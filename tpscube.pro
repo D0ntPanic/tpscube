@@ -22,3 +22,9 @@ SOURCES -= ui/qt/qrc_tpscube.cpp
 INCLUDEPATH += lib
 INCLUDEPATH += ui/qt
 LIBS += -lleveldb
+
+macx {
+	QMAKE_CXXFLAGS += -I/usr/local/include
+	LIBS += -L/usr/local/lib
+}
+
