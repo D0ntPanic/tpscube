@@ -1,0 +1,105 @@
+namespace database;
+
+enum SolveType: uint8
+{
+	SOLVE_3X3X3 = 0,
+	SOLVE_3X3X3_OH = 1,
+	SOLVE_3X3X3_BF = 2,
+	SOLVE_2X2X2 = 3,
+	SOLVE_4X4X4 = 4,
+	SOLVE_4X4X4_BF = 5,
+	SOLVE_5X5X5 = 6,
+	SOLVE_5X5X5_BF = 7
+}
+
+enum CubeMove: uint8
+{
+	MOVE_U = 0,
+	MOVE_Up = 1,
+	MOVE_U2 = 2,
+	MOVE_F = 3,
+	MOVE_Fp = 4,
+	MOVE_F2 = 5,
+	MOVE_R = 6,
+	MOVE_Rp = 7,
+	MOVE_R2 = 8,
+	MOVE_B = 9,
+	MOVE_Bp = 10,
+	MOVE_B2 = 11,
+	MOVE_L = 12,
+	MOVE_Lp = 13,
+	MOVE_L2 = 14,
+	MOVE_D = 15,
+	MOVE_Dp = 16,
+	MOVE_D2 = 17
+}
+
+table Update
+{
+	id: string;
+	time: uint;
+	sync: string;
+}
+
+table CubeSolveMove
+{
+	move: CubeMove;
+	milliseconds: uint;
+}
+
+table CubeSolveSplits
+{
+	white_cross_time: uint;
+	f2l_first_pair_time: uint;
+	f2l_second_pair_time: uint;
+	f2l_third_pair_time: uint;
+	f2l_finish_time: uint;
+	oll_yellow_cross_time: uint;
+	oll_finish_time: uint;
+	pll_corner_time: uint;
+}
+
+table CubeSolve
+{
+    scramble: [CubeMove];
+	created: uint64;
+	update: Update;
+	ok: bool;
+	time: uint;
+	penalty: uint;
+	solve_method_name: string;
+	solve_moves: [CubeSolveMove];
+	solve_splits: CubeSolveSplits;
+}
+
+table SolveList
+{
+	solves: [string];
+}
+
+table Session
+{
+	type: SolveType;
+	name: string;
+	update: Update;
+}
+
+table SessionList
+{
+	sessions: [string];
+}
+
+union Contents
+{
+	cube_solve: CubeSolve,
+	solve_list: SolveList,
+	session: Session,
+	session_list: SessionList
+}
+
+table Data
+{
+	contents: Contents;
+}
+
+root_type Data;

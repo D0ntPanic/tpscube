@@ -1,0 +1,7 @@
+obj/
+.vscode/
+tools/gentables3x3
+.qmake.stash
+qrc_*.cpp
+tpscube
+Makefile
