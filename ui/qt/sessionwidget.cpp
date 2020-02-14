@@ -5,8 +5,10 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QMenu>
 #include <QtGui/QFontMetrics>
+#include <QtGui/QCursor>
 #include <algorithm>
 #include "sessionwidget.h"
+#include "solvedialog.h"
 
 using namespace std;
 
@@ -47,6 +49,7 @@ SessionWidget::SessionWidget(QWidget* parent): QWidget(parent)
 		[this]() { resetSession(); });
 	resetButton->setFont(fontOfRelativeSize(0.9f, QFont::Light));
 	resetButton->setToolTip("Reset current session. Solves in the current session will be saved in the solve history.");
+	resetButton->setCursor(Qt::PointingHandCursor);
 	resetLayout->addWidget(resetButton);
 	layout->addLayout(resetLayout);
 
@@ -119,6 +122,18 @@ QString SessionWidget::stringForSolveTime(const Solve& solve)
 	if (!solve.ok)
 		return "DNF";
 	return stringForTime(solve.time);
+}
+
+
+void SessionWidget::showSolve(int row)
+{
+	int solveIndex = (int)History::instance.activeSession->solves.size() - (row + 1);
+	if (solveIndex < 0)
+		return;
+
+	const Solve& solve = History::instance.activeSession->solves[solveIndex];
+	SolveDialog* dlg = new SolveDialog(solve);
+	dlg->show();
 }
 
 
@@ -245,7 +260,9 @@ void SessionWidget::updateHistory()
 			int row = m_solveLabels.size();
 			SolveLabels labels;
 			labels.num = new ThinLabel("");
-			labels.time = new QLabel("");
+			labels.time = new ClickableLabel("", Theme::content, Theme::blue,
+				[=]() { showSolve(row); });
+			labels.time->setCursor(Qt::PointingHandCursor);
 			labels.penalty = new QLabel("");
 			labels.options = new ClickableLabel(" ≡", Theme::selection, Theme::blue,
 				[=]() { options(row); });
@@ -288,14 +305,14 @@ void SessionWidget::updateHistory()
 				QString::asprintf("<span style='font-size:%fpt'>(+%d)</span> ",
 					relativeFontSize(0.75f), solve.penalty / 1000) : "");
 
-			QPalette pal = palette();
+			QColor color = Theme::content;
 			if (solve.ok && ((int)solve.time == allTimeBest))
-				pal.setColor(QPalette::WindowText, Theme::orange);
+				color = Theme::orange;
 			else if (solve.ok && ((int)solve.time == best))
-				pal.setColor(QPalette::WindowText, Theme::green);
+				color = Theme::green;
 			else if (!solve.ok)
-				pal.setColor(QPalette::WindowText, Theme::red);
-			m_solveLabels[i].time->setPalette(pal);
+				color = Theme::red;
+			m_solveLabels[i].time->setColors(color, Theme::blue);
 		}
 
 		m_noSolves->setVisible(History::instance.activeSession->solves.size() == 0);

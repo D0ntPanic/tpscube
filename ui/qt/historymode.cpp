@@ -10,6 +10,7 @@
 #include "historymode.h"
 #include "theme.h"
 #include "sessionwidget.h"
+#include "solvedialog.h"
 
 using namespace std;
 
@@ -114,7 +115,7 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
 	QFontMetrics lightMetrics(lightFont);
 	QFontMetrics normalMetrics(normalFont);
-	QFontMetrics smallMetrics(normalFont);
+	QFontMetrics smallMetrics(smallFont);
 	int solveHeight = normalMetrics.height();
 
 	int yofs = verticalScrollBar()->value();
@@ -264,7 +265,7 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 				else
 				{
 					largeTimeText = "DNF";
-					smallTimeText = " ";
+					smallTimeText = "";
 				}
 
 				// Draw penalty
@@ -281,7 +282,9 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 				x -= normalMetrics.horizontalAdvance(largeTimeText) +
 					smallMetrics.horizontalAdvance(smallTimeText);
 				p.setFont(normalFont);
-				if (solve.ok && ((int)solve.time == m_bestSolve))
+				if ((m_hoverSession == i.session) && (m_hoverSolve == solveIndex) && (m_hoverIcon == -1))
+					p.setPen(Theme::blue);
+				else if (solve.ok && ((int)solve.time == m_bestSolve))
 					p.setPen(Theme::orange);
 				else if (solve.ok && ((int)solve.time == i.bestSolve))
 					p.setPen(Theme::green);
@@ -338,6 +341,8 @@ void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 {
 	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
 	QFontMetrics normalMetrics(normalFont);
+	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
+	QFontMetrics smallMetrics(smallFont);
 	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
 	QFontMetrics headingMetrics(headingFont);
 	int headingFontHeight = headingMetrics.height();
@@ -366,6 +371,7 @@ void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 				m_hoverSolve = -1;
 				m_hoverIcon = 0;
 				viewport()->update();
+				setCursor(Qt::ArrowCursor);
 				return;
 			}
 			break;
@@ -394,6 +400,7 @@ void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 			m_hoverSolve = solveIdx;
 			m_hoverIcon = 1;
 			viewport()->update();
+			setCursor(Qt::ArrowCursor);
 			return;
 		}
 
@@ -407,6 +414,21 @@ void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 			m_hoverSolve = solveIdx;
 			m_hoverIcon = 0;
 			viewport()->update();
+			setCursor(Qt::ArrowCursor);
+			return;
+		}
+
+		rightX = leftX - smallMetrics.boundingRect("  (+2) ").width();
+		leftX = 8 + col * i.columnWidth;
+		if ((x >= leftX) && (x <= rightX))
+		{
+			if ((m_hoverSession == i.session) && (m_hoverSolve == solveIdx) && (m_hoverIcon == -1))
+				return;
+			m_hoverSession = i.session;
+			m_hoverSolve = solveIdx;
+			m_hoverIcon = -1;
+			viewport()->update();
+			setCursor(Qt::PointingHandCursor);
 			return;
 		}
 	}
@@ -417,19 +439,27 @@ void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 		m_hoverSolve = -1;
 		m_hoverIcon = -1;
 		viewport()->update();
+		setCursor(Qt::ArrowCursor);
 	}
 }
 
 
 void HistoryMode::mousePressEvent(QMouseEvent*)
 {
+	setCursor(Qt::ArrowCursor);
+
 	if (m_hoverSession && (m_hoverSolve != -1) && (m_hoverSolve < (int)m_hoverSession->solves.size()))
 	{
 		shared_ptr<Session> session = m_hoverSession;
 		int solveIdx = m_hoverSolve;
 		Solve& solve = session->solves[solveIdx];
 
-		if (m_hoverIcon == 0)
+		if (m_hoverIcon == -1)
+		{
+			SolveDialog* dlg = new SolveDialog(solve);
+			dlg->show();
+		}
+		else if (m_hoverIcon == 0)
 		{
 			QMenu menu;
 			QAction* solveOK = new QAction("Solve OK");
@@ -606,6 +636,7 @@ void HistoryMode::leaveEvent(QEvent*)
 	m_hoverSolve = -1;
 	m_hoverIcon = -1;
 	viewport()->update();
+	setCursor(Qt::ArrowCursor);
 }
 
 

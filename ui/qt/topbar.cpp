@@ -13,6 +13,7 @@ ModeLabel::ModeLabel(const QString& text, const function<void()>& func):
 	pal.setColor(QPalette::WindowText, Theme::disabled);
 	setPalette(pal);
 	setFont(fontOfRelativeSize(1.0f, QFont::Light));
+	setCursor(Qt::PointingHandCursor);
 }
 
 

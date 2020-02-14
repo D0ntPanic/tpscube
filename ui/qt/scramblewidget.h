@@ -14,6 +14,7 @@ class ScrambleWidget: public QLabel
 {
 	CubeMoveSequence m_scramble;
 	size_t m_maxMoveCount = 30;
+	bool m_reserveVerticalSpace = true;
 
 	void updateText();
 
@@ -24,4 +25,5 @@ public:
 	void invalidateScramble();
 	void setFontSize(int size);
 	void setMaxMoveCount(size_t count);
+	void setReserveVerticalSpace(bool enable);
 };

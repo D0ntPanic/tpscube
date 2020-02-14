@@ -28,6 +28,8 @@ void ScrambleWidget::updateText()
 	size_t neededRows = m_scramble.moves.size() / MOVES_PER_ROW;
 	if (neededRows == 0)
 		neededRows = 1;
+	if (!m_reserveVerticalSpace)
+		rows = neededRows;
 	size_t cols = (m_scramble.moves.size() + (neededRows - 1)) / neededRows;
 
 	QString text;
@@ -73,5 +75,12 @@ void ScrambleWidget::setFontSize(int size)
 void ScrambleWidget::setMaxMoveCount(size_t count)
 {
 	m_maxMoveCount = count;
+	updateText();
+}
+
+
+void ScrambleWidget::setReserveVerticalSpace(bool enable)
+{
+	m_reserveVerticalSpace = enable;
 	updateText();
 }

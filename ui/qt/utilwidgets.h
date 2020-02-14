@@ -38,4 +38,5 @@ protected:
 public:
 	ClickableLabel(const QString& text, QColor defaultColor, QColor hoverColor,
 		const std::function<void()>& func);
+	void setColors(QColor defaultColor, QColor hoverColor);
 };

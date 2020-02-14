@@ -80,3 +80,13 @@ void ClickableLabel::leaveEvent(QEvent*)
 	pal.setColor(QPalette::WindowText, m_defaultColor);
 	setPalette(pal);
 }
+
+
+void ClickableLabel::setColors(QColor defaultColor, QColor hoverColor)
+{
+	m_defaultColor = defaultColor;
+	m_hoverColor = hoverColor;
+	QPalette pal = palette();
+	pal.setColor(QPalette::WindowText, m_defaultColor);
+	setPalette(pal);
+}

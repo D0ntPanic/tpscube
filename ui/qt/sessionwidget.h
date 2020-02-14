@@ -9,7 +9,7 @@
 struct SolveLabels
 {
 	QLabel* num;
-	QLabel* time;
+	ClickableLabel* time;
 	QLabel* penalty;
 	ClickableLabel* options;
 	ClickableLabel* remove;
@@ -29,6 +29,7 @@ class SessionWidget: public QWidget
 	QGridLayout* m_solveLayout;
 	QList<SolveLabels> m_solveLabels;
 
+	void showSolve(int row);
 	void options(int row);
 	void remove(int row);
 
