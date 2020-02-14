@@ -24,6 +24,8 @@ SolveDialog::SolveDialog(const Solve& solve): QDialog(MainWindow::instance())
 	buttonLayout->addStretch(1);
 
 	QPushButton* copyButton = new QPushButton("Copy to Clipboard");
+	copyButton->setDefault(false);
+	copyButton->setAutoDefault(false);
 	connect(copyButton, &QPushButton::clicked, this, &SolveDialog::copy);
 	QAction* copyAction = new QAction("Copy", this);
 	copyAction->setShortcut(QKeySequence::Copy);
@@ -33,10 +35,11 @@ SolveDialog::SolveDialog(const Solve& solve): QDialog(MainWindow::instance())
 	buttonLayout->addWidget(copyButton);
 
 	QPushButton* closeButton = new QPushButton("Close");
+	closeButton->setDefault(true);
+	closeButton->setAutoDefault(true);
 	connect(closeButton, &QPushButton::clicked, this, &SolveDialog::accept);
 	buttonLayout->addWidget(closeButton);
 	layout->addLayout(buttonLayout);
-	closeButton->setDefault(true);
 
 	setLayout(layout);
 }
