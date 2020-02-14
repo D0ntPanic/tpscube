@@ -1,3 +1,4 @@
+#include <QtWidgets/QApplication>
 #include "theme.h"
 
 namespace Theme
@@ -9,7 +10,7 @@ namespace Theme
 	QColor content = QColor(224, 224, 224);
 	QColor light = QColor(120, 120, 120);
 	QColor disabled = QColor(160, 160, 160);
-	QColor selection = QColor(76, 76, 76);
+	QColor selection = QColor(96, 96, 96);
 	QColor selectionLight = QColor(128, 128, 128);
 	QColor green = QColor(162, 217, 175);
 	QColor red = QColor(222, 143, 151);
@@ -31,4 +32,20 @@ QColor MixColor(const QColor& a, const QColor& b, uint8_t alpha)
 	uint8_t blue = (uint8_t)((((uint16_t)a.blue() * (255 - alpha)) +
 		((uint16_t)b.blue() * alpha)) / 255);
 	return QColor(red, green, blue);
+}
+
+
+float relativeFontSize(float mult)
+{
+	return QApplication::font().pointSizeF() * mult;
+}
+
+
+QFont fontOfRelativeSize(float mult, int weight, bool italic)
+{
+	QFont result(QApplication::font());
+	result.setWeight(weight);
+	result.setItalic(italic);
+	result.setPointSizeF(result.pointSizeF() * mult);
+	return result;
 }

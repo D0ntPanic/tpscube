@@ -12,7 +12,7 @@ ModeLabel::ModeLabel(const QString& text, const function<void()>& func):
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, Theme::disabled);
 	setPalette(pal);
-	setFont(QFont("Open Sans", 13, QFont::Light));
+	setFont(fontOfRelativeSize(1.0f, QFont::Light));
 }
 
 
@@ -41,7 +41,7 @@ void ModeLabel::leaveEvent(QEvent*)
 void ModeLabel::setActive(bool active)
 {
 	m_active = active;
-	setFont(QFont("Open Sans", 13, active ? QFont::Bold : QFont::Light));
+	setFont(fontOfRelativeSize(1.0f, active ? QFont::Bold : QFont::Light));
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::disabled);
 	setPalette(pal);

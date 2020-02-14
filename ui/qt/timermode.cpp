@@ -150,8 +150,13 @@ void TimerMode::updateFontSizes()
 	int size = w;
 	if (h < size)
 		size = h;
+#ifdef __APPLE__
+	m_timer->setFontSize(size / 6);
+	m_scrambleWidget->setFontSize(size / 19);
+#else
 	m_timer->setFontSize(size / 7);
 	m_scrambleWidget->setFontSize(size / 22);
+#endif
 }
 
 

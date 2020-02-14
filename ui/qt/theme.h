@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QtGui/QColor>
+#include <QtGui/QFont>
 
 namespace Theme
 {
@@ -11,6 +12,7 @@ namespace Theme
 	extern QColor content;
 	extern QColor light;
 	extern QColor disabled;
+	extern QColor deselected;
 	extern QColor selection;
 	extern QColor selectionLight;
 	extern QColor green;
@@ -24,3 +26,5 @@ namespace Theme
 }
 
 QColor MixColor(const QColor& a, const QColor& b, uint8_t alpha = 128);
+float relativeFontSize(float mult);
+QFont fontOfRelativeSize(float mult, int weight = QFont::Normal, bool italic = false);

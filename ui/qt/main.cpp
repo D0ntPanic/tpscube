@@ -256,7 +256,11 @@ int main(int argc, char* argv[])
 	QFontDatabase::addApplicationFont(":/fonts/OpenSans-LightItalic.ttf");
 	QFontDatabase::addApplicationFont(":/fonts/OpenSans-Semibold.ttf");
 	QFontDatabase::addApplicationFont(":/fonts/OpenSans-SemiboldItalic.ttf");
+#ifdef __APPLE__
+	QApplication::setFont(QFont("Open Sans", 15));
+#else
 	QApplication::setFont(QFont("Open Sans", 13));
+#endif
 
 	QApplication::setApplicationName("tpscube");
 	QApplication::setApplicationDisplayName("TPS Cube");

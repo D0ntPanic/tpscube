@@ -25,9 +25,9 @@ HistoryMode::HistoryMode(QWidget* parent): QAbstractScrollArea(parent)
 
 void HistoryMode::paintAllTimeBest(QPainter& p, int x, const QString& title, int best)
 {
-	QFont lightFont("Open Sans", 13, QFont::Light);
-	QFont largestFont("Open Sans", 32, QFont::Light);
-	QFont largeFont("Open Sans", 26, QFont::Light);
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont largestFont = fontOfRelativeSize(2.5f, QFont::Light);
+	QFont largeFont = fontOfRelativeSize(2.0f, QFont::Light);
 	QFontMetrics lightMetrics(lightFont);
 	QFontMetrics largestMetrics(largestFont);
 	QFontMetrics largeMetrics(largeFont);
@@ -65,9 +65,9 @@ void HistoryMode::paintAllTimeBest(QPainter& p, int x, const QString& title, int
 
 void HistoryMode::paintSessionBest(QPainter& p, int& x, int y, const QString& title, int best)
 {
-	QFont lightFont("Open Sans", 13, QFont::Light);
-	QFont normalFont("Open Sans", 13, QFont::Normal);
-	QFont smallFont("Open Sans", 10, QFont::Normal);
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
 	QFontMetrics lightMetrics(lightFont);
 	QFontMetrics normalMetrics(normalFont);
 	QFontMetrics smallMetrics(normalFont);
@@ -105,13 +105,13 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 	int width = viewport()->width();
 
 	// Create fonts used during rendering
-	QFont headingFont("Open Sans", 14, QFont::Light);
+	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
 	QFontMetrics headingMetrics(headingFont);
 	int headingFontHeight = headingMetrics.height();
 
-	QFont lightFont("Open Sans", 13, QFont::Light);
-	QFont normalFont("Open Sans", 13, QFont::Normal);
-	QFont smallFont("Open Sans", 10, QFont::Normal);
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
 	QFontMetrics lightMetrics(lightFont);
 	QFontMetrics normalMetrics(normalFont);
 	QFontMetrics smallMetrics(normalFont);
@@ -122,7 +122,7 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 	if (m_sessions.size() == 0)
 	{
 		// No sessions, don't leave it blank
-		p.setFont(QFont("Open Sans", 13, QFont::Light, true));
+		p.setFont(fontOfRelativeSize(1.0f, QFont::Light, true));
 		p.setPen(Theme::disabled);
 		p.drawText(16, 16 - yofs + lightMetrics.ascent(), "No sessions have been completed.");
 		return;
@@ -139,7 +139,7 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 
 	if (bestCount > 0)
 	{
-		QFont largestFont("Open Sans", 32, QFont::Light);
+		QFont largestFont = fontOfRelativeSize(2.5f, QFont::Light);
 		QFontMetrics largestMetrics(largestFont);
 		int bestWidth = largestMetrics.boundingRect("00:00.00").width() + 32;
 
@@ -236,7 +236,7 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 				if ((m_hoverSession == i.session) && (m_hoverSolve == solveIndex) && (m_hoverIcon == 1))
 					p.setPen(Theme::red);
 				else
-					p.setPen(Theme::backgroundHighlight);
+					p.setPen(Theme::selection);
 				p.drawText(x, solveY + row * solveHeight + normalMetrics.ascent(), "  × ");
 
 				x -= normalMetrics.boundingRect("  ≡ ").width();
@@ -244,7 +244,7 @@ void HistoryMode::paintEvent(QPaintEvent* event)
 				if ((m_hoverSession == i.session) && (m_hoverSolve == solveIndex) && (m_hoverIcon == 0))
 					p.setPen(Theme::blue);
 				else
-					p.setPen(Theme::backgroundHighlight);
+					p.setPen(Theme::selection);
 				p.drawText(x, solveY + row * solveHeight + normalMetrics.ascent(), "  ≡ ");
 
 				// Create strings for the solve time
@@ -336,9 +336,9 @@ void HistoryMode::resizeEvent(QResizeEvent*)
 
 void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 {
-	QFont normalFont("Open Sans", 13, QFont::Normal);
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
 	QFontMetrics normalMetrics(normalFont);
-	QFont headingFont("Open Sans", 14, QFont::Light);
+	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
 	QFontMetrics headingMetrics(headingFont);
 	int headingFontHeight = headingMetrics.height();
 	int solveHeight = normalMetrics.height();
@@ -628,14 +628,14 @@ void HistoryMode::updateHistory()
 
 	// Create fonts and measurements for them
 	int y = 16;
-	QFont headingFont("Open Sans", 14, QFont::Light);
+	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
 	QFontMetrics headingMetrics(headingFont);
 	int headingFontHeight = headingMetrics.height();
 
-	QFont lightFont("Open Sans", 13, QFont::Light);
-	QFont normalFont("Open Sans", 13, QFont::Normal);
-	QFont smallFont("Open Sans", 10, QFont::Normal);
-	QFont largeFont("Open Sans", 32, QFont::Light);
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
+	QFont largeFont = fontOfRelativeSize(2.5f, QFont::Light);
 	QFontMetrics lightMetrics(lightFont);
 	QFontMetrics normalMetrics(normalFont);
 	QFontMetrics smallMetrics(normalFont);

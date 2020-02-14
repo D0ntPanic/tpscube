@@ -43,9 +43,9 @@ SessionWidget::SessionWidget(QWidget* parent): QWidget(parent)
 	layout->addLayout(currentSessionLayout);
 	QHBoxLayout* resetLayout = new QHBoxLayout();
 	resetLayout->addStretch(1);
-	ClickableLabel* resetButton = new ClickableLabel("↺ Reset", Theme::disabled, Theme::red,
+	ClickableLabel* resetButton = new ClickableLabel("↺ New Session", Theme::disabled, Theme::red,
 		[this]() { resetSession(); });
-	resetButton->setFont(QFont("Open Sans", 11, QFont::Light));
+	resetButton->setFont(fontOfRelativeSize(0.9f, QFont::Light));
 	resetButton->setToolTip("Reset current session. Solves in the current session will be saved in the solve history.");
 	resetLayout->addWidget(resetButton);
 	layout->addLayout(resetLayout);
@@ -53,7 +53,7 @@ SessionWidget::SessionWidget(QWidget* parent): QWidget(parent)
 	layout->addWidget(new Heading("Solves"));
 
 	m_noSolves = new QLabel("No solves in this session");
-	m_noSolves->setFont(QFont("Open Sans", 12, QFont::Light, true));
+	m_noSolves->setFont(fontOfRelativeSize(0.9f, QFont::Light, true));
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, Theme::disabled);
 	m_noSolves->setPalette(pal);
@@ -101,13 +101,15 @@ QString SessionWidget::stringForTime(int ms)
 
 	if (minutes > 0)
 	{
-		return QString::asprintf("<span style='font-size:13pt'>%d:%02d</span>"
-			"<span style='font-size:10pt'>.%02d</span>", minutes, seconds, hs);
+		return QString::asprintf("<span style='font-size:%fpt'>%d:%02d</span>"
+			"<span style='font-size:%fpt'>.%02d</span>", relativeFontSize(1.0f),
+			minutes, seconds, relativeFontSize(0.75f), hs);
 	}
 	else
 	{
-		return QString::asprintf("<span style='font-size:13pt'>%d</span>"
-			"<span style='font-size:10pt'>.%02d</span>", seconds, hs);
+		return QString::asprintf("<span style='font-size:%fpt'>%d</span>"
+			"<span style='font-size:%fpt'>.%02d</span>", relativeFontSize(1.0f),
+			seconds, relativeFontSize(0.75f), hs);
 	}
 }
 
@@ -245,10 +247,10 @@ void SessionWidget::updateHistory()
 			labels.num = new ThinLabel("");
 			labels.time = new QLabel("");
 			labels.penalty = new QLabel("");
-			labels.options = new ClickableLabel(" ≡", Theme::backgroundHighlight, Theme::blue,
+			labels.options = new ClickableLabel(" ≡", Theme::selection, Theme::blue,
 				[=]() { options(row); });
 			labels.options->setToolTip("Set solve penalties");
-			labels.remove = new ClickableLabel(" ×", Theme::backgroundHighlight, Theme::red,
+			labels.remove = new ClickableLabel(" ×", Theme::selection, Theme::red,
 				[=]() { remove(row); });
 			labels.remove->setToolTip("Delete solve");
 
@@ -283,7 +285,8 @@ void SessionWidget::updateHistory()
 			m_solveLabels[i].num->setText(QString::asprintf("%d.", solveIdx + 1));
 			m_solveLabels[i].time->setText(stringForSolveTime(solve));
 			m_solveLabels[i].penalty->setText((solve.ok && solve.penalty) ?
-				QString::asprintf("<span style='font-size:10pt'>(+%d)</span> ", solve.penalty / 1000) : "");
+				QString::asprintf("<span style='font-size:%fpt'>(+%d)</span> ",
+					relativeFontSize(0.75f), solve.penalty / 1000) : "");
 
 			QPalette pal = palette();
 			if (solve.ok && ((int)solve.time == allTimeBest))

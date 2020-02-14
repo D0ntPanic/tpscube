@@ -1,6 +1,7 @@
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QApplication>
 #include "utilwidgets.h"
+#include "theme.h"
 
 using namespace std;
 
@@ -12,9 +13,9 @@ Subheading::Subheading(const QString& name, const QColor& color, bool large)
 
 	m_label = new QLabel(name);
 	if (large)
-		m_label->setFont(QFont("Open Sans", 15, QFont::DemiBold));
+		m_label->setFont(fontOfRelativeSize(1.2f, QFont::DemiBold));
 	else
-		m_label->setFont(QFont("Open Sans", 12, QFont::DemiBold));
+		m_label->setFont(fontOfRelativeSize(1.0f, QFont::DemiBold));
 	QPalette headerPalette(palette());
 	headerPalette.setColor(QPalette::WindowText, color);
 	m_label->setPalette(headerPalette);
@@ -45,7 +46,7 @@ Heading::Heading(const QString& name): Subheading(name, Theme::blue, true)
 
 ThinLabel::ThinLabel(const QString& text): QLabel(text)
 {
-	setFont(QFont("Open Sans", 12, QFont::Thin));
+	setFont(fontOfRelativeSize(0.9f, QFont::Thin));
 }
 
 

@@ -23,6 +23,7 @@ public:
 class Scrambler
 {
 public:
+	virtual ~Scrambler() {}
 	virtual std::string GetName() = 0;
 	virtual CubeMoveSequence GetScramble(RandomSource& rng) = 0;
 	virtual size_t GetMaxMoveCount() = 0;
