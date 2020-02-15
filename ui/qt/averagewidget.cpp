@@ -28,11 +28,11 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 		{
 			if (lowest == -1)
 				lowest = (int)i;
-			else if (highest == -1)
+			if (highest == -1)
 				highest = (int)i;
-			else if ((m_solves[i].time < m_solves[lowest].time))
+			if ((m_solves[i].time < m_solves[lowest].time))
 				lowest = (int)i;
-			else if ((m_solves[i].time > m_solves[highest].time))
+			if ((m_solves[i].time > m_solves[highest].time))
 				highest = (int)i;
 			solveTimes.push_back(m_solves[i].time);
 		}
