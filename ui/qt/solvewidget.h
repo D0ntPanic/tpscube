@@ -1,10 +1,8 @@
 #pragma once
 
 #include <QtWidgets/QWidget>
-
 #include "history.h"
 #include "scramblewidget.h"
-#include "timerwidget.h"
 
 class SolveWidget: public QWidget
 {
@@ -13,7 +11,8 @@ class SolveWidget: public QWidget
 	QLabel* m_timer;
 
 public:
-	SolveWidget(QWidget* parent, const Solve& solve);
+	SolveWidget(const Solve& solve);
 
 	QString solveDetailsText();
+	static QString solveTimeText(const Solve& solve);
 };

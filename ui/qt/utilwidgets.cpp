@@ -57,12 +57,25 @@ ClickableLabel::ClickableLabel(const QString& text, QColor defaultColor, QColor 
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
 	setPalette(pal);
+
+	m_hoverTimer = new QTimer(this);
+	m_hoverTimer->setSingleShot(true);
+	m_hoverTimer->setInterval(500);
+	connect(m_hoverTimer, &QTimer::timeout, this, &ClickableLabel::hoverTooltip);
 }
 
 
 void ClickableLabel::mousePressEvent(QMouseEvent*)
 {
 	m_onClick();
+}
+
+
+void ClickableLabel::mouseMoveEvent(QMouseEvent*)
+{
+	m_hoverTimer->stop();
+	if (m_tooltip)
+		m_hoverTimer->start();
 }
 
 
@@ -79,6 +92,14 @@ void ClickableLabel::leaveEvent(QEvent*)
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
 	setPalette(pal);
+	m_hoverTimer->stop();
+}
+
+
+void ClickableLabel::hoverTooltip()
+{
+	if (m_tooltip)
+		m_tooltip();
 }
 
 
@@ -89,4 +110,11 @@ void ClickableLabel::setColors(QColor defaultColor, QColor hoverColor)
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
 	setPalette(pal);
+}
+
+
+void ClickableLabel::setTooltipFunction(const function<void()>& func)
+{
+	m_tooltip = func;
+	m_hoverTimer->stop();
 }

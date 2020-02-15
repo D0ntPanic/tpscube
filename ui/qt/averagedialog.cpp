@@ -4,20 +4,20 @@
 #include <QtWidgets/QAction>
 #include <QtGui/QClipboard>
 #include <QtGui/QGuiApplication>
-#include "solvedialog.h"
+#include "averagedialog.h"
 #include "mainwindow.h"
 
 using namespace std;
 
 
-SolveDialog::SolveDialog(const Solve& solve): QDialog(MainWindow::instance())
+AverageDialog::AverageDialog(const vector<Solve>& solves): QDialog(MainWindow::instance())
 {
 	setModal(false);
-	setWindowTitle("Solve");
+	setWindowTitle(QString::asprintf("Average of %d", (int)solves.size()));
 
 	QVBoxLayout* layout = new QVBoxLayout();
-	m_solve = new SolveWidget(solve);
-	layout->addWidget(m_solve);
+	m_average = new AverageWidget(solves, true);
+	layout->addWidget(m_average);
 	layout->addSpacing(8);
 
 	QHBoxLayout* buttonLayout = new QHBoxLayout();
@@ -26,18 +26,18 @@ SolveDialog::SolveDialog(const Solve& solve): QDialog(MainWindow::instance())
 	QPushButton* copyButton = new QPushButton("Copy to Clipboard");
 	copyButton->setDefault(false);
 	copyButton->setAutoDefault(false);
-	connect(copyButton, &QPushButton::clicked, this, &SolveDialog::copy);
+	connect(copyButton, &QPushButton::clicked, this, &AverageDialog::copy);
 	QAction* copyAction = new QAction("Copy", this);
 	copyAction->setShortcut(QKeySequence::Copy);
 	copyAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 	addAction(copyAction);
-	connect(copyAction, &QAction::triggered, this, &SolveDialog::copy);
+	connect(copyAction, &QAction::triggered, this, &AverageDialog::copy);
 	buttonLayout->addWidget(copyButton);
 
 	QPushButton* closeButton = new QPushButton("Close");
 	closeButton->setDefault(true);
 	closeButton->setAutoDefault(true);
-	connect(closeButton, &QPushButton::clicked, this, &SolveDialog::accept);
+	connect(closeButton, &QPushButton::clicked, this, &AverageDialog::accept);
 	buttonLayout->addWidget(closeButton);
 	layout->addLayout(buttonLayout);
 
@@ -45,8 +45,8 @@ SolveDialog::SolveDialog(const Solve& solve): QDialog(MainWindow::instance())
 }
 
 
-void SolveDialog::copy()
+void AverageDialog::copy()
 {
-	QString text = m_solve->solveDetailsText();
+	QString text = m_average->averageDetailsText();
 	QGuiApplication::clipboard()->setText(text);
 }

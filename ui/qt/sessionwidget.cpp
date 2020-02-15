@@ -9,6 +9,8 @@
 #include <algorithm>
 #include "sessionwidget.h"
 #include "solvedialog.h"
+#include "averagedialog.h"
+#include "tooltip.h"
 
 using namespace std;
 
@@ -23,19 +25,27 @@ SessionWidget::SessionWidget(QWidget* parent): QWidget(parent)
 
 	QGridLayout* currentSessionLayout = new QGridLayout();
 	currentSessionLayout->addWidget(new ThinLabel("Last ao5: "), 1, 0);
-	m_averageOf5 = new QLabel();
+	m_averageOf5 = new ClickableLabel("", Theme::content, Theme::blue, [this]() { showLastAvgOf5(); });
+	m_averageOf5->setCursor(Qt::PointingHandCursor);
+	m_averageOf5->setTooltipFunction([this]() { showLastAvgOf5Tooltip(); });
 	currentSessionLayout->addWidget(m_averageOf5, 1, 1, Qt::AlignRight);
 	currentSessionLayout->addWidget(new ThinLabel("Last ao12: "), 2, 0);
-	m_averageOf12 = new QLabel();
+	m_averageOf12 = new ClickableLabel("", Theme::content, Theme::blue, [this]() { showLastAvgOf12(); });
+	m_averageOf12->setCursor(Qt::PointingHandCursor);
+	m_averageOf12->setTooltipFunction([this]() { showLastAvgOf12Tooltip(); });
 	currentSessionLayout->addWidget(m_averageOf12, 2, 1, Qt::AlignRight);
 	currentSessionLayout->addWidget(new ThinLabel("Session avg: "), 3, 0);
 	m_sessionAverage = new QLabel();
 	currentSessionLayout->addWidget(m_sessionAverage, 3, 1, Qt::AlignRight);
 	currentSessionLayout->addWidget(new ThinLabel("Best solve: "), 4, 0);
-	m_bestSolve = new QLabel();
-	currentSessionLayout->addWidget(m_bestSolve, 4, 1, Qt::AlignRight);
+	m_bestSolveLabel = new ClickableLabel("", Theme::content, Theme::blue, [this]() { showBestSolve(); });;
+	m_bestSolveLabel->setCursor(Qt::PointingHandCursor);
+	m_bestSolveLabel->setTooltipFunction([this]() { showBestSolveTooltip(); });
+	currentSessionLayout->addWidget(m_bestSolveLabel, 4, 1, Qt::AlignRight);
 	currentSessionLayout->addWidget(new ThinLabel("Best ao5: "), 5, 0);
-	m_bestAverageOf5 = new QLabel();
+	m_bestAverageOf5 = new ClickableLabel("", Theme::content, Theme::blue, [this]() { showBestAvgOf5(); });
+	m_bestAverageOf5->setCursor(Qt::PointingHandCursor);
+	m_bestAverageOf5->setTooltipFunction([this]() { showBestAvgOf5Tooltip(); });
 	currentSessionLayout->addWidget(m_bestAverageOf5, 5, 1, Qt::AlignRight);
 	currentSessionLayout->setColumnStretch(0, 0);
 	currentSessionLayout->setColumnStretch(1, 1);
@@ -134,6 +144,129 @@ void SessionWidget::showSolve(int row)
 	const Solve& solve = History::instance.activeSession->solves[solveIndex];
 	SolveDialog* dlg = new SolveDialog(solve);
 	dlg->show();
+}
+
+
+void SessionWidget::showSolveTooltip(int row)
+{
+	int solveIndex = (int)History::instance.activeSession->solves.size() - (row + 1);
+	if (solveIndex < 0)
+		return;
+
+	const Solve& solve = History::instance.activeSession->solves[solveIndex];
+	SolveWidget* widget = new SolveWidget(solve);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(this);
+}
+
+
+void SessionWidget::showLastAvgOf5()
+{
+	if (!History::instance.activeSession)
+		return;
+	if (History::instance.activeSession->solves.size() < 5)
+		return;
+	vector<Solve> solves;
+	solves.insert(solves.end(), History::instance.activeSession->solves.end() - 5,
+		History::instance.activeSession->solves.end());
+	AverageDialog* dlg = new AverageDialog(solves);
+	dlg->show();
+}
+
+
+void SessionWidget::showLastAvgOf5Tooltip()
+{
+	if (!History::instance.activeSession)
+		return;
+	if (History::instance.activeSession->solves.size() < 5)
+		return;
+	vector<Solve> solves;
+	solves.insert(solves.end(), History::instance.activeSession->solves.end() - 5,
+		History::instance.activeSession->solves.end());
+	AverageWidget* widget = new AverageWidget(solves);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(this);
+}
+
+
+void SessionWidget::showLastAvgOf12()
+{
+	if (!History::instance.activeSession)
+		return;
+	if (History::instance.activeSession->solves.size() < 12)
+		return;
+	vector<Solve> solves;
+	solves.insert(solves.end(), History::instance.activeSession->solves.end() - 12,
+		History::instance.activeSession->solves.end());
+	AverageDialog* dlg = new AverageDialog(solves);
+	dlg->show();
+}
+
+
+void SessionWidget::showLastAvgOf12Tooltip()
+{
+	if (!History::instance.activeSession)
+		return;
+	if (History::instance.activeSession->solves.size() < 12)
+		return;
+	vector<Solve> solves;
+	solves.insert(solves.end(), History::instance.activeSession->solves.end() - 12,
+		History::instance.activeSession->solves.end());
+	AverageWidget* widget = new AverageWidget(solves);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(this);
+}
+
+
+void SessionWidget::showBestSolve()
+{
+	if (!m_bestSolve.ok)
+		return;
+	SolveDialog* dlg = new SolveDialog(m_bestSolve);
+	dlg->show();
+}
+
+
+void SessionWidget::showBestSolveTooltip()
+{
+	if (!m_bestSolve.ok)
+		return;
+	SolveWidget* widget = new SolveWidget(m_bestSolve);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(this);
+}
+
+
+void SessionWidget::showBestAvgOf5()
+{
+	if (!History::instance.activeSession)
+		return;
+	if (m_bestAverageOf5Index == -1)
+		return;
+	if ((m_bestAverageOf5Index + 5) > (int)History::instance.activeSession->solves.size())
+		return;
+	vector<Solve> solves;
+	solves.insert(solves.end(), History::instance.activeSession->solves.begin() + m_bestAverageOf5Index,
+		History::instance.activeSession->solves.begin() + m_bestAverageOf5Index + 5);
+	AverageDialog* dlg = new AverageDialog(solves);
+	dlg->show();
+}
+
+
+void SessionWidget::showBestAvgOf5Tooltip()
+{
+	if (!History::instance.activeSession)
+		return;
+	if (m_bestAverageOf5Index == -1)
+		return;
+	if ((m_bestAverageOf5Index + 5) > (int)History::instance.activeSession->solves.size())
+		return;
+	vector<Solve> solves;
+	solves.insert(solves.end(), History::instance.activeSession->solves.begin() + m_bestAverageOf5Index,
+		History::instance.activeSession->solves.begin() + m_bestAverageOf5Index + 5);
+	AverageWidget* widget = new AverageWidget(solves);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(this);
 }
 
 
@@ -241,9 +374,9 @@ void SessionWidget::updateHistory()
 			m_sessionAverage->setText(stringForTime(History::instance.activeSession->sessionAvg()));
 		else
 			m_sessionAverage->setText("-");
-		int best = History::instance.activeSession->bestSolve();
-		m_bestSolve->setText(stringForTime(best));
-		m_bestAverageOf5->setText(stringForTime(History::instance.activeSession->bestAvgOf(5)));
+		int best = History::instance.activeSession->bestSolve(&m_bestSolve);
+		m_bestSolveLabel->setText(stringForTime(best));
+		m_bestAverageOf5->setText(stringForTime(History::instance.activeSession->bestAvgOf(5, &m_bestAverageOf5Index)));
 
 		int allTimeBest = -1;
 		for (auto& i : History::instance.sessions)
@@ -263,6 +396,7 @@ void SessionWidget::updateHistory()
 			labels.time = new ClickableLabel("", Theme::content, Theme::blue,
 				[=]() { showSolve(row); });
 			labels.time->setCursor(Qt::PointingHandCursor);
+			labels.time->setTooltipFunction([=]() { showSolveTooltip(row); });
 			labels.penalty = new QLabel("");
 			labels.options = new ClickableLabel(" ≡", Theme::selection, Theme::blue,
 				[=]() { options(row); });
@@ -322,7 +456,7 @@ void SessionWidget::updateHistory()
 		m_averageOf5->setText("-");
 		m_averageOf12->setText("-");
 		m_sessionAverage->setText("-");
-		m_bestSolve->setText("-");
+		m_bestSolveLabel->setText("-");
 		m_bestAverageOf5->setText("-");
 		m_noSolves->setVisible(true);
 

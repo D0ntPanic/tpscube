@@ -12,7 +12,16 @@ History History::instance;
 int Session::avgOf(const vector<int>& times)
 {
 	vector<int> sorted = times;
-	sort(sorted.begin(), sorted.end());
+	sort(sorted.begin(), sorted.end(), [](int a, int b) {
+		// DNF must be considered largest possible time
+		if ((a == -1) && (b == -1))
+			return false;
+		if (a == -1)
+			return false;
+		if (b == -1)
+			return true;
+		return a < b;
+	});
 	if (sorted.size() <= 2)
 		return -1;
 	sorted.erase(sorted.begin());
@@ -50,6 +59,8 @@ int Session::avgOfLast(size_t count, bool ignoreDNF)
 
 int Session::bestSolve(Solve* solve)
 {
+	if (solve)
+		solve->ok = false;
 	int best = -1;
 	for (auto& i : solves)
 	{

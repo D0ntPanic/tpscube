@@ -11,6 +11,8 @@
 #include "theme.h"
 #include "sessionwidget.h"
 #include "solvedialog.h"
+#include "averagedialog.h"
+#include "tooltip.h"
 
 using namespace std;
 
@@ -100,6 +102,14 @@ bool HistoryAllTimeBestSolveElement::click(HistoryMode*, QMouseEvent*)
 }
 
 
+void HistoryAllTimeBestSolveElement::tooltip(HistoryMode* parent) const
+{
+	SolveWidget* widget = new SolveWidget(m_solve);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(parent->viewport());
+}
+
+
 HistoryAllTimeBestAverageElement::HistoryAllTimeBestAverageElement(const QString& title, int best,
 	const shared_ptr<Session>& session, int start, int size):
 	HistoryAllTimeBestElement(title, best), m_session(session), m_start(start), m_size(size)
@@ -109,7 +119,28 @@ HistoryAllTimeBestAverageElement::HistoryAllTimeBestAverageElement(const QString
 
 bool HistoryAllTimeBestAverageElement::click(HistoryMode*, QMouseEvent*)
 {
+	vector<Solve> solves;
+	if ((!m_session) || ((m_start + m_size) > (int)m_session->solves.size()))
+		return false;
+	for (int i = 0; i < m_size; i++)
+		solves.push_back(m_session->solves[m_start + i]);
+	AverageDialog* dlg = new AverageDialog(solves);
+	dlg->show();
+	dlg->setFixedSize(dlg->size());
 	return false;
+}
+
+
+void HistoryAllTimeBestAverageElement::tooltip(HistoryMode* parent) const
+{
+	vector<Solve> solves;
+	if ((!m_session) || ((m_start + m_size) > (int)m_session->solves.size()))
+		return;
+	for (int i = 0; i < m_size; i++)
+		solves.push_back(m_session->solves[m_start + i]);
+	AverageWidget* widget = new AverageWidget(solves);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(parent->viewport());
 }
 
 
@@ -226,9 +257,8 @@ vector<shared_ptr<HistoryElement>> HistorySessionElement::children()
 	int x = rect().x() + 8;
 	if (m_sessionAvg != -1)
 	{
-		shared_ptr<HistorySessionBestAverageElement> avg =
-			make_shared<HistorySessionBestAverageElement>("Session avg: ", m_sessionAvg,
-			m_session, 0, (int)m_session->solves.size()); 
+		shared_ptr<HistorySessionAverageElement> avg =
+			make_shared<HistorySessionAverageElement>("Session avg: ", m_sessionAvg);
 		QSize size = avg->sizeHint();
 		avg->setRect(QRect(x, bestTimeY, size.width(), normalMetrics.height()));
 		x += size.width() + 32;
@@ -492,6 +522,17 @@ bool HistorySessionSolveTimeElement::click(HistoryMode*, QMouseEvent*)
 }
 
 
+void HistorySessionSolveTimeElement::tooltip(HistoryMode* parent) const
+{
+	if (m_index >= (int)m_session->solves.size())
+		return;
+	const Solve& solve = m_session->solves[m_index];
+	SolveWidget* widget = new SolveWidget(solve);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(parent->viewport());
+}
+
+
 HistorySessionSolveOptionsElement::HistorySessionSolveOptionsElement(const shared_ptr<Session>& session, int idx):
 	m_session(session), m_index(idx)
 {
@@ -719,6 +760,20 @@ bool HistorySessionBestSolveElement::click(HistoryMode*, QMouseEvent*)
 }
 
 
+void HistorySessionBestSolveElement::tooltip(HistoryMode* parent) const
+{
+	SolveWidget* widget = new SolveWidget(m_solve);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(parent->viewport());
+}
+
+
+HistorySessionAverageElement::HistorySessionAverageElement(const QString& title, int best):
+	HistorySessionBestElement(title, best)
+{
+}
+
+
 HistorySessionBestAverageElement::HistorySessionBestAverageElement(const QString& title, int best,
 	const shared_ptr<Session>& session, int start, int size):
 	HistorySessionBestElement(title, best), m_session(session), m_start(start), m_size(size)
@@ -728,7 +783,28 @@ HistorySessionBestAverageElement::HistorySessionBestAverageElement(const QString
 
 bool HistorySessionBestAverageElement::click(HistoryMode*, QMouseEvent*)
 {
+	vector<Solve> solves;
+	if ((!m_session) || ((m_start + m_size) > (int)m_session->solves.size()))
+		return false;
+	for (int i = 0; i < m_size; i++)
+		solves.push_back(m_session->solves[m_start + i]);
+	AverageDialog* dlg = new AverageDialog(solves);
+	dlg->show();
+	dlg->setFixedSize(dlg->size());
 	return false;
+}
+
+
+void HistorySessionBestAverageElement::tooltip(HistoryMode* parent) const
+{
+	vector<Solve> solves;
+	if ((!m_session) || ((m_start + m_size) > (int)m_session->solves.size()))
+		return;
+	for (int i = 0; i < m_size; i++)
+		solves.push_back(m_session->solves[m_start + i]);
+	AverageWidget* widget = new AverageWidget(solves);
+	Tooltip* tooltip = new Tooltip(widget);
+	tooltip->show(parent->viewport());
 }
 
 
@@ -738,6 +814,11 @@ HistoryMode::HistoryMode(QWidget* parent): QAbstractScrollArea(parent)
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 	setMouseTracking(true);
+
+	m_hoverTimer = new QTimer(this);
+	m_hoverTimer->setSingleShot(true);
+	m_hoverTimer->setInterval(500);
+	connect(m_hoverTimer, &QTimer::timeout, this, &HistoryMode::hoverTooltip);
 }
 
 
@@ -822,6 +903,10 @@ void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 			setCursor(Qt::ArrowCursor);
 		viewport()->update();
 	}
+
+	m_hoverTimer->stop();
+	if (m_hoverElement)
+		m_hoverTimer->start();
 }
 
 
@@ -844,6 +929,7 @@ void HistoryMode::leaveEvent(QEvent*)
 	m_hoverElement.reset();
 	viewport()->update();
 	setCursor(Qt::ArrowCursor);
+	m_hoverTimer->stop();
 }
 
 
@@ -855,6 +941,13 @@ void HistoryMode::scrollContentsBy(int dx, int dy)
 		viewport()->update();
 	}
 	QAbstractScrollArea::scrollContentsBy(dx, dy);
+}
+
+
+void HistoryMode::hoverTooltip()
+{
+	if (m_hoverElement)
+		m_hoverElement->tooltip(this);
 }
 
 
@@ -1016,4 +1109,19 @@ QString HistoryMode::stringForDate(time_t date)
 	else if (dt.daysTo(now) < 365)
 		return QString("%1 at %2").arg(dt.toString("MMMM d")).arg(t);
 	return QString("%1 at %2").arg(dt.toString("MMMM d, yyyy")).arg(t);
+}
+
+
+QString HistoryMode::shortStringForDate(time_t date)
+{
+	QDateTime dt = QDateTime::fromTime_t(date);
+	QDateTime now = QDateTime::currentDateTime();
+	QString t = dt.toString("h:mm ap");
+	if (dt.daysTo(now) == 0)
+		return QString("Today at %1").arg(t);
+	else if (dt.daysTo(now) < 7)
+		return QString("%1 at %2").arg(dt.toString("ddd")).arg(t);
+	else if (dt.daysTo(now) < 365)
+		return QString("%1 at %2").arg(dt.toString("MMM d")).arg(t);
+	return QString("%1 at %2").arg(dt.toString("MMM d, yyyy")).arg(t);
 }

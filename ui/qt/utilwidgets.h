@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QtWidgets/QLabel>
+#include <QtCore/QTimer>
 #include <functional>
 #include "theme.h"
 
@@ -27,16 +28,25 @@ public:
 
 class ClickableLabel: public QLabel
 {
-	std::function<void()> m_onClick;
+	Q_OBJECT
+
+	std::function<void()> m_onClick, m_tooltip;
 	QColor m_defaultColor, m_hoverColor;
+
+	QTimer* m_hoverTimer;
 
 protected:
 	virtual void mousePressEvent(QMouseEvent* event);
+	virtual void mouseMoveEvent(QMouseEvent* event);
 	virtual void enterEvent(QEvent* event);
 	virtual void leaveEvent(QEvent* event);
+
+private slots:
+	void hoverTooltip();
 
 public:
 	ClickableLabel(const QString& text, QColor defaultColor, QColor hoverColor,
 		const std::function<void()>& func);
 	void setColors(QColor defaultColor, QColor hoverColor);
+	void setTooltipFunction(const std::function<void()>& func);
 };

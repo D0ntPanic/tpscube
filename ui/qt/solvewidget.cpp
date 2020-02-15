@@ -8,8 +8,7 @@
 using namespace std;
 
 
-SolveWidget::SolveWidget(QWidget* parent, const Solve& solve):
-	QWidget(parent), m_solve(solve)
+SolveWidget::SolveWidget(const Solve& solve): m_solve(solve)
 {
 	QVBoxLayout* layout = new QVBoxLayout();
 	layout->setContentsMargins(0, 0, 0, 0);
@@ -72,27 +71,28 @@ SolveWidget::SolveWidget(QWidget* parent, const Solve& solve):
 
 QString SolveWidget::solveDetailsText()
 {
-	QString result;
-	if (m_solve.ok)
+	QString result = solveTimeText(m_solve);
+	result += "   ";
+	result += QString::fromStdString(m_solve.scramble.ToString());
+	result += "   @";
+	result += QDateTime::fromSecsSinceEpoch(m_solve.created).toString(Qt::DateFormat::TextDate);
+	return result;
+}
+
+
+QString SolveWidget::solveTimeText(const Solve& solve)
+{
+	if (solve.ok)
 	{
-		int hs = (m_solve.time + 5) / 10;
+		int hs = (solve.time + 5) / 10;
 		int minutes = hs / 6000;
 		int seconds = (hs / 100) % 60;
 		hs %= 100;
 
 		if (minutes > 0)
-			result = QString::asprintf("%d:%02d.%02d", minutes, seconds, hs);
+			return QString::asprintf("%d:%02d.%02d", minutes, seconds, hs);
 		else
-			result = QString::asprintf("%d.%02d", seconds, hs);
+			return QString::asprintf("%d.%02d", seconds, hs);
 	}
-	else
-	{
-		result = "DNF";
-	}
-
-	result += "   ";
-	result += QString::fromStdString(m_solve.scramble.ToString());
-	result += "   ";
-	result += QDateTime::fromSecsSinceEpoch(m_solve.created).toString(Qt::DateFormat::TextDate);
-	return result;
+	return "DNF";
 }

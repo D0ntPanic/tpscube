@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QtWidgets/QAbstractScrollArea>
+#include <QtCore/QTimer>
 #include "history.h"
 
 struct SessionHistoryInfo
@@ -40,6 +41,7 @@ public:
 	virtual bool interactable() const { return false; }
 	virtual bool click(HistoryMode* parent, QMouseEvent* event) { (void)parent; (void)event; return false; }
 	virtual bool hasHandCursor() const { return false; }
+	virtual void tooltip(HistoryMode* parent) const { (void)parent; }
 };
 
 class HistoryAllTimeBestElement: public HistoryElement
@@ -63,6 +65,7 @@ class HistoryAllTimeBestSolveElement: public HistoryAllTimeBestElement
 public:
 	HistoryAllTimeBestSolveElement(const QString& title, int best, const Solve& solve);
 	virtual bool click(HistoryMode* parent, QMouseEvent* event) override;
+	virtual void tooltip(HistoryMode* parent) const override;
 };
 
 class HistoryAllTimeBestAverageElement: public HistoryAllTimeBestElement
@@ -74,6 +77,7 @@ public:
 	HistoryAllTimeBestAverageElement(const QString& title, int best,
 		const std::shared_ptr<Session>& session, int start, int size);
 	virtual bool click(HistoryMode* parent, QMouseEvent* event) override;
+	virtual void tooltip(HistoryMode* parent) const override;
 };
 
 class HistorySessionElement: public HistoryElement
@@ -118,6 +122,7 @@ public:
 	virtual bool interactable() const override { return true; }
 	virtual bool click(HistoryMode* parent, QMouseEvent* event) override;
 	virtual bool hasHandCursor() const override { return true; }
+	virtual void tooltip(HistoryMode* parent) const override;
 };
 
 class HistorySessionSolveOptionsElement: public HistoryElement
@@ -165,6 +170,15 @@ class HistorySessionBestSolveElement: public HistorySessionBestElement
 public:
 	HistorySessionBestSolveElement(const QString& title, int best, const Solve& solve);
 	virtual bool click(HistoryMode* parent, QMouseEvent* event) override;
+	virtual void tooltip(HistoryMode* parent) const override;
+};
+
+class HistorySessionAverageElement: public HistorySessionBestElement
+{
+public:
+	HistorySessionAverageElement(const QString& title, int best);
+	virtual bool interactable() const override { return false; }
+	virtual bool hasHandCursor() const override { return false; }
 };
 
 class HistorySessionBestAverageElement: public HistorySessionBestElement
@@ -176,16 +190,21 @@ public:
 	HistorySessionBestAverageElement(const QString& title, int best,
 		const std::shared_ptr<Session>& session, int start, int size);
 	virtual bool click(HistoryMode* parent, QMouseEvent* event) override;
+	virtual void tooltip(HistoryMode* parent) const override;
 };
 
 class HistoryMode: public QAbstractScrollArea
 {
+	Q_OBJECT
+
 	SolveType m_type = SOLVE_3X3X3;
 	int m_bestSolveTime = -1;
 
 	std::vector<std::shared_ptr<Session>> m_sessions;
 	std::vector<std::shared_ptr<HistoryElement>> m_elements;
 	std::shared_ptr<HistoryElement> m_hoverElement;
+
+	QTimer* m_hoverTimer;
 
 	void paintElement(QPainter& p, QPaintEvent* event, const std::shared_ptr<HistoryElement>& element);
 	std::shared_ptr<HistoryElement> getInteractableElement(int x, int y, const std::shared_ptr<HistoryElement>& element);
@@ -198,6 +217,9 @@ protected:
 	virtual void leaveEvent(QEvent* event) override;
 	virtual void scrollContentsBy(int dx, int dy) override;
 
+private slots:
+	void hoverTooltip();
+
 public:
 	HistoryMode(QWidget* parent);
 
@@ -205,4 +227,5 @@ public:
 	void updateHistory();
 
 	static QString stringForDate(time_t date);
+	static QString shortStringForDate(time_t date);
 };
