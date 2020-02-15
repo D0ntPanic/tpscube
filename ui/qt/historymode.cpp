@@ -15,16 +15,35 @@
 using namespace std;
 
 
-HistoryMode::HistoryMode(QWidget* parent): QAbstractScrollArea(parent)
+void HistoryElement::move(int dx, int dy)
 {
-	setFrameStyle(QFrame::NoFrame);
-	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-	setMouseTracking(true);
+	m_rect = QRect(m_rect.x() + dx, m_rect.y() + dy, m_rect.width(), m_rect.height());
+	for (auto& i : m_children)
+		i->move(dx, dy);
 }
 
 
-void HistoryMode::paintAllTimeBest(QPainter& p, int x, const QString& title, int best)
+HistoryAllTimeBestElement::HistoryAllTimeBestElement(const QString& title, int best):
+	m_title(title), m_best(best)
+{
+}
+
+
+QSize HistoryAllTimeBestElement::sizeHint() const
+{
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont largestFont = fontOfRelativeSize(2.5f, QFont::Light);
+	QFontMetrics lightMetrics(lightFont);
+	QFontMetrics largestMetrics(largestFont);
+	int titleWidth = lightMetrics.boundingRect(m_title).width();
+	int bestWidth = largestMetrics.boundingRect("00:00.00").width();
+	if (titleWidth > bestWidth)
+		return QSize(titleWidth, lightMetrics.height() + largestMetrics.height());
+	return QSize(bestWidth, lightMetrics.height() + largestMetrics.height());
+}
+
+
+void HistoryAllTimeBestElement::paint(QPainter& p, bool hovering)
 {
 	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
 	QFont largestFont = fontOfRelativeSize(2.5f, QFont::Light);
@@ -33,15 +52,15 @@ void HistoryMode::paintAllTimeBest(QPainter& p, int x, const QString& title, int
 	QFontMetrics largestMetrics(largestFont);
 	QFontMetrics largeMetrics(largeFont);
 
-	int yofs = verticalScrollBar()->value();
+	int centerX = rect().x() + (rect().width() / 2);
+	int headingWidth = lightMetrics.boundingRect(m_title).width();
 
-	int headingWidth = lightMetrics.boundingRect(title).width();
 	p.setFont(lightFont);
 	p.setPen(Theme::content);
-	p.drawText(x - (headingWidth / 2), 16 + lightMetrics.ascent() - yofs, title);
-	int y = 16 + lightMetrics.height() - yofs;
+	p.drawText(centerX - (headingWidth / 2), rect().y() + lightMetrics.ascent(), m_title);
+	int y = rect().y() + lightMetrics.height();
 
-	int hs = (best + 5) / 10;
+	int hs = (m_best + 5) / 10;
 	int minutes = hs / 6000;
 	int seconds = (hs / 100) % 60;
 	hs %= 100;
@@ -55,16 +74,569 @@ void HistoryMode::paintAllTimeBest(QPainter& p, int x, const QString& title, int
 
 	int largestWidth = largestMetrics.horizontalAdvance(largeText);
 	int timeWidth = largestWidth + largeMetrics.horizontalAdvance(smallText);
-	int timeX = x - (timeWidth / 2);
+	int timeX = centerX - (timeWidth / 2);
 	p.setFont(largestFont);
-	p.setPen(Theme::orange);
+	if (hovering)
+		p.setPen(Theme::blue);
+	else
+		p.setPen(Theme::orange);
 	p.drawText(timeX, y + largestMetrics.ascent(), largeText);
 	p.setFont(largeFont);
 	p.drawText(timeX + largestWidth, y + largestMetrics.ascent(), smallText);
 }
 
 
-void HistoryMode::paintSessionBest(QPainter& p, int& x, int y, const QString& title, int best)
+HistoryAllTimeBestSolveElement::HistoryAllTimeBestSolveElement(const QString& title, int best, const Solve& solve):
+	HistoryAllTimeBestElement(title, best), m_solve(solve)
+{
+}
+
+
+bool HistoryAllTimeBestSolveElement::click(HistoryMode*, QMouseEvent*)
+{
+	SolveDialog* dlg = new SolveDialog(m_solve);
+	dlg->show();
+	return false;
+}
+
+
+HistoryAllTimeBestAverageElement::HistoryAllTimeBestAverageElement(const QString& title, int best,
+	const shared_ptr<Session>& session, int start, int size):
+	HistoryAllTimeBestElement(title, best), m_session(session), m_start(start), m_size(size)
+{
+}
+
+
+bool HistoryAllTimeBestAverageElement::click(HistoryMode*, QMouseEvent*)
+{
+	return false;
+}
+
+
+HistorySessionElement::HistorySessionElement(const std::shared_ptr<Session>& session,
+	int x, int y, int width, int* allTimeBestSolve): m_session(session),
+	m_allTimeBestSolve(allTimeBestSolve)
+{
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
+	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
+	QFontMetrics lightMetrics(lightFont);
+	QFontMetrics normalMetrics(normalFont);
+	QFontMetrics smallMetrics(smallFont);
+	QFontMetrics headingMetrics(headingFont);
+	int headingFontHeight = headingMetrics.height();
+
+	int height = headingFontHeight + 24;
+
+	// Compute size of individual components of each solve display
+	QString maxSolveNum = QString::asprintf("%d.    ", (int)m_session->solves.size());
+	int solveNumWidth = lightMetrics.boundingRect(maxSolveNum).width();
+
+	int maxSolveTime = 60000;
+	for (auto& j : m_session->solves)
+	{
+		if (j.ok && ((int)j.time > maxSolveTime))
+			maxSolveTime = (int)j.time;
+	}
+	int minutes = (maxSolveTime + 5) / 60000;
+	QString maxTimeStr = QString::asprintf("%d:00.00", minutes);
+	int timeWidth = normalMetrics.boundingRect(maxTimeStr).width();
+	int penaltyWidth = smallMetrics.boundingRect("  (+2) ").width();
+	int optionWidth = normalMetrics.boundingRect("  ≡ ").width();
+	int removeWidth = normalMetrics.boundingRect("  × ").width();
+
+	// Compute the number of columns that can be displayed for this session
+	m_columnWidth = solveNumWidth + timeWidth + penaltyWidth +
+		optionWidth + removeWidth + 16;
+	m_columns = (width - 8) / m_columnWidth;
+	if (m_columns < 1)
+		m_columns = 1;
+
+	// Compute the number of rows that are required and update size of session
+	m_rows = ((int)m_session->solves.size() + m_columns - 1) / m_columns;
+	height += m_rows * normalMetrics.height();
+
+	// Compute best times for the session
+	m_bestSolveTime = m_session->bestSolve(&m_bestSolve);
+	m_bestAvgOf5 = m_session->bestAvgOf(5, &m_bestAvgOf5Start);
+	m_bestAvgOf12 = m_session->bestAvgOf(12, &m_bestAvgOf12Start);
+	m_sessionAvg = m_session->sessionAvg();
+
+	height += normalMetrics.height() + 16;
+
+	setRect(QRect(x, y, width, height));
+}
+
+
+vector<shared_ptr<HistoryElement>> HistorySessionElement::children()
+{
+	if (HistoryElement::children().size() != 0)
+		return HistoryElement::children();
+
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
+	QFontMetrics normalMetrics(normalFont);
+	QFontMetrics headingMetrics(headingFont);
+	int headingFontHeight = headingMetrics.height();
+	int solveHeight = normalMetrics.height();
+
+	int sessionOptionsWidth = normalMetrics.boundingRect("  ≡ ").width();
+	shared_ptr<HistorySessionOptionsElement> sessionOptions =
+		make_shared<HistorySessionOptionsElement>(m_session);
+	sessionOptions->setRect(QRect(rect().x() + rect().width() - (sessionOptionsWidth + 16),
+		rect().y() + 4, sessionOptionsWidth, headingFontHeight));
+	addChild(sessionOptions);
+
+	int solveY = rect().y() + headingFontHeight + 16;
+
+	for (int row = 0; row < m_rows; row++)
+	{
+		for (int col = 0; col < m_columns; col++)
+		{
+			int solveIndex = (col * m_rows) + row;
+			if (solveIndex >= (int)m_session->solves.size())
+				break;
+
+			int removeWidth = normalMetrics.boundingRect("  × ").width();
+			int optionsWidth = normalMetrics.boundingRect("  ≡ ").width();
+
+			shared_ptr<HistorySessionSolveTimeElement> timeElement =
+				make_shared<HistorySessionSolveTimeElement>(m_session, solveIndex,
+				m_bestSolveTime, m_allTimeBestSolve);
+			timeElement->setRect(QRect(rect().x() + 8 + col * m_columnWidth,
+				solveY + row * solveHeight, m_columnWidth - (16 + removeWidth + optionsWidth), solveHeight));
+			addChild(timeElement);
+
+			shared_ptr<HistorySessionSolveOptionsElement> optionsElement =
+				make_shared<HistorySessionSolveOptionsElement>(m_session, solveIndex);
+			optionsElement->setRect(QRect(timeElement->rect().x() + timeElement->rect().width(),
+				timeElement->rect().y(), optionsWidth, timeElement->rect().height()));
+			addChild(optionsElement);
+
+			shared_ptr<HistorySessionSolveRemoveElement> removeElement =
+				make_shared<HistorySessionSolveRemoveElement>(m_session, solveIndex);
+			removeElement->setRect(QRect(optionsElement->rect().x() + optionsElement->rect().width(),
+				optionsElement->rect().y(), removeWidth, optionsElement->rect().height()));
+			addChild(removeElement);
+		}
+	}
+
+	int bestTimeY = solveY + m_rows * solveHeight + 16;
+	int x = rect().x() + 8;
+	if (m_sessionAvg != -1)
+	{
+		shared_ptr<HistorySessionBestAverageElement> avg =
+			make_shared<HistorySessionBestAverageElement>("Session avg: ", m_sessionAvg,
+			m_session, 0, (int)m_session->solves.size()); 
+		QSize size = avg->sizeHint();
+		avg->setRect(QRect(x, bestTimeY, size.width(), normalMetrics.height()));
+		x += size.width() + 32;
+		addChild(avg);
+	}
+
+	if (m_bestSolveTime != -1)
+	{
+		shared_ptr<HistorySessionBestSolveElement> best =
+			make_shared<HistorySessionBestSolveElement>("Best solve: ", m_bestSolveTime,
+			m_bestSolve);
+		QSize size = best->sizeHint();
+		best->setRect(QRect(x, bestTimeY, size.width(), normalMetrics.height()));
+		x += size.width() + 32;
+		addChild(best);
+	}
+
+	if (m_bestAvgOf5 != -1)
+	{
+		shared_ptr<HistorySessionBestAverageElement> avg =
+			make_shared<HistorySessionBestAverageElement>("Best avg of 5: ", m_bestAvgOf5,
+			m_session, m_bestAvgOf5Start, 5);
+		QSize size = avg->sizeHint();
+		avg->setRect(QRect(x, bestTimeY, size.width(), normalMetrics.height()));
+		x += size.width() + 32;
+		addChild(avg);
+	}
+
+	if (m_bestAvgOf12 != -1)
+	{
+		shared_ptr<HistorySessionBestAverageElement> avg =
+			make_shared<HistorySessionBestAverageElement>("Best avg of 12: ", m_bestAvgOf12,
+			m_session, m_bestAvgOf12Start, 12);
+		QSize size = avg->sizeHint();
+		avg->setRect(QRect(x, bestTimeY, size.width(), normalMetrics.height()));
+		x += size.width() + 32;
+		addChild(avg);
+	}
+
+	return HistoryElement::children();
+}
+
+
+void HistorySessionElement::paint(QPainter& p, bool)
+{
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
+	QFontMetrics normalMetrics(normalFont);
+	QFontMetrics headingMetrics(headingFont);
+	int headingFontHeight = headingMetrics.height();
+	int solveHeight = normalMetrics.height();
+
+	p.fillRect(rect(), Theme::background);
+
+	p.setFont(headingFont);
+	p.setPen(Theme::blue);
+	QString dateText;
+	if (m_session->solves.size() != 0)
+		dateText = HistoryMode::stringForDate(m_session->solves[m_session->solves.size() - 1].created);
+	else
+		dateText = HistoryMode::stringForDate(m_session->update.date);
+	QString sessionText;
+	if (m_session->name.size() == 0)
+		sessionText = "Session - " + dateText;
+	else
+		sessionText = QString::fromStdString(m_session->name) + " - " + dateText;
+	p.drawText(QRect(rect().x() + 8, rect().y() + 4, rect().width() - 16, headingFontHeight), sessionText);
+
+	// Draw line to separate heading from solve list
+	p.fillRect(rect().x() + 8, rect().y() + headingFontHeight + 8, rect().width() - 16, 1, Theme::blue.darker());
+
+	int solveY = rect().y() + headingFontHeight + 16;
+
+	// Draw lines to separate columns in the solve list
+	for (int col = 1; col < m_columns; col++)
+		p.fillRect(rect().x() + col * m_columnWidth, solveY, 1, solveHeight * m_rows, Theme::selection);
+
+	// Draw line to separate solve list from best times
+	int bestTimeY = solveY + m_rows * solveHeight + 16;
+	p.fillRect(rect().x() + 8, bestTimeY - 8, rect().width() - 16, 1, Theme::selection);
+}
+
+
+HistorySessionOptionsElement::HistorySessionOptionsElement(const std::shared_ptr<Session>& session):
+	m_session(session)
+{
+}
+
+
+void HistorySessionOptionsElement::paint(QPainter& p, bool hovering)
+{
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFontMetrics normalMetrics(normalFont);
+	p.setFont(normalFont);
+	if (hovering)
+		p.setPen(Theme::blue);
+	else
+		p.setPen(Theme::selection);
+	QTextOption option;
+	option.setAlignment(Qt::AlignVCenter | Qt::AlignCenter);
+	p.drawText(rect(), "  ≡ ");
+}
+
+
+bool HistorySessionOptionsElement::click(HistoryMode* parent, QMouseEvent*)
+{
+	shared_ptr<Session> aboveSession, belowSession;
+	for (size_t i = 0; i < parent->sessions().size(); i++)
+	{
+		if (parent->sessions()[i] == m_session)
+		{
+			if (i > 0)
+				aboveSession = parent->sessions()[i - 1];
+			if (i < (parent->sessions().size() - 1))
+				belowSession = parent->sessions()[i + 1];
+			break;
+		}
+	}
+
+	QMenu menu;
+	QAction* rename = new QAction("Rename Session...");
+	QAction* remove = new QAction("Delete Session");
+	QAction* mergeAbove = nullptr;
+	if (aboveSession)
+		mergeAbove = new QAction("Merge with Above Session");
+	QAction* mergeBelow = nullptr;
+	if (belowSession)
+		mergeBelow = new QAction("Merge with Below Session");
+	menu.addAction(rename);
+	menu.addAction(remove);
+	if (mergeAbove || mergeBelow)
+		menu.addSeparator();
+	if (mergeAbove)
+		menu.addAction(mergeAbove);
+	if (mergeBelow)
+		menu.addAction(mergeBelow);
+
+	QAction* clicked = menu.exec(QCursor::pos() + QPoint(2, 2));
+	if (clicked == rename)
+	{
+		QString name = QString::fromStdString(m_session->name);
+		name = QInputDialog::getText(parent, "Rename Session", "Session name:", QLineEdit::Normal, name);
+		if (name.isNull())
+			return false;
+
+		m_session->name = name.toStdString();
+		m_session->dirty = true;
+		History::instance.UpdateDatabaseForSession(m_session);
+		return true;
+	}
+	else if (clicked == remove)
+	{
+		if (QMessageBox::critical(parent, "Delete Session", "Are you sure you want to delete this session?",
+			QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)
+		{
+			History::instance.DeleteSession(m_session);
+			return true;
+		}
+	}
+	else if (mergeAbove && (clicked == mergeAbove))
+	{
+		History::instance.MergeSessions(m_session, aboveSession, m_session->name);
+		return true;
+	}
+	else if (mergeBelow && (clicked == mergeBelow))
+	{
+		History::instance.MergeSessions(belowSession, m_session, m_session->name);
+		return true;
+	}
+
+	return false;
+}
+
+
+HistorySessionSolveTimeElement::HistorySessionSolveTimeElement(const shared_ptr<Session>& session, int idx,
+	int bestSolveTime, int* allTimeBestSolve): m_session(session), m_index(idx),
+	m_bestSolveTime(bestSolveTime), m_allTimeBestSolve(allTimeBestSolve)
+{
+}
+
+
+void HistorySessionSolveTimeElement::paint(QPainter& p, bool hovering)
+{
+	if (m_index >= (int)m_session->solves.size())
+		return;
+
+	const Solve& solve = m_session->solves[m_index];
+
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
+	QFontMetrics lightMetrics(lightFont);
+	QFontMetrics normalMetrics(normalFont);
+	QFontMetrics smallMetrics(smallFont);
+
+	// Draw solve number to the left
+	p.setPen(Theme::disabled);
+	p.setFont(lightFont);
+	p.drawText(rect().x(), rect().y() + lightMetrics.ascent(), QString::asprintf("%d.", m_index + 1));
+
+	// Create strings for the solve time
+	QString largeTimeText, smallTimeText;
+	if (solve.ok)
+	{
+		int hs = (solve.time + 5) / 10;
+		int minutes = hs / 6000;
+		int seconds = (hs / 100) % 60;
+		hs %= 100;
+		if (minutes > 0)
+			largeTimeText = QString::asprintf("%d:%02d", minutes, seconds);
+		else
+			largeTimeText = QString::asprintf("%d", seconds);
+		smallTimeText = QString::asprintf(".%02d", hs);
+	}
+	else
+	{
+		largeTimeText = "DNF";
+		smallTimeText = "";
+	}
+
+	// Draw penalty
+	int x = rect().x() + rect().width();
+	x -= smallMetrics.boundingRect("  (+2) ").width();
+	if (solve.ok && (solve.penalty != 0))
+	{
+		p.setFont(smallFont);
+		p.setPen(Theme::red);
+		p.drawText(x, rect().y() + normalMetrics.ascent(),
+			QString::asprintf("  (+%d)", (int)solve.penalty / 1000));
+	}
+
+	// Draw solve time
+	x -= normalMetrics.horizontalAdvance(largeTimeText) +
+		smallMetrics.horizontalAdvance(smallTimeText);
+	p.setFont(normalFont);
+	if (hovering)
+		p.setPen(Theme::blue);
+	else if (solve.ok && ((int)solve.time == *m_allTimeBestSolve))
+		p.setPen(Theme::orange);
+	else if (solve.ok && ((int)solve.time == m_bestSolveTime))
+		p.setPen(Theme::green);
+	else if (solve.ok)
+		p.setPen(Theme::content);
+	else
+		p.setPen(Theme::red);
+	p.drawText(x, rect().y() + normalMetrics.ascent(), largeTimeText);
+	p.setFont(smallFont);
+	p.drawText(x + normalMetrics.horizontalAdvance(largeTimeText),
+		rect().y() + normalMetrics.ascent(), smallTimeText);
+}
+
+
+bool HistorySessionSolveTimeElement::click(HistoryMode*, QMouseEvent*)
+{
+	if (m_index >= (int)m_session->solves.size())
+		return false;
+	const Solve& solve = m_session->solves[m_index];
+	SolveDialog* dlg = new SolveDialog(solve);
+	dlg->show();
+	return false;
+}
+
+
+HistorySessionSolveOptionsElement::HistorySessionSolveOptionsElement(const shared_ptr<Session>& session, int idx):
+	m_session(session), m_index(idx)
+{
+}
+
+
+void HistorySessionSolveOptionsElement::paint(QPainter& p, bool hovering)
+{
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFontMetrics normalMetrics(normalFont);
+	p.setFont(normalFont);
+	if (hovering)
+		p.setPen(Theme::blue);
+	else
+		p.setPen(Theme::selection);
+	p.drawText(rect().x(), rect().y() + normalMetrics.ascent(), "  ≡ ");
+}
+
+
+bool HistorySessionSolveOptionsElement::click(HistoryMode*, QMouseEvent*)
+{
+	if (m_index >= (int)m_session->solves.size())
+		return false;
+
+	Solve& solve = m_session->solves[m_index];
+
+	QMenu menu;
+	QAction* solveOK = new QAction("Solve OK");
+	solveOK->setCheckable(true);
+	solveOK->setChecked(solve.ok && (solve.penalty == 0));
+	QAction* penalty = new QAction("2 Second Penalty");
+	penalty->setCheckable(true);
+	penalty->setChecked(solve.ok && (solve.penalty == 2000));
+	QAction* dnf = new QAction("Did Not Finish");
+	dnf->setCheckable(true);
+	dnf->setChecked(!solve.ok);
+	QAction* split = nullptr;
+	if (m_index > 0)
+		split = new QAction("Split Session Starting Here");
+	menu.addAction(solveOK);
+	menu.addAction(penalty);
+	menu.addAction(dnf);
+	if (split)
+	{
+		menu.addSeparator();
+		menu.addAction(split);
+	}
+
+	QAction* clicked = menu.exec(QCursor::pos() + QPoint(2, 2));
+	if (clicked == solveOK)
+	{
+		solve.ok = true;
+		solve.time -= solve.penalty;
+		solve.penalty = 0;
+		solve.update.id = History::instance.idGenerator->GenerateId();
+		solve.update.date = time(NULL);
+		solve.dirty = true;
+	}
+	else if (clicked == penalty)
+	{
+		solve.ok = true;
+		solve.time -= solve.penalty;
+		solve.penalty = 2000;
+		solve.time += solve.penalty;
+		solve.update.id = History::instance.idGenerator->GenerateId();
+		solve.update.date = time(NULL);
+		solve.dirty = true;
+	}
+	else if (clicked == dnf)
+	{
+		solve.ok = false;
+		solve.update.id = History::instance.idGenerator->GenerateId();
+		solve.update.date = time(NULL);
+		solve.dirty = true;
+	}
+	else if (split && (clicked == split))
+	{
+		History::instance.SplitSessionAtSolve(m_session, (size_t)m_index);
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+
+	m_session->update.id = History::instance.idGenerator->GenerateId();
+	m_session->update.date = time(NULL);
+	m_session->dirty = true;
+	History::instance.UpdateDatabaseForSession(m_session);
+	return true;
+}
+
+
+HistorySessionSolveRemoveElement::HistorySessionSolveRemoveElement(const shared_ptr<Session>& session, int idx):
+	m_session(session), m_index(idx)
+{
+}
+
+
+void HistorySessionSolveRemoveElement::paint(QPainter& p, bool hovering)
+{
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFontMetrics normalMetrics(normalFont);
+	p.setFont(normalFont);
+	if (hovering)
+		p.setPen(Theme::red);
+	else
+		p.setPen(Theme::selection);
+	p.drawText(rect().x(), rect().y() + normalMetrics.ascent(), "  × ");
+}
+
+
+bool HistorySessionSolveRemoveElement::click(HistoryMode* parent, QMouseEvent*)
+{
+	if (m_index >= (int)m_session->solves.size())
+		return false;
+
+	Solve& solve = m_session->solves[m_index];
+
+	QString msg;
+	if (solve.ok)
+		msg = QString("Delete solve with time of ") + SessionWidget::stringForSolveTime(solve) + QString("?");
+	else
+		msg = "Delete DNF solve?";
+	if (QMessageBox::critical(parent, "Delete Solve", msg, QMessageBox::Yes, QMessageBox::No) != QMessageBox::Yes)
+		return false;
+
+	m_session->solves.erase(m_session->solves.begin() + m_index);
+	m_session->dirty = true;
+	History::instance.UpdateDatabaseForSession(m_session);
+
+	if (m_session->solves.size() == 0)
+		History::instance.DeleteSession(m_session);
+
+	return true;
+}
+
+
+HistorySessionBestElement::HistorySessionBestElement(const QString& title, int best):
+	m_title(title), m_best(best)
+{
+}
+
+
+QSize HistorySessionBestElement::sizeHint() const
 {
 	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
 	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
@@ -73,12 +645,42 @@ void HistoryMode::paintSessionBest(QPainter& p, int& x, int y, const QString& ti
 	QFontMetrics normalMetrics(normalFont);
 	QFontMetrics smallMetrics(normalFont);
 
+	int width = lightMetrics.horizontalAdvance(m_title);
+
+	int hs = (m_best + 5) / 10;
+	int minutes = hs / 6000;
+	int seconds = (hs / 100) % 60;
+	hs %= 100;
+
+	QString largeText, smallText;
+	if (minutes > 0)
+		largeText = QString::asprintf("%d:%02d", minutes, seconds);
+	else
+		largeText = QString::asprintf("%d", seconds);
+	smallText = QString::asprintf(".%02d", hs);
+
+	width += normalMetrics.horizontalAdvance(largeText);
+	width += smallMetrics.horizontalAdvance(smallText);
+	return QSize(width, normalMetrics.height());
+}
+
+
+void HistorySessionBestElement::paint(QPainter& p, bool hovering)
+{
+	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
+	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
+	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
+	QFontMetrics lightMetrics(lightFont);
+	QFontMetrics normalMetrics(normalFont);
+	QFontMetrics smallMetrics(normalFont);
+
+	int x = rect().x();
 	p.setFont(lightFont);
 	p.setPen(Theme::disabled);
-	p.drawText(x, y + normalMetrics.ascent(), title);
-	x += lightMetrics.horizontalAdvance(title);
+	p.drawText(x, rect().y() + normalMetrics.ascent(), m_title);
+	x += lightMetrics.horizontalAdvance(m_title);
 
-	int hs = (best + 5) / 10;
+	int hs = (m_best + 5) / 10;
 	int minutes = hs / 6000;
 	int seconds = (hs / 100) % 60;
 	hs %= 100;
@@ -91,243 +693,85 @@ void HistoryMode::paintSessionBest(QPainter& p, int& x, int y, const QString& ti
 	smallText = QString::asprintf(".%02d", hs);
 
 	p.setFont(normalFont);
-	p.setPen(Theme::content);
-	p.drawText(x, y + normalMetrics.ascent(), largeText);
+	if (hovering)
+		p.setPen(Theme::blue);
+	else
+		p.setPen(Theme::content);
+	p.drawText(x, rect().y() + normalMetrics.ascent(), largeText);
 	x += normalMetrics.horizontalAdvance(largeText);
 	p.setFont(smallFont);
-	p.drawText(x, y + normalMetrics.ascent(), smallText);
+	p.drawText(x, rect().y() + normalMetrics.ascent(), smallText);
 	x += smallMetrics.horizontalAdvance(smallText);
+}
+
+
+HistorySessionBestSolveElement::HistorySessionBestSolveElement(const QString& title, int best, const Solve& solve):
+	HistorySessionBestElement(title, best), m_solve(solve)
+{
+}
+
+
+bool HistorySessionBestSolveElement::click(HistoryMode*, QMouseEvent*)
+{
+	SolveDialog* dlg = new SolveDialog(m_solve);
+	dlg->show();
+	return false;
+}
+
+
+HistorySessionBestAverageElement::HistorySessionBestAverageElement(const QString& title, int best,
+	const shared_ptr<Session>& session, int start, int size):
+	HistorySessionBestElement(title, best), m_session(session), m_start(start), m_size(size)
+{
+}
+
+
+bool HistorySessionBestAverageElement::click(HistoryMode*, QMouseEvent*)
+{
+	return false;
+}
+
+
+HistoryMode::HistoryMode(QWidget* parent): QAbstractScrollArea(parent)
+{
+	setFrameStyle(QFrame::NoFrame);
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+	setMouseTracking(true);
+}
+
+
+void HistoryMode::paintElement(QPainter& p, QPaintEvent* event, const shared_ptr<HistoryElement>& element)
+{
+	if (!event->rect().intersects(element->rect()))
+		return;
+
+	element->paint(p, element == m_hoverElement);
+
+	for (auto& i : element->children())
+		paintElement(p, event, i);
 }
 
 
 void HistoryMode::paintEvent(QPaintEvent* event)
 {
 	QPainter p(viewport());
-	int width = viewport()->width();
-
-	// Create fonts used during rendering
-	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
-	QFontMetrics headingMetrics(headingFont);
-	int headingFontHeight = headingMetrics.height();
-
-	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
-	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
-	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
-	QFontMetrics lightMetrics(lightFont);
-	QFontMetrics normalMetrics(normalFont);
-	QFontMetrics smallMetrics(smallFont);
-	int solveHeight = normalMetrics.height();
-
 	int yofs = verticalScrollBar()->value();
+	p.translate(0, -yofs);
 
-	if (m_sessions.size() == 0)
+	if (m_elements.size() == 0)
 	{
 		// No sessions, don't leave it blank
-		p.setFont(fontOfRelativeSize(1.0f, QFont::Light, true));
+		QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light, true);
+		QFontMetrics lightMetrics(lightFont);
+		p.setFont(lightFont);
 		p.setPen(Theme::disabled);
 		p.drawText(16, 16 - yofs + lightMetrics.ascent(), "No sessions have been completed.");
 		return;
 	}
 
-	// Render personal bests at top
-	int bestCount = 0;
-	if (m_bestSolve != -1)
-		bestCount++;
-	if (m_bestAvgOf5 != -1)
-		bestCount++;
-	if (m_bestAvgOf12 != -1)
-		bestCount++;
-
-	if (bestCount > 0)
-	{
-		QFont largestFont = fontOfRelativeSize(2.5f, QFont::Light);
-		QFontMetrics largestMetrics(largestFont);
-		int bestWidth = largestMetrics.boundingRect("00:00.00").width() + 32;
-
-		int x = (viewport()->width() / 2) + (bestWidth / 2) - ((bestWidth * bestCount) / 2);
-
-		if (m_bestSolve != -1)
-		{
-			paintAllTimeBest(p, x, "Best solve", m_bestSolve);
-			x += bestWidth;
-		}
-
-		if (m_bestAvgOf5 != -1)
-		{
-			paintAllTimeBest(p, x, "Best avg of 5", m_bestAvgOf5);
-			x += bestWidth;
-		}
-
-		if (m_bestAvgOf12 != -1)
-		{
-			paintAllTimeBest(p, x, "Best avg of 12", m_bestAvgOf12);
-			x += bestWidth;
-		}
-	}
-
-	// Render sessions
-	for (auto& i : m_sessions)
-	{
-		if ((i.y - yofs) > event->rect().bottom())
-			break;
-		if ((i.y + i.height - yofs) < event->rect().top())
-			continue;
-
-		p.fillRect(16, i.y - yofs, width - 32, i.height, Theme::background);
-
-		// Draw session heading
-		p.setFont(headingFont);
-		p.setPen(Theme::blue);
-		QString dateText;
-		if (i.session->solves.size() != 0)
-			dateText = stringForDate(i.session->solves[i.session->solves.size() - 1].created);
-		else
-			dateText = stringForDate(i.session->update.date);
-		QString sessionText;
-		if (i.session->name.size() == 0)
-			sessionText = "Session - " + dateText;
-		else
-			sessionText = QString::fromStdString(i.session->name) + " - " + dateText;
-		p.drawText(QRect(24, i.y + 4 - yofs, width - 48, headingFontHeight), sessionText);
-
-		p.setFont(normalFont);
-		if ((m_hoverSession == i.session) && (m_hoverSolve == -1) && (m_hoverIcon == 0))
-			p.setPen(Theme::blue);
-		else
-			p.setPen(Theme::selection);
-		QTextOption textOption;
-		textOption.setAlignment(Qt::AlignVCenter | Qt::AlignRight);
-		p.drawText(QRect(24, i.y + 4 - yofs, width - 48, headingFontHeight), "  ≡ ", textOption);
-
-		// Draw line to separate heading from solve list
-		p.fillRect(24, i.y + headingFontHeight + 8 - yofs, width - 48, 1, Theme::blue.darker());
-
-		int solveY = i.y + headingFontHeight + 16 - yofs;
-
-		// Draw lines to separate columns in the solve list
-		for (int col = 1; col < i.columns; col++)
-			p.fillRect(16 + col * i.columnWidth, solveY, 1, solveHeight * i.rows, Theme::selection);
-
-		// Draw solves
-		for (int row = 0; row < i.rows; row++)
-		{
-			if (solveY > event->rect().bottom())
-				break;
-			if ((solveY + (row + 1) * solveHeight) < event->rect().top())
-				continue;
-
-			for (int col = 0; col < i.columns; col++)
-			{
-				int solveIndex = (col * i.rows) + row;
-				if (solveIndex >= (int)i.session->solves.size())
-					break;
-
-				const Solve& solve = i.session->solves[solveIndex];
-
-				// Draw solve number to the left
-				p.setPen(Theme::disabled);
-				p.setFont(lightFont);
-				p.drawText(24 + col * i.columnWidth, solveY + row * solveHeight + lightMetrics.ascent(),
-					QString::asprintf("%d.", solveIndex + 1));
-
-				// Draw options and remove buttons
-				int x = 8 + (col + 1) * i.columnWidth;
-				x -= normalMetrics.boundingRect("  × ").width();
-				p.setFont(normalFont);
-				if ((m_hoverSession == i.session) && (m_hoverSolve == solveIndex) && (m_hoverIcon == 1))
-					p.setPen(Theme::red);
-				else
-					p.setPen(Theme::selection);
-				p.drawText(x, solveY + row * solveHeight + normalMetrics.ascent(), "  × ");
-
-				x -= normalMetrics.boundingRect("  ≡ ").width();
-				p.setFont(normalFont);
-				if ((m_hoverSession == i.session) && (m_hoverSolve == solveIndex) && (m_hoverIcon == 0))
-					p.setPen(Theme::blue);
-				else
-					p.setPen(Theme::selection);
-				p.drawText(x, solveY + row * solveHeight + normalMetrics.ascent(), "  ≡ ");
-
-				// Create strings for the solve time
-				QString largeTimeText, smallTimeText;
-				if (solve.ok)
-				{
-					int hs = (solve.time + 5) / 10;
-					int minutes = hs / 6000;
-					int seconds = (hs / 100) % 60;
-					hs %= 100;
-					if (minutes > 0)
-						largeTimeText = QString::asprintf("%d:%02d", minutes, seconds);
-					else
-						largeTimeText = QString::asprintf("%d", seconds);
-					smallTimeText = QString::asprintf(".%02d", hs);
-				}
-				else
-				{
-					largeTimeText = "DNF";
-					smallTimeText = "";
-				}
-
-				// Draw penalty
-				x -= smallMetrics.boundingRect("  (+2) ").width();
-				if (solve.ok && (solve.penalty != 0))
-				{
-					p.setFont(smallFont);
-					p.setPen(Theme::red);
-					p.drawText(x, solveY + row * solveHeight + normalMetrics.ascent(),
-						QString::asprintf("  (+%d)", (int)solve.penalty / 1000));
-				}
-
-				// Draw solve time
-				x -= normalMetrics.horizontalAdvance(largeTimeText) +
-					smallMetrics.horizontalAdvance(smallTimeText);
-				p.setFont(normalFont);
-				if ((m_hoverSession == i.session) && (m_hoverSolve == solveIndex) && (m_hoverIcon == -1))
-					p.setPen(Theme::blue);
-				else if (solve.ok && ((int)solve.time == m_bestSolve))
-					p.setPen(Theme::orange);
-				else if (solve.ok && ((int)solve.time == i.bestSolve))
-					p.setPen(Theme::green);
-				else if (solve.ok)
-					p.setPen(Theme::content);
-				else
-					p.setPen(Theme::red);
-				p.drawText(x, solveY + row * solveHeight + normalMetrics.ascent(), largeTimeText);
-				p.setFont(smallFont);
-				p.drawText(x + normalMetrics.horizontalAdvance(largeTimeText),
-					solveY + row * solveHeight + normalMetrics.ascent(), smallTimeText);
-			}
-		}
-
-		// Draw line to separate solve list from best times
-		int bestTimeY = solveY + i.rows * solveHeight + 16;
-		p.fillRect(24, bestTimeY - 8, width - 48, 1, Theme::selection);
-
-		int x = 24;
-		if (i.sessionAvg != -1)
-		{
-			paintSessionBest(p, x, bestTimeY, "Session avg: ", i.sessionAvg);
-			x += 32;
-		}
-
-		if (i.bestSolve != -1)
-		{
-			paintSessionBest(p, x, bestTimeY, "Best solve: ", i.bestSolve);
-			x += 32;
-		}
-
-		if (i.bestAvgOf5 != -1)
-		{
-			paintSessionBest(p, x, bestTimeY, "Best avg of 5: ", i.bestAvgOf5);
-			x += 32;
-		}
-
-		if (i.bestAvgOf12 != -1)
-		{
-			paintSessionBest(p, x, bestTimeY, "Best avg of 12: ", i.bestAvgOf12);
-			x += 32;
-		}
-	}
+	for (auto& i : m_elements)
+		paintElement(p, event, i);
 }
 
 
@@ -337,304 +781,65 @@ void HistoryMode::resizeEvent(QResizeEvent*)
 }
 
 
+shared_ptr<HistoryElement> HistoryMode::getInteractableElement(int x, int y, const shared_ptr<HistoryElement>& element)
+{
+	if (!element->rect().contains(x, y))
+		return shared_ptr<HistoryElement>();
+	for (auto& i : element->children())
+	{
+		shared_ptr<HistoryElement> result = getInteractableElement(x, y, i);
+		if (result)
+			return result;
+	}
+	if (!element->interactable())
+		return shared_ptr<HistoryElement>();
+	return element;
+}
+
+
 void HistoryMode::mouseMoveEvent(QMouseEvent* event)
 {
-	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
-	QFontMetrics normalMetrics(normalFont);
-	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
-	QFontMetrics smallMetrics(smallFont);
-	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
-	QFontMetrics headingMetrics(headingFont);
-	int headingFontHeight = headingMetrics.height();
-	int solveHeight = normalMetrics.height();
-
 	int yofs = verticalScrollBar()->value();
 	int x = event->x();
 	int y = event->y() + yofs;
 
-	for (auto& i : m_sessions)
+	shared_ptr<HistoryElement> result;
+	for (auto& i : m_elements)
 	{
-		if (y > (i.y + i.height))
-			continue;
-		if (y < i.y)
+		result = getInteractableElement(x, y, i);
+		if (result)
 			break;
-
-		if (y < (i.y + headingFontHeight + 16))
-		{
-			int rightX = viewport()->width() - 24;
-			int leftX = rightX - normalMetrics.boundingRect("  ≡ ").width();
-			if ((x >= leftX) && (x <= rightX))
-			{
-				if ((m_hoverSession == i.session) && (m_hoverSolve == -1) && (m_hoverIcon == 0))
-					return;
-				m_hoverSession = i.session;
-				m_hoverSolve = -1;
-				m_hoverIcon = 0;
-				viewport()->update();
-				setCursor(Qt::ArrowCursor);
-				return;
-			}
-			break;
-		}
-
-		int solveY = i.y + headingFontHeight + 16;
-		if (y < solveY)
-			break;
-		int row = (y - solveY) / solveHeight;
-		int col = (x - 24) / i.columnWidth;
-
-		if ((row < 0) || (row >= i.rows) || (col < 0) || (col >= i.columns))
-			break;
-
-		int solveIdx = (col * i.rows) + row;
-		if ((solveIdx < 0) || (solveIdx >= (int)i.session->solves.size()))
-			break;
-
-		int rightX = 8 + (col + 1) * i.columnWidth;
-		int leftX = rightX - normalMetrics.boundingRect("  × ").width();
-		if ((x >= leftX) && (x <= rightX))
-		{
-			if ((m_hoverSession == i.session) && (m_hoverSolve == solveIdx) && (m_hoverIcon == 1))
-				return;
-			m_hoverSession = i.session;
-			m_hoverSolve = solveIdx;
-			m_hoverIcon = 1;
-			viewport()->update();
-			setCursor(Qt::ArrowCursor);
-			return;
-		}
-
-		rightX = leftX;
-		leftX = rightX - normalMetrics.boundingRect("  ≡ ").width();
-		if ((x >= leftX) && (x <= rightX))
-		{
-			if ((m_hoverSession == i.session) && (m_hoverSolve == solveIdx) && (m_hoverIcon == 0))
-				return;
-			m_hoverSession = i.session;
-			m_hoverSolve = solveIdx;
-			m_hoverIcon = 0;
-			viewport()->update();
-			setCursor(Qt::ArrowCursor);
-			return;
-		}
-
-		rightX = leftX - smallMetrics.boundingRect("  (+2) ").width();
-		leftX = 8 + col * i.columnWidth;
-		if ((x >= leftX) && (x <= rightX))
-		{
-			if ((m_hoverSession == i.session) && (m_hoverSolve == solveIdx) && (m_hoverIcon == -1))
-				return;
-			m_hoverSession = i.session;
-			m_hoverSolve = solveIdx;
-			m_hoverIcon = -1;
-			viewport()->update();
-			setCursor(Qt::PointingHandCursor);
-			return;
-		}
 	}
 
-	if (m_hoverSession)
+	if (result != m_hoverElement)
 	{
-		m_hoverSession.reset();
-		m_hoverSolve = -1;
-		m_hoverIcon = -1;
+		m_hoverElement = result;
+		if (result && result->hasHandCursor())
+			setCursor(Qt::PointingHandCursor);
+		else
+			setCursor(Qt::ArrowCursor);
 		viewport()->update();
-		setCursor(Qt::ArrowCursor);
 	}
 }
 
 
-void HistoryMode::mousePressEvent(QMouseEvent*)
+void HistoryMode::mousePressEvent(QMouseEvent* event)
 {
 	setCursor(Qt::ArrowCursor);
-
-	if (m_hoverSession && (m_hoverSolve != -1) && (m_hoverSolve < (int)m_hoverSession->solves.size()))
+	if (m_hoverElement)
 	{
-		shared_ptr<Session> session = m_hoverSession;
-		int solveIdx = m_hoverSolve;
-		Solve& solve = session->solves[solveIdx];
-
-		if (m_hoverIcon == -1)
+		if (m_hoverElement->click(this, event))
 		{
-			SolveDialog* dlg = new SolveDialog(solve);
-			dlg->show();
-		}
-		else if (m_hoverIcon == 0)
-		{
-			QMenu menu;
-			QAction* solveOK = new QAction("Solve OK");
-			solveOK->setCheckable(true);
-			solveOK->setChecked(solve.ok && (solve.penalty == 0));
-			QAction* penalty = new QAction("2 Second Penalty");
-			penalty->setCheckable(true);
-			penalty->setChecked(solve.ok && (solve.penalty == 2000));
-			QAction* dnf = new QAction("Did Not Finish");
-			dnf->setCheckable(true);
-			dnf->setChecked(!solve.ok);
-			QAction* split = nullptr;
-			if (m_hoverSolve > 0)
-				split = new QAction("Split Session Starting Here");
-			menu.addAction(solveOK);
-			menu.addAction(penalty);
-			menu.addAction(dnf);
-			if (split)
-			{
-				menu.addSeparator();
-				menu.addAction(split);
-			}
-
-			QAction* clicked = menu.exec(QCursor::pos() + QPoint(2, 2));
-			if (clicked == solveOK)
-			{
-				solve.ok = true;
-				solve.time -= solve.penalty;
-				solve.penalty = 0;
-				solve.update.id = History::instance.idGenerator->GenerateId();
-				solve.update.date = time(NULL);
-				solve.dirty = true;
-			}
-			else if (clicked == penalty)
-			{
-				solve.ok = true;
-				solve.time -= solve.penalty;
-				solve.penalty = 2000;
-				solve.time += solve.penalty;
-				solve.update.id = History::instance.idGenerator->GenerateId();
-				solve.update.date = time(NULL);
-				solve.dirty = true;
-			}
-			else if (clicked == dnf)
-			{
-				solve.ok = false;
-				solve.update.id = History::instance.idGenerator->GenerateId();
-				solve.update.date = time(NULL);
-				solve.dirty = true;
-			}
-			else if (split && (clicked == split))
-			{
-				History::instance.SplitSessionAtSolve(session, (size_t)solveIdx);
-				m_hoverSession.reset();
-				m_hoverSolve = -1;
-				m_hoverIcon = -1;
-				updateHistory();
-				return;
-			}
-			else
-			{
-				return;
-			}
-
-			session->update.id = History::instance.idGenerator->GenerateId();
-			session->update.date = time(NULL);
-			session->dirty = true;
-			History::instance.UpdateDatabaseForSession(session);
-
-			m_hoverSession.reset();
-			m_hoverSolve = -1;
-			m_hoverIcon = -1;
+			m_hoverElement.reset();
 			updateHistory();
 		}
-		else if (m_hoverIcon == 1)
-		{
-			QString msg;
-			if (solve.ok)
-				msg = QString("Delete solve with time of ") + SessionWidget::stringForSolveTime(solve) + QString("?");
-			else
-				msg = "Delete DNF solve?";
-			if (QMessageBox::critical(this, "Delete Solve", msg, QMessageBox::Yes, QMessageBox::No) != QMessageBox::Yes)
-				return;
-
-			session->solves.erase(session->solves.begin() + solveIdx);
-			session->dirty = true;
-			History::instance.UpdateDatabaseForSession(session);
-
-			if (session->solves.size() == 0)
-				History::instance.DeleteSession(session);
-
-			m_hoverSession.reset();
-			m_hoverSolve = -1;
-			m_hoverIcon = -1;
-			updateHistory();
-		}
-	}
-	else if (m_hoverSession && (m_hoverSolve == -1) && (m_hoverIcon == 0))
-	{
-		shared_ptr<Session> session = m_hoverSession;
-		shared_ptr<Session> aboveSession, belowSession;
-		for (size_t i = 0; i < m_sessions.size(); i++)
-		{
-			if (m_sessions[i].session == session)
-			{
-				if (i > 0)
-					aboveSession = m_sessions[i - 1].session;
-				if (i < (m_sessions.size() - 1))
-					belowSession = m_sessions[i + 1].session;
-				break;
-			}
-		}
-
-		QMenu menu;
-		QAction* rename = new QAction("Rename Session...");
-		QAction* remove = new QAction("Delete Session");
-		QAction* mergeAbove = nullptr;
-		if (aboveSession)
-			mergeAbove = new QAction("Merge with Above Session");
-		QAction* mergeBelow = nullptr;
-		if (belowSession)
-			mergeBelow = new QAction("Merge with Below Session");
-		menu.addAction(rename);
-		menu.addAction(remove);
-		if (mergeAbove || mergeBelow)
-			menu.addSeparator();
-		if (mergeAbove)
-			menu.addAction(mergeAbove);
-		if (mergeBelow)
-			menu.addAction(mergeBelow);
-
-		QAction* clicked = menu.exec(QCursor::pos() + QPoint(2, 2));
-		if (clicked == rename)
-		{
-			QString name = QString::fromStdString(session->name);
-			name = QInputDialog::getText(this, "Rename Session", "Session name:", QLineEdit::Normal, name);
-			if (name.isNull())
-				return;
-
-			session->name = name.toStdString();
-			session->dirty = true;
-			History::instance.UpdateDatabaseForSession(session);
-		}
-		else if (clicked == remove)
-		{
-			if (QMessageBox::critical(this, "Delete Session", "Are you sure you want to delete this session?",
-				QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)
-				History::instance.DeleteSession(session);
-		}
-		else if (mergeAbove && (clicked == mergeAbove))
-		{
-			History::instance.MergeSessions(session, aboveSession, session->name);
-		}
-		else if (mergeBelow && (clicked == mergeBelow))
-		{
-			History::instance.MergeSessions(belowSession, session, session->name);
-		}
-		else
-		{
-			return;
-		}
-
-		m_hoverSession.reset();
-		m_hoverSolve = -1;
-		m_hoverIcon = -1;
-		updateHistory();
 	}
 }
 
 
 void HistoryMode::leaveEvent(QEvent*)
 {
-	m_hoverSession.reset();
-	m_hoverSolve = -1;
-	m_hoverIcon = -1;
+	m_hoverElement.reset();
 	viewport()->update();
 	setCursor(Qt::ArrowCursor);
 }
@@ -643,6 +848,8 @@ void HistoryMode::leaveEvent(QEvent*)
 void HistoryMode::updateHistory()
 {
 	m_sessions.clear();
+	m_elements.clear();
+	m_hoverElement.reset();
 
 	// Sort sessions so that newest sessions are on top
 	vector<shared_ptr<Session>> sortedSessions = History::instance.sessions;
@@ -659,91 +866,119 @@ void HistoryMode::updateHistory()
 
 	// Create fonts and measurements for them
 	int y = 16;
-	QFont headingFont = fontOfRelativeSize(1.1f, QFont::Light);
-	QFontMetrics headingMetrics(headingFont);
-	int headingFontHeight = headingMetrics.height();
 
-	QFont lightFont = fontOfRelativeSize(1.0f, QFont::Light);
-	QFont normalFont = fontOfRelativeSize(1.0f, QFont::Normal);
-	QFont smallFont = fontOfRelativeSize(0.75f, QFont::Normal);
-	QFont largeFont = fontOfRelativeSize(2.5f, QFont::Light);
-	QFontMetrics lightMetrics(lightFont);
-	QFontMetrics normalMetrics(normalFont);
-	QFontMetrics smallMetrics(normalFont);
-	QFontMetrics largeMetrics(largeFont);
-
-	m_bestSolve = -1;
-	m_bestAvgOf5 = -1;
-	m_bestAvgOf12 = -1;
+	m_bestSolveTime = -1;
+	Solve bestSolve;
+	int bestAvgOf5 = -1;
+	shared_ptr<Session> bestAvgOf5Session;
+	int bestAvgOf5Start = -1;
+	int bestAvgOf12 = -1;
+	shared_ptr<Session> bestAvgOf12Session;
+	int bestAvgOf12Start = -1;
 
 	for (auto& i : sortedSessions)
 	{
 		if (i->type != m_type)
 			continue;
 
-		SessionHistoryInfo info;
-		info.session = i;
-		info.y = y;
-		info.height = headingFontHeight + 24;
-
-		// Compute size of individual components of each solve display
-		QString maxSolveNum = QString::asprintf("%d.    ", (int)i->solves.size());
-		int solveNumWidth = lightMetrics.boundingRect(maxSolveNum).width();
-
-		int maxSolveTime = 60000;
-		for (auto& j : i->solves)
-		{
-			if (j.ok && ((int)j.time > maxSolveTime))
-				maxSolveTime = (int)j.time;
-		}
-		int minutes = (maxSolveTime + 5) / 60000;
-		QString maxTimeStr = QString::asprintf("%d:00.00", minutes);
-		int timeWidth = normalMetrics.boundingRect(maxTimeStr).width();
-		int penaltyWidth = smallMetrics.boundingRect("  (+2) ").width();
-		int optionWidth = normalMetrics.boundingRect("  ≡ ").width();
-		int removeWidth = normalMetrics.boundingRect("  × ").width();
-		info.timeXOffset = solveNumWidth + timeWidth;
-
-		// Compute the number of columns that can be displayed for this session
-		info.columnWidth = solveNumWidth + timeWidth + penaltyWidth +
-			optionWidth + removeWidth + 16;
-		info.columns = (viewport()->width() - 40) / info.columnWidth;
-		if (info.columns < 1)
-			info.columns = 1;
-
-		// Compute the number of rows that are required and update size of session
-		info.rows = ((int)i->solves.size() + info.columns - 1) / info.columns;
-		info.height += info.rows * normalMetrics.height();
+		shared_ptr<HistorySessionElement> element = make_shared<HistorySessionElement>(i, 16,
+			y, viewport()->width() - 32, &m_bestSolveTime);
+		m_elements.push_back(element);
+		m_sessions.push_back(i);
+		y += element->rect().height() + 16;
 
 		// Compute best times for the session
-		info.bestSolve = i->bestSolve();
-		info.bestAvgOf5 = i->bestAvgOf(5);
-		info.bestAvgOf12 = i->bestAvgOf(12);
-		info.sessionAvg = i->sessionAvg();
+		Solve bestSessionSolve;
+		int bestSessionSolveTime = i->bestSolve(&bestSessionSolve);
+		int bestSessionAvgOf5Start, bestSessionAvgOf12Start;
+		int bestSessionAvgOf5 = i->bestAvgOf(5, &bestSessionAvgOf5Start);
+		int bestSessionAvgOf12 = i->bestAvgOf(12, &bestSessionAvgOf12Start);
 
-		if ((info.bestSolve != -1) && ((m_bestSolve == -1) || (info.bestSolve < m_bestSolve)))
-			m_bestSolve = info.bestSolve;
-		if ((info.bestAvgOf5 != -1) && ((m_bestAvgOf5 == -1) || (info.bestAvgOf5 < m_bestAvgOf5)))
-			m_bestAvgOf5 = info.bestAvgOf5;
-		if ((info.bestAvgOf12 != -1) && ((m_bestAvgOf12 == -1) || (info.bestAvgOf12 < m_bestAvgOf12)))
-			m_bestAvgOf12 = info.bestAvgOf12;
+		if ((bestSessionSolveTime != -1) && ((m_bestSolveTime == -1) || (bestSessionSolveTime < m_bestSolveTime)))
+		{
+			m_bestSolveTime = bestSessionSolveTime;
+			bestSolve = bestSessionSolve;
+		}
 
-		info.height += normalMetrics.height() + 16;
-
-		m_sessions.push_back(info);
-
-		y += info.height + 16;
+		if ((bestSessionAvgOf5 != -1) && ((bestAvgOf5 == -1) || (bestSessionAvgOf5 < bestAvgOf5)))
+		{
+			bestAvgOf5 = bestSessionAvgOf5;
+			bestAvgOf5Session = i;
+			bestAvgOf5Start = bestSessionAvgOf5Start;
+		}
+		if ((bestSessionAvgOf12 != -1) && ((bestAvgOf12 == -1) || (bestSessionAvgOf12 < bestAvgOf12)))
+		{
+			bestAvgOf12 = bestSessionAvgOf12;
+			bestAvgOf12Session = i;
+			bestAvgOf12Start = bestSessionAvgOf12Start;
+		}
 	}
 
 	y += 16; // End padding
 
-	if ((m_bestSolve != -1) || (m_bestAvgOf5 != -1) || (m_bestAvgOf12 != -1))
+	if ((m_bestSolveTime != -1) || (bestAvgOf5 != -1) || (bestAvgOf12 != -1))
 	{
 		// Show a personal best area at the top
-		int bestHeight = lightMetrics.height() + largeMetrics.height() + 16;
-		for (auto& i : m_sessions)
-			i.y += bestHeight;
-		y += bestHeight;
+		shared_ptr<HistoryAllTimeBestSolveElement> solveElement;
+		shared_ptr<HistoryAllTimeBestAverageElement> avgOf5Element, avgOf12Element;
+		int width = 0;
+		int height = 0;
+
+		if (m_bestSolveTime != -1)
+		{
+			solveElement = make_shared<HistoryAllTimeBestSolveElement>(
+				"Best solve", m_bestSolveTime, bestSolve);
+			width += solveElement->sizeHint().width();
+			height = solveElement->sizeHint().height();
+		}
+
+		if (bestAvgOf5 != -1)
+		{
+			avgOf5Element = make_shared<HistoryAllTimeBestAverageElement>(
+				"Best avg of 5", bestAvgOf5, bestAvgOf5Session, bestAvgOf5Start, 5);
+			if (width > 0)
+				width += 32;
+			width += avgOf5Element->sizeHint().width();
+			height = avgOf5Element->sizeHint().height();
+		}
+
+		if (bestAvgOf12 != -1)
+		{
+			avgOf12Element = make_shared<HistoryAllTimeBestAverageElement>(
+				"Best avg of 12", bestAvgOf12, bestAvgOf12Session, bestAvgOf12Start, 12);
+			if (width > 0)
+				width += 32;
+			width += avgOf12Element->sizeHint().width();
+			height = avgOf12Element->sizeHint().height();
+		}
+
+		int x = (viewport()->width() / 2) - (width / 2);
+		if (solveElement)
+		{
+			solveElement->setRect(QRect(x, 16, solveElement->sizeHint().width(), height));
+			x += solveElement->rect().width() + 32;
+		}
+		if (avgOf5Element)
+		{
+			avgOf5Element->setRect(QRect(x, 16, avgOf5Element->sizeHint().width(), height));
+			x += avgOf5Element->rect().width() + 32;
+		}
+		if (avgOf12Element)
+		{
+			avgOf12Element->setRect(QRect(x, 16, avgOf12Element->sizeHint().width(), height));
+			x += avgOf12Element->rect().width() + 32;
+		}
+
+		for (auto& i : m_elements)
+			i->move(0, height + 16);
+		y += height + 16;
+
+		if (solveElement)
+			m_elements.push_back(solveElement);
+		if (avgOf5Element)
+			m_elements.push_back(avgOf5Element);
+		if (avgOf12Element)
+			m_elements.push_back(avgOf12Element);
 	}
 
 	verticalScrollBar()->setRange(0, y - viewport()->height());

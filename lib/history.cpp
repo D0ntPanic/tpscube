@@ -48,7 +48,7 @@ int Session::avgOfLast(size_t count, bool ignoreDNF)
 }
 
 
-int Session::bestSolve()
+int Session::bestSolve(Solve* solve)
 {
 	int best = -1;
 	for (auto& i : solves)
@@ -56,17 +56,23 @@ int Session::bestSolve()
 		if (!i.ok)
 			continue;
 		if ((best == -1) || ((int)i.time < best))
+		{
 			best = (int)i.time;
+			if (solve)
+				*solve = i;
+		}
 	}
 	return best;
 }
 
 
-int Session::bestAvgOf(size_t count)
+int Session::bestAvgOf(size_t count, int* start)
 {
 	if (solves.size() < count)
 		return -1;
 	int best = -1;
+	if (start)
+		*start = -1;
 	for (size_t i = 0; i <= (solves.size() - count); i++)
 	{
 		vector<int> times;
@@ -82,7 +88,11 @@ int Session::bestAvgOf(size_t count)
 		if (avg == -1)
 			continue;
 		if ((best == -1) || (avg < best))
+		{
 			best = avg;
+			if (start)
+				*start = (int)i;
+		}
 	}
 	return best;
 }
@@ -344,6 +354,13 @@ void History::SplitSessionAtSolve(const shared_ptr<Session>& session, size_t sol
 			sessionListDirty = true;
 
 			UpdateDatabaseForSessions(vector<shared_ptr<Session>> { session, splitSession });
+
+			if (session == activeSession)
+			{
+				activeSession = splitSession;
+				if (database)
+					database->Put(leveldb::WriteOptions(), "active_session", activeSession->id);
+			}
 			return;
 		}
 	}

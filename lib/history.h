@@ -45,8 +45,8 @@ struct Session
 	std::vector<Solve> solves;
 	bool dirty;
 
-	int bestSolve();
-	int bestAvgOf(size_t count);
+	int bestSolve(Solve* solve = nullptr);
+	int bestAvgOf(size_t count, int* start = nullptr);
 	static int avgOf(const std::vector<int>& times);
 	int avgOfLast(size_t count, bool ignoreDNF = false);
 	int sessionAvg();
