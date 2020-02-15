@@ -507,7 +507,7 @@ void HistorySessionSolveOptionsElement::paint(QPainter& p, bool hovering)
 		p.setPen(Theme::blue);
 	else
 		p.setPen(Theme::selection);
-	p.drawText(rect().x(), rect().y() + normalMetrics.ascent(), "  ≡ ");
+	p.drawText(rect().x(), rect().y() + normalMetrics.ascent(), " ≡ ");
 }
 
 
@@ -600,7 +600,7 @@ void HistorySessionSolveRemoveElement::paint(QPainter& p, bool hovering)
 		p.setPen(Theme::red);
 	else
 		p.setPen(Theme::selection);
-	p.drawText(rect().x(), rect().y() + normalMetrics.ascent(), "  × ");
+	p.drawText(rect().x(), rect().y() + normalMetrics.ascent(), " × ");
 }
 
 
@@ -743,7 +743,9 @@ HistoryMode::HistoryMode(QWidget* parent): QAbstractScrollArea(parent)
 
 void HistoryMode::paintElement(QPainter& p, QPaintEvent* event, const shared_ptr<HistoryElement>& element)
 {
-	if (!event->rect().intersects(element->rect()))
+	int yofs = verticalScrollBar()->value();
+	if (!QRect(event->rect().x(), event->rect().y() + yofs,
+		event->rect().width(), event->rect().height()).intersects(element->rect()))
 		return;
 
 	element->paint(p, element == m_hoverElement);
@@ -842,6 +844,17 @@ void HistoryMode::leaveEvent(QEvent*)
 	m_hoverElement.reset();
 	viewport()->update();
 	setCursor(Qt::ArrowCursor);
+}
+
+
+void HistoryMode::scrollContentsBy(int dx, int dy)
+{
+	if (m_hoverElement)
+	{
+		m_hoverElement.reset();
+		viewport()->update();
+	}
+	QAbstractScrollArea::scrollContentsBy(dx, dy);
 }
 
 

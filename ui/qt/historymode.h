@@ -53,7 +53,7 @@ public:
 	virtual QSize sizeHint() const override;
 	virtual void paint(QPainter& p, bool hovering) override;
 	virtual bool interactable() const override { return true; }
-	virtual bool hasHandCursor() const { return true; }
+	virtual bool hasHandCursor() const override { return true; }
 };
 
 class HistoryAllTimeBestSolveElement: public HistoryAllTimeBestElement
@@ -81,7 +81,6 @@ class HistorySessionElement: public HistoryElement
 	std::shared_ptr<Session> m_session;
 
 	int m_rows, m_columns, m_columnWidth;
-	int m_timeXOffset;
 	int m_bestSolveTime, m_bestAvgOf5, m_bestAvgOf12, m_sessionAvg;
 	int m_bestAvgOf5Start, m_bestAvgOf12Start;
 	Solve m_bestSolve;
@@ -197,6 +196,7 @@ protected:
 	virtual void mouseMoveEvent(QMouseEvent* event) override;
 	virtual void mousePressEvent(QMouseEvent* event) override;
 	virtual void leaveEvent(QEvent* event) override;
+	virtual void scrollContentsBy(int dx, int dy) override;
 
 public:
 	HistoryMode(QWidget* parent);
