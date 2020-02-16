@@ -10,5 +10,7 @@
 		<file>fonts/OpenSans-LightItalic.ttf</file>
 		<file>fonts/OpenSans-Semibold.ttf</file>
 		<file>fonts/OpenSans-SemiboldItalic.ttf</file>
+		<file>shaders/vertex.glsl</file>
+		<file>shaders/fragment.glsl</file>
 	</qresource>
 </RCC>

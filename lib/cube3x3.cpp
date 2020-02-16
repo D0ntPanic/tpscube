@@ -627,6 +627,13 @@ void Cube3x3::Move(CubeMove move)
 }
 
 
+void Cube3x3::Apply(const CubeMoveSequence& moves)
+{
+	for (auto i : moves.moves)
+		Move(i);
+}
+
+
 void Cube3x3::GenerateRandomState(RandomSource& rng)
 {
 	// Randomize the corner pieces
@@ -1083,6 +1090,13 @@ void Cube3x3Faces::Rotate(CubeFace face, CubeRotationDirection dir)
 void Cube3x3Faces::Move(CubeMove move)
 {
 	MoveWithRotation(*this, move);
+}
+
+
+void Cube3x3Faces::Apply(const CubeMoveSequence& moves)
+{
+	for (auto i : moves.moves)
+		Move(i);
 }
 
 

@@ -8,7 +8,7 @@
 using namespace std;
 
 
-SolveWidget::SolveWidget(const Solve& solve): m_solve(solve)
+SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 {
 	QVBoxLayout* layout = new QVBoxLayout();
 	layout->setContentsMargins(0, 0, 0, 0);
@@ -21,6 +21,15 @@ SolveWidget::SolveWidget(const Solve& solve): m_solve(solve)
 	m_scramble->setScramble(m_solve.scramble);
 	m_scramble->setFontSize(relativeFontSize(1.25f));
 	layout->addWidget(m_scramble);
+
+/*	if (fullDetails)
+	{
+		layout->addSpacing(8);
+
+		m_cube = new Cube3x3Widget();
+		m_cube->cube().Apply(m_solve.scramble);
+		layout->addWidget(m_cube, 1);
+	}*/
 
 	layout->addSpacing(8);
 

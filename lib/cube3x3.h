@@ -104,6 +104,7 @@ public:
 
 	void Rotate(CubeFace face, CubeRotationDirection dir);
 	void Move(CubeMove move);
+	void Apply(const CubeMoveSequence& moves);
 
 	void GenerateRandomState(RandomSource& rng);
 
@@ -149,6 +150,7 @@ public:
 
 	void Rotate(CubeFace face, CubeRotationDirection dir);
 	void Move(CubeMove move);
+	void Apply(const CubeMoveSequence& moves);
 
 	CubeColor GetColor(CubeFace face, uint8_t row, uint8_t col) const;
 	CubeColor GetCornerColor(CubeCorner corner, size_t i) const;

@@ -3,6 +3,7 @@
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QProgressDialog>
 #include <QtGui/QFontDatabase>
+#include <QtGui/QSurfaceFormat>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QDir>
@@ -212,6 +213,11 @@ int main(int argc, char* argv[])
 		return RunTest();
 
 	QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+	QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+
+	QSurfaceFormat fmt;
+	fmt.setDepthBufferSize(24);
+	QSurfaceFormat::setDefaultFormat(fmt);
 
 	QApplication app(argc, argv);
 

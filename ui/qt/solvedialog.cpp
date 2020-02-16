@@ -16,7 +16,7 @@ SolveDialog::SolveDialog(const Solve& solve): QDialog(MainWindow::instance())
 	setWindowTitle("Solve");
 
 	QVBoxLayout* layout = new QVBoxLayout();
-	m_solve = new SolveWidget(solve);
+	m_solve = new SolveWidget(solve, true);
 	layout->addWidget(m_solve);
 	layout->addSpacing(8);
 
