@@ -4,6 +4,9 @@
 #include <QtGui/QOpenGLFunctions>
 #include <QtGui/QOpenGLShaderProgram>
 #include <QtGui/QOpenGLBuffer>
+#include <QtCore/QTimer>
+#include <chrono>
+#include <queue>
 #include "cubecommon.h"
 
 struct CubeModelVertex
@@ -29,8 +32,16 @@ struct CubeVertexRange
 	int face;
 };
 
+struct QueuedCubeMove
+{
+	CubeMove move;
+	float tps;
+};
+
 class CubeWidget: public QOpenGLWidget, protected QOpenGLFunctions
 {
+	Q_OBJECT
+
 protected:
 	QOpenGLShaderProgram m_program;
 	QMatrix4x4 m_projectionMatrix;
@@ -45,17 +56,35 @@ protected:
 	QVector3D m_lightPosition, m_lightColor;
 
 	QOpenGLBuffer* m_vertexArray = nullptr;
+	QOpenGLBuffer* m_animVertexArray = nullptr;
 	QOpenGLBuffer* m_indexBuffer = nullptr;
+	QOpenGLBuffer* m_animFixedIndexBuffer = nullptr;
+	QOpenGLBuffer* m_animMovingIndexBuffer = nullptr;
 
 	bool m_grabbed = false;
 	QPoint m_lastMouseLocation;
 
 	std::vector<CubeVertex> m_verts;
+	std::vector<CubeVertex> m_animVerts;
 	std::vector<unsigned short> m_index;
+	std::map<CubeFace, std::vector<unsigned short>> m_animFixedIndex;
+	std::map<CubeFace, std::vector<unsigned short>> m_animMovingIndex;
 	std::vector<CubeVertexRange> m_vertRanges;
 
 	QVector3D m_cubeModelOffset;
 	float m_cubeModelScale;
+	bool m_cubeNeedsUpdate = true;
+
+	bool m_movementActive = false;
+	std::vector<CubeColor> m_movementColors;
+	CubeFace m_movementFace;
+	QVector3D m_movementAxis;
+	float m_movementAngle;
+	float m_movementTimePassed, m_movementLength;
+	QTimer* m_animationTimer;
+	std::chrono::time_point<std::chrono::steady_clock> m_lastFrameTime;
+
+	std::queue<QueuedCubeMove> m_movementQueue;
 
 	static QVector3D m_faceColors[6];
 	static QVector3D m_innerColor;
@@ -81,6 +110,7 @@ protected:
 	virtual void mouseReleaseEvent(QMouseEvent* event) override;
 	virtual void mouseMoveEvent(QMouseEvent* event) override;
 	virtual void wheelEvent(QWheelEvent* event) override;
+	void adjustAngle(float dx, float dy);
 
 	CubeVertexRange& vertRange(CubeFace face, int row, int col);
 
@@ -94,7 +124,13 @@ protected:
 	void addCenter(int x, int y, int z, int xRot, int yRot, int zRot,
 		CubeFace face, int row, int col);
 
+	void startAnimation(CubeMove move, float tps);
 	void updateCubeModelColors();
+
+	virtual void applyMove(CubeMove move) = 0;
+
+private slots:
+	void animate();
 
 public:
 	CubeWidget();
@@ -103,4 +139,7 @@ public:
 	virtual QSize sizeHint() const override;
 	virtual int cubeSize() const = 0;
 	virtual std::vector<CubeColor> cubeFaceColors() const = 0;
+
+	void apply(const CubeMoveSequence& moves, float tps);
+	void applyImmediate(const CubeMoveSequence& moves);
 };

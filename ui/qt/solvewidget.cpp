@@ -27,7 +27,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 		layout->addSpacing(8);
 
 		m_cube = new Cube3x3Widget();
-		m_cube->cube().Apply(m_solve.scramble);
+		m_cube->applyImmediate(m_solve.scramble);
 		layout->addWidget(m_cube, 1);
 	}
 

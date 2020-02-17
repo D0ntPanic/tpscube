@@ -11,6 +11,12 @@ Cube3x3Widget::Cube3x3Widget()
 }
 
 
+void Cube3x3Widget::applyMove(CubeMove move)
+{
+	m_cube.Move(move);
+}
+
+
 vector<CubeColor> Cube3x3Widget::cubeFaceColors() const
 {
 	Cube3x3Faces faces(m_cube);
