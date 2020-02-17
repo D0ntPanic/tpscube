@@ -5,13 +5,12 @@
 
 enum CubeColor: uint8_t
 {
-	UNASSIGNED = 0,
-	WHITE = 1,
-	GREEN = 2,
-	RED = 3,
-	BLUE = 4,
-	ORANGE = 5,
-	YELLOW = 6
+	WHITE = 0,
+	GREEN = 1,
+	RED = 2,
+	BLUE = 3,
+	ORANGE = 4,
+	YELLOW = 5
 };
 
 enum CubeFace
