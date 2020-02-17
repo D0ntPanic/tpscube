@@ -223,13 +223,21 @@ void CubeWidget::mouseMoveEvent(QMouseEvent* event)
 void CubeWidget::wheelEvent(QWheelEvent* event)
 {
 	if (event->pixelDelta().isNull())
-		return;
-
-	m_yaw += event->pixelDelta().x() / 2.0f;
-	m_pitch += event->pixelDelta().y() / 2.0f;
-	m_rotation = QQuaternion::fromAxisAndAngle(1, 0, 0, m_pitch) *
-		QQuaternion::fromAxisAndAngle(0, 1, 0, m_yaw);
-	update();
+	{
+		m_yaw += event->angleDelta().x() / 25.0f;
+		m_pitch += event->angleDelta().y() / 25.0f;
+		m_rotation = QQuaternion::fromAxisAndAngle(1, 0, 0, m_pitch) *
+			QQuaternion::fromAxisAndAngle(0, 1, 0, m_yaw);
+		update();
+	}
+	else
+	{
+		m_yaw += event->pixelDelta().x() / 2.0f;
+		m_pitch += event->pixelDelta().y() / 2.0f;
+		m_rotation = QQuaternion::fromAxisAndAngle(1, 0, 0, m_pitch) *
+			QQuaternion::fromAxisAndAngle(0, 1, 0, m_yaw);
+		update();
+	}
 }
 
 
