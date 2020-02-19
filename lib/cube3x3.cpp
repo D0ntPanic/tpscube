@@ -1118,6 +1118,12 @@ CubeColor Cube3x3Faces::GetEdgeColor(CubeEdge edge, size_t i) const
 }
 
 
+CubeColor Cube3x3Faces::SetColor(CubeFace face, uint8_t row, uint8_t col, CubeColor color)
+{
+	m_state[IDX(face, row, col)] = color;
+}
+
+
 bool Cube3x3Faces::IsSolved() const
 {
 	for (size_t i = 0; i < 6; i++)

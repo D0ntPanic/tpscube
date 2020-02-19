@@ -1,4 +1,4 @@
-QT += core gui widgets
+QT += core gui widgets bluetooth
 
 TARGET = tpscube
 TEMPLATE = app
@@ -24,7 +24,10 @@ INCLUDEPATH += ui/qt
 LIBS += -lleveldb
 
 macx {
-	QMAKE_CXXFLAGS += -I/usr/local/include
-	LIBS += -L/usr/local/lib
+    QMAKE_CXXFLAGS += -I/usr/local/include
+    LIBS += -L/usr/local/lib
 }
 
+linux {
+    LIBS += -ltomcrypt
+}

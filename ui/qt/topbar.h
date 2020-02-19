@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QtWidgets/QLabel>
+#include "utilwidgets.h"
 
 class ModeLabel: public QLabel
 {
@@ -25,11 +26,13 @@ class TopBar: public QWidget
 	ModeLabel* m_historyMode;
 	ModeLabel* m_graphMode;
 	ModeLabel* m_algorithmMode;
+	ClickableLabel* m_bluetooth;
 
 	void timerModeClicked();
 	void historyModeClicked();
 	void graphModeClicked();
 	void algorithmModeClicked();
+	void bluetoothClicked();
 
 public:
 	TopBar(QWidget* parent);

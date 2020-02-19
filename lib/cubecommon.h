@@ -92,4 +92,15 @@ struct CubeMoveSequence
 	CubeMoveSequence Inverted() const;
 };
 
+struct TimedCubeMove
+{
+	CubeMove move;
+	uint64_t timestamp;
+};
+
+struct TimedCubeMoveSequence
+{
+	std::vector<TimedCubeMove> moves;
+};
+
 int NChooseK(int n, int k);

@@ -36,6 +36,7 @@ struct QueuedCubeMove
 {
 	CubeMove move;
 	float tps;
+	bool allowAccel;
 };
 
 class CubeWidget: public QOpenGLWidget, protected QOpenGLFunctions
@@ -140,6 +141,6 @@ public:
 	virtual int cubeSize() const = 0;
 	virtual std::vector<CubeColor> cubeFaceColors() const = 0;
 
-	void apply(const CubeMoveSequence& moves, float tps);
+	void apply(const CubeMoveSequence& moves, float tps, bool accel = false);
 	void applyImmediate(const CubeMoveSequence& moves);
 };

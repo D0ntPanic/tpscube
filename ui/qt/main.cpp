@@ -14,6 +14,7 @@
 #include "theme.h"
 #include "cube3x3.h"
 #include "history.h"
+#include "bluetoothcube.h"
 
 using namespace std;
 
@@ -273,6 +274,7 @@ int main(int argc, char* argv[])
 	QApplication::setApplicationDisplayName("TPS Cube");
 
 	History::instance.idGenerator = new QtIdGenerator();
+	BluetoothCubeType::Init();
 
 	QString dataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
 	bool aborted = false;

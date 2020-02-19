@@ -156,6 +156,8 @@ public:
 	CubeColor GetCornerColor(CubeCorner corner, size_t i) const;
 	CubeColor GetEdgeColor(CubeEdge edge, size_t i) const;
 
+	CubeColor SetColor(CubeFace face, uint8_t row, uint8_t col, CubeColor color);
+
 	bool IsSolved() const;
 	bool operator==(const Cube3x3Faces& cube) const;
 	bool operator!=(const Cube3x3Faces& cube) const;

@@ -1,7 +1,7 @@
 #include <QtWidgets/QHBoxLayout>
 #include "topbar.h"
 #include "theme.h"
-#include "utilwidgets.h"
+#include "bluetoothdialog.h"
 
 using namespace std;
 
@@ -73,6 +73,10 @@ TopBar::TopBar(QWidget* parent): QWidget(parent)
 
 	layout->addStretch(1);
 
+	m_bluetooth = new ClickableLabel("Bluetooth", Theme::content, Theme::blue,
+		[this]() { bluetoothClicked(); });
+	layout->addWidget(m_bluetooth);
+
 	setLayout(layout);
 }
 
@@ -114,4 +118,11 @@ void TopBar::algorithmModeClicked()
 	m_graphMode->setActive(false);
 	m_algorithmMode->setActive(true);
 	emit showAlgorithms();
+}
+
+
+void TopBar::bluetoothClicked()
+{
+	BluetoothDialog dlg;
+	dlg.exec();
 }

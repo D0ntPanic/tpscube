@@ -26,7 +26,7 @@ CubeWidget::CubeWidget()
 	m_lightPosition = QVector3D(0, 2, 4);
 	m_lightColor = QVector3D(40, 40, 40);
 	m_pitch = 30;
-	m_yaw = 45;
+	m_yaw = -35;
 	m_rotation = QQuaternion::fromAxisAndAngle(1, 0, 0, m_pitch) *
 		QQuaternion::fromAxisAndAngle(0, 1, 0, m_yaw);
 
@@ -223,7 +223,10 @@ void CubeWidget::paintGL()
 	}
 	else if (!m_movementQueue.empty())
 	{
-		startAnimation(m_movementQueue.front().move, m_movementQueue.front().tps);
+		float tps = m_movementQueue.front().tps;
+		if (m_movementQueue.front().allowAccel)
+			tps *= m_movementQueue.size();
+		startAnimation(m_movementQueue.front().move, tps);
 		m_movementQueue.pop();
 	}
 
@@ -670,10 +673,10 @@ void CubeWidget::updateCubeModelColors()
 }
 
 
-void CubeWidget::apply(const CubeMoveSequence& moves, float tps)
+void CubeWidget::apply(const CubeMoveSequence& moves, float tps, bool accel)
 {
 	for (auto& i : moves.moves)
-		m_movementQueue.push(QueuedCubeMove { i, tps });
+		m_movementQueue.push(QueuedCubeMove { i, tps, accel });
 	m_animationTimer->start();
 }
 
