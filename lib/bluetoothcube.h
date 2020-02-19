@@ -89,6 +89,7 @@ class GANCube: public BluetoothCube
 	float m_clockRatio = 0.95f;
 	std::chrono::time_point<std::chrono::steady_clock> m_startTime, m_lastMoveTime;
 	bool m_updateInProgress = false;
+	bool m_resetRequested = false;
 
 	uint8_t m_deviceKey[16];
 

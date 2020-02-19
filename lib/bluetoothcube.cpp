@@ -282,6 +282,7 @@ TimedCubeMoveSequence GANCube::GetLatestMoves()
 
 void GANCube::ResetToSolved()
 {
+	m_resetRequested = true;
 }
 
 
@@ -309,6 +310,15 @@ void GANCube::Update()
 		return;
 
 	m_updateInProgress = true;
+
+	if (m_resetRequested)
+	{
+		ResetCubeState([this]() {
+			m_cube = Cube3x3();
+			m_updateInProgress = false;
+		});
+		return;
+	}
 
 	ReadLastMoveData([this](const GANCubeLastMoveData& lastMove) {
 			m_dev->ReadEncodedCharacteristic(m_timingCharacteristic, [=](const std::vector<uint8_t>& data) {
@@ -391,6 +401,7 @@ void GANCube::Update()
 						}
 
 						m_pendingMoves.moves.push_back(TimedCubeMove { moveTable[move], m_currentTimestamp });
+						m_cube.Move(moveTable[move]);
 					}
 
 					// The GAN cubes have wildly variable clock rates so we need to calibrate

@@ -55,5 +55,6 @@ void BluetoothCheckWidget::correctPushed()
 
 void BluetoothCheckWidget::incorrectPushed()
 {
+	m_cube->ResetToSolved();
 	emit incorrect();
 }
