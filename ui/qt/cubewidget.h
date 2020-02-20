@@ -87,6 +87,8 @@ protected:
 
 	std::queue<QueuedCubeMove> m_movementQueue;
 
+	QColor m_backgroundColor;
+
 	static QVector3D m_faceColors[6];
 	static QVector3D m_innerColor;
 
@@ -143,4 +145,6 @@ public:
 
 	void apply(const CubeMoveSequence& moves, float tps, bool accel = false);
 	void applyImmediate(const CubeMoveSequence& moves);
+
+	void setBackgroundColor(QColor color);
 };

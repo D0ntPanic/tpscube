@@ -25,6 +25,8 @@ private slots:
 	void showHistory();
 	void showGraphs();
 	void showAlgorithms();
+	void connectToBluetoothCube();
+	void disconnectFromBluetoothCube();
 
 protected:
 	virtual void keyPressEvent(QKeyEvent* event) override;

@@ -12,5 +12,8 @@
 		<file>fonts/OpenSans-SemiboldItalic.ttf</file>
 		<file>shaders/vertex.glsl</file>
 		<file>shaders/fragment.glsl</file>
+		<file>images/bluetooth.png</file>
+		<file>images/bluetooth_deselect.png</file>
+		<file>images/bluetooth_hover.png</file>
 	</qresource>
 </RCC>

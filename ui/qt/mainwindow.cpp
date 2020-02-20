@@ -5,6 +5,7 @@
 #include "topbar.h"
 #include "timermode.h"
 #include "historymode.h"
+#include "bluetoothdialog.h"
 
 using namespace std;
 
@@ -30,6 +31,8 @@ MainWindow::MainWindow()
 	connect(m_topBar, &TopBar::showHistory, this, &MainWindow::showHistory);
 	connect(m_topBar, &TopBar::showGraphs, this, &MainWindow::showGraphs);
 	connect(m_topBar, &TopBar::showAlgorithms, this, &MainWindow::showAlgorithms);
+	connect(m_topBar, &TopBar::connectToBluetoothCube, this, &MainWindow::connectToBluetoothCube);
+	connect(m_topBar, &TopBar::disconnectFromBluetoothCube, this, &MainWindow::disconnectFromBluetoothCube);
 
 	m_stackedWidget = new QStackedWidget();
 	containerLayout->addWidget(m_stackedWidget, 1);
@@ -124,4 +127,22 @@ void MainWindow::showGraphs()
 
 void MainWindow::showAlgorithms()
 {
+}
+
+
+void MainWindow::connectToBluetoothCube()
+{
+	BluetoothDialog dlg;
+	if (dlg.exec() == QDialog::Accepted)
+	{
+		m_timerMode->setBluetoothCube(dlg.cube());
+		m_topBar->setBluetoothCube(dlg.cube());
+	}
+}
+
+
+void MainWindow::disconnectFromBluetoothCube()
+{
+	m_timerMode->setBluetoothCube(shared_ptr<BluetoothCube>());
+	m_topBar->setBluetoothCube(shared_ptr<BluetoothCube>());
 }

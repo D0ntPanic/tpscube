@@ -15,6 +15,13 @@ Cube3x3Widget::Cube3x3Widget()
 }
 
 
+Cube3x3Widget::~Cube3x3Widget()
+{
+	if (m_bluetoothCube && m_bluetoothCubeClient)
+		m_bluetoothCube->RemoveClient(m_bluetoothCubeClient);
+}
+
+
 void Cube3x3Widget::applyMove(CubeMove move)
 {
 	m_cube.Move(move);
@@ -36,25 +43,41 @@ vector<CubeColor> Cube3x3Widget::cubeFaceColors() const
 
 void Cube3x3Widget::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 {
+	if (m_bluetoothCube && m_bluetoothCubeClient)
+	{
+		m_bluetoothCube->RemoveClient(m_bluetoothCubeClient);
+		m_bluetoothCubeClient.reset();
+	}
+
 	m_bluetoothCube = cube;
-	m_cube = cube->GetCubeState();
 
-	while (!m_movementQueue.empty())
-		m_movementQueue.pop();
-	m_movementActive = false;
-	m_cubeNeedsUpdate = true;
-	m_animationTimer->stop();
+	if (m_bluetoothCube)
+	{
+		m_cube = cube->GetCubeState();
+		m_bluetoothCubeClient = make_shared<BluetoothCubeClient>();
+		m_bluetoothCube->AddClient(m_bluetoothCubeClient);
 
-	m_updateTimer->start();
+		while (!m_movementQueue.empty())
+			m_movementQueue.pop();
+		m_movementActive = false;
+		m_cubeNeedsUpdate = true;
+		m_animationTimer->stop();
+
+		m_updateTimer->start();
+	}
+	else
+	{
+		m_updateTimer->stop();
+	}
 }
 
 
 void Cube3x3Widget::updateBluetoothCube()
 {
-	if (!m_bluetoothCube)
+	if ((!m_bluetoothCube) || (!m_bluetoothCubeClient))
 		return;
 
-	TimedCubeMoveSequence timedMoves = m_bluetoothCube->GetLatestMoves();
+	TimedCubeMoveSequence timedMoves = m_bluetoothCubeClient->GetLatestMoves();
 	if (timedMoves.moves.size() > 0)
 	{
 		CubeMoveSequence moves;

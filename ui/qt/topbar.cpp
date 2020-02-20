@@ -1,7 +1,8 @@
 #include <QtWidgets/QHBoxLayout>
+#include <QtGui/QPainter>
+#include <QtGui/QPicture>
 #include "topbar.h"
 #include "theme.h"
-#include "bluetoothdialog.h"
 
 using namespace std;
 
@@ -73,11 +74,88 @@ TopBar::TopBar(QWidget* parent): QWidget(parent)
 
 	layout->addStretch(1);
 
-	m_bluetooth = new ClickableLabel("Bluetooth", Theme::content, Theme::blue,
+	QImage disconnectedBluetoothImage(":/images/bluetooth_deselect.png");
+	QPainter disconnectedPainter(&m_disconnectedBluetoothIcon);
+	disconnectedPainter.setRenderHint(QPainter::SmoothPixmapTransform);
+	disconnectedPainter.drawImage(QRect(0, 0, 20, 20), disconnectedBluetoothImage);
+
+	QImage connectedBluetoothImage(":/images/bluetooth.png");
+	QPainter connectedPainter(&m_connectedBluetoothIcon);
+	connectedPainter.setRenderHint(QPainter::SmoothPixmapTransform);
+	connectedPainter.drawImage(QRect(0, 0, 20, 20), connectedBluetoothImage);
+
+	QImage hoverBluetoothImage(":/images/bluetooth_hover.png");
+	QPainter hoverPainter(&m_hoverBluetoothIcon);
+	hoverPainter.setRenderHint(QPainter::SmoothPixmapTransform);
+	hoverPainter.drawImage(QRect(0, 0, 20, 20), hoverBluetoothImage);
+
+	m_bluetooth = new ClickableLabel("", Theme::content, Theme::blue,
 		[this]() { bluetoothClicked(); });
+	m_bluetooth->setPictures(m_disconnectedBluetoothIcon, m_hoverBluetoothIcon);
+	m_bluetooth->setCursor(Qt::PointingHandCursor);
+	m_bluetooth->setToolTip("Connect to a Bluetooth cube");
 	layout->addWidget(m_bluetooth);
 
+	m_bluetoothName = new QLabel();
+	m_bluetoothName->setFont(fontOfRelativeSize(1.0f, QFont::Thin));
+	m_bluetoothName->hide();
+	layout->addWidget(m_bluetoothName);
+
+	m_bluetoothUpdateTimer = new QTimer(this);
+	m_bluetoothUpdateTimer->setSingleShot(false);
+	m_bluetoothUpdateTimer->setInterval(5000);
+	connect(m_bluetoothUpdateTimer, &QTimer::timeout, this, &TopBar::bluetoothUpdate);
+
 	setLayout(layout);
+}
+
+
+void TopBar::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
+{
+	m_bluetoothCube = cube;
+
+	if (m_bluetoothCube)
+	{
+		m_bluetooth->setPictures(m_connectedBluetoothIcon, m_hoverBluetoothIcon);
+		m_bluetooth->setToolTip("Disconnect from the Bluetooth cube");
+		if (m_bluetoothCube->GetBatteryState().charging)
+		{
+			m_bluetoothName->setText(QString::fromStdString(m_bluetoothCube->GetDevice()->GetName()) +
+				QString::asprintf(" (%d%%, charging)", m_bluetoothCube->GetBatteryState().percent));
+		}
+		else
+		{
+			m_bluetoothName->setText(QString::fromStdString(m_bluetoothCube->GetDevice()->GetName()) +
+				QString::asprintf(" (%d%%)", m_bluetoothCube->GetBatteryState().percent));
+		}
+		m_bluetoothName->show();
+		m_bluetoothUpdateTimer->start();
+	}
+	else
+	{
+		m_bluetooth->setPictures(m_disconnectedBluetoothIcon, m_hoverBluetoothIcon);
+		m_bluetooth->setToolTip("Connect to a Bluetooth cube");
+		m_bluetoothName->hide();
+		m_bluetoothUpdateTimer->stop();
+	}
+}
+
+
+void TopBar::bluetoothUpdate()
+{
+	if (m_bluetoothCube)
+	{
+		if (m_bluetoothCube->GetBatteryState().charging)
+		{
+			m_bluetoothName->setText(QString::fromStdString(m_bluetoothCube->GetDevice()->GetName()) +
+				QString::asprintf(" (%d%%, charging)", m_bluetoothCube->GetBatteryState().percent));
+		}
+		else
+		{
+			m_bluetoothName->setText(QString::fromStdString(m_bluetoothCube->GetDevice()->GetName()) +
+				QString::asprintf(" (%d%%)", m_bluetoothCube->GetBatteryState().percent));
+		}
+	}
 }
 
 
@@ -123,6 +201,8 @@ void TopBar::algorithmModeClicked()
 
 void TopBar::bluetoothClicked()
 {
-	BluetoothDialog dlg;
-	dlg.exec();
+	if (m_bluetoothCube)
+		emit disconnectFromBluetoothCube();
+	else
+		emit connectToBluetoothCube();
 }

@@ -84,6 +84,8 @@ void ClickableLabel::enterEvent(QEvent*)
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_hoverColor);
 	setPalette(pal);
+	if (m_usePictures)
+		setPicture(m_hoverPicture);
 }
 
 
@@ -92,6 +94,8 @@ void ClickableLabel::leaveEvent(QEvent*)
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
 	setPalette(pal);
+	if (m_usePictures)
+		setPicture(m_normalPicture);
 	m_hoverTimer->stop();
 }
 
@@ -110,6 +114,15 @@ void ClickableLabel::setColors(QColor defaultColor, QColor hoverColor)
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
 	setPalette(pal);
+}
+
+
+void ClickableLabel::setPictures(QPicture normalPicture, QPicture hoverPicture)
+{
+	m_normalPicture = normalPicture;
+	m_hoverPicture = hoverPicture;
+	m_usePictures = true;
+	setPicture(m_normalPicture);
 }
 
 

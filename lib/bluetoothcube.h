@@ -36,8 +36,18 @@ public:
 	virtual void SetDecoder(const std::function<std::vector<uint8_t>(const std::vector<uint8_t>&)>& decodeFunc) = 0;
 	virtual void WriteCharacteristic(const std::string& uuid, const std::vector<uint8_t>& data,
 		const std::function<void()>& doneFunc) = 0;
+	virtual void EnableNotifications(const std::string& uuid, const std::function<void()>& doneFunc) = 0;
 	virtual void Error(const std::string& msg) { (void)msg; }
 	virtual void DebugMessage(const std::string& msg) { (void)msg; }
+};
+
+class BluetoothCubeClient
+{
+	TimedCubeMoveSequence m_moves;
+
+public:
+	void AddMove(TimedCubeMove move);
+	TimedCubeMoveSequence GetLatestMoves();
 };
 
 class BluetoothCube
@@ -45,6 +55,9 @@ class BluetoothCube
 protected:
 	BluetoothDevice* m_dev;
 	std::function<void()> m_readyFunc;
+	std::vector<std::shared_ptr<BluetoothCubeClient>> m_clients;
+
+	void AddMove(TimedCubeMove move);
 
 public:
 	BluetoothCube(BluetoothDevice* dev);
@@ -55,8 +68,10 @@ public:
 	void SetReadyCallback(const std::function<void()>& readyFunc);
 	void Ready();
 
+	void AddClient(const std::shared_ptr<BluetoothCubeClient>& client);
+	void RemoveClient(const std::shared_ptr<BluetoothCubeClient>& client);
+
 	virtual Cube3x3 GetCubeState() = 0;
-	virtual TimedCubeMoveSequence GetLatestMoves() = 0;
 	virtual void ResetToSolved() = 0;
 	virtual bool HasOrientation() = 0;
 	virtual Quaternion GetOrientation() = 0;
@@ -79,15 +94,19 @@ class GANCube: public BluetoothCube
 	BatteryState m_battery;
 	bool m_hasOrientation = false;
 	Quaternion m_orientation = {0, 0, 0, 1};
+
 	uint8_t m_lastMoveCount;
-	TimedCubeMoveSequence m_pendingMoves;
 	bool m_firstMove = true;
+
 	uint64_t m_currentTimestamp = 0;
 	uint64_t m_totalCubeTicks = 0;
 	uint64_t m_lastRealTicks = 0;
 	uint64_t m_baseRealTicks = 0;
 	float m_clockRatio = 0.95f;
 	std::chrono::time_point<std::chrono::steady_clock> m_startTime, m_lastMoveTime;
+
+	std::chrono::time_point<std::chrono::steady_clock> m_lastBatteryUpdateTime;
+
 	bool m_updateInProgress = false;
 	bool m_resetRequested = false;
 
@@ -116,7 +135,6 @@ public:
 	GANCube(BluetoothDevice* dev);
 
 	virtual Cube3x3 GetCubeState() override;
-	virtual TimedCubeMoveSequence GetLatestMoves() override;
 	virtual void ResetToSolved() override;
 	virtual bool HasOrientation() override;
 	virtual Quaternion GetOrientation() override;

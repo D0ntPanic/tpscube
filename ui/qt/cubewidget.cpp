@@ -36,6 +36,8 @@ CubeWidget::CubeWidget()
 	m_animationTimer->setSingleShot(false);
 	m_animationTimer->setInterval(1000 / 60);
 	connect(m_animationTimer, &QTimer::timeout, this, &CubeWidget::animate);
+
+	m_backgroundColor = Theme::backgroundWindow;
 }
 
 
@@ -80,8 +82,6 @@ QSize CubeWidget::sizeHint() const
 void CubeWidget::initializeGL()
 {
 	initializeOpenGLFunctions();
-	glClearColor(Theme::backgroundWindow.redF(), Theme::backgroundWindow.greenF(),
-		Theme::backgroundWindow.blueF(), 1.0f);
 
 	m_program.addShaderFromSourceFile(QOpenGLShader::Vertex, ":/shaders/vertex.glsl");
 	m_program.addShaderFromSourceFile(QOpenGLShader::Fragment, ":/shaders/fragment.glsl");
@@ -192,6 +192,8 @@ void CubeWidget::resizeGL(int width, int height)
 
 void CubeWidget::paintGL()
 {
+	glClearColor(m_backgroundColor.redF(), m_backgroundColor.greenF(),
+		m_backgroundColor.blueF(), 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	m_viewMatrix.setToIdentity();
@@ -701,4 +703,10 @@ void CubeWidget::applyImmediate(const CubeMoveSequence& moves)
 void CubeWidget::animate()
 {
 	update();
+}
+
+
+void CubeWidget::setBackgroundColor(QColor color)
+{
+	m_backgroundColor = color;
 }

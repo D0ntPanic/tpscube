@@ -9,6 +9,7 @@ class Cube3x3Widget: public CubeWidget
 	Cube3x3 m_cube;
 
 	std::shared_ptr<BluetoothCube> m_bluetoothCube;
+	std::shared_ptr<BluetoothCubeClient> m_bluetoothCubeClient;
 	QTimer* m_updateTimer;
 
 protected:
@@ -19,6 +20,7 @@ private slots:
 
 public:
 	Cube3x3Widget();
+	~Cube3x3Widget();
 
 	const Cube3x3& cube() const { return m_cube; }
 	virtual int cubeSize() const override { return 3; }

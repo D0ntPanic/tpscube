@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QtWidgets/QLabel>
+#include <QtGui/QPicture>
 #include <QtCore/QTimer>
 #include <functional>
 #include "theme.h"
@@ -33,6 +34,9 @@ class ClickableLabel: public QLabel
 	std::function<void()> m_onClick, m_tooltip;
 	QColor m_defaultColor, m_hoverColor;
 
+	bool m_usePictures = false;
+	QPicture m_normalPicture, m_hoverPicture;
+
 	QTimer* m_hoverTimer;
 
 protected:
@@ -48,5 +52,6 @@ public:
 	ClickableLabel(const QString& text, QColor defaultColor, QColor hoverColor,
 		const std::function<void()>& func);
 	void setColors(QColor defaultColor, QColor hoverColor);
+	void setPictures(QPicture normalPicture, QPicture hoverPicture);
 	void setTooltipFunction(const std::function<void()>& func);
 };

@@ -14,10 +14,22 @@ TimerWidget::TimerWidget(QWidget* parent): QLabel(parent)
 	m_updateTimer->setSingleShot(false);
 	connect(m_updateTimer, &QTimer::timeout, this, &TimerWidget::updateText);
 
+	m_bluetoothUpdateTimer = new QTimer(this);
+	m_bluetoothUpdateTimer->setSingleShot(false);
+	m_bluetoothUpdateTimer->setInterval(25);
+	connect(m_bluetoothUpdateTimer, &QTimer::timeout, this, &TimerWidget::updateBluetoothSolve);
+
 	setAlignment(Qt::AlignCenter | Qt::AlignVCenter);
 
 	setFont(QFont("Open Sans", m_fontSize, QFont::Light));
 	updateText();
+}
+
+
+TimerWidget::~TimerWidget()
+{
+	if (m_bluetoothCube && m_bluetoothCubeClient)
+		m_bluetoothCube->RemoveClient(m_bluetoothCubeClient);
 }
 
 
@@ -89,11 +101,17 @@ void TimerWidget::buttonDown()
 		emit aboutToStart();
 		m_updateTimer->start();
 		break;
+	case TIMER_BLUETOOTH_READY:
+		m_prepareTime = chrono::steady_clock::now();
+		m_state = TIMER_READY_TO_START;
+		updateText();
+		break;
 	case TIMER_RUNNING:
 		if (value() < 500)
 			break;
 		m_endTime = chrono::steady_clock::now();
 		m_state = TIMER_STOPPED;
+		m_bluetoothTimeOverride = false;
 		m_updateTimer->stop();
 		updateText();
 		emit completed();
@@ -120,6 +138,7 @@ void TimerWidget::buttonUp()
 		{
 			m_startTime = chrono::steady_clock::now();
 			m_state = TIMER_RUNNING;
+			m_bluetoothTimeOverride = false;
 			emit started();
 			updateText();
 		}
@@ -133,6 +152,8 @@ int TimerWidget::value()
 		return 0;
 	if (m_state == TIMER_RUNNING)
 		m_endTime = chrono::steady_clock::now();
+	if (m_bluetoothTimeOverride)
+		return m_bluetoothTimeValue;
 	return (int)chrono::duration_cast<chrono::milliseconds>(m_endTime - m_startTime).count();
 }
 
@@ -156,4 +177,96 @@ void TimerWidget::enable()
 {
 	m_enabled = true;
 	updateText();
+}
+
+
+void TimerWidget::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
+{
+	if (m_bluetoothCube && m_bluetoothCubeClient)
+	{
+		m_bluetoothCube->RemoveClient(m_bluetoothCubeClient);
+		m_bluetoothCube.reset();
+	}
+
+	m_bluetoothCube = cube;
+	if (m_bluetoothCube)
+	{
+		m_bluetoothCubeClient = make_shared<BluetoothCubeClient>();
+		m_bluetoothCube->AddClient(m_bluetoothCubeClient);
+		m_bluetoothUpdateTimer->start();
+	}
+	else
+	{
+		m_bluetoothUpdateTimer->stop();
+		if (m_state == TIMER_BLUETOOTH_READY)
+		{
+			m_state = TIMER_STOPPED;
+			m_updateTimer->stop();
+			updateText();
+			emit reset();
+		}
+	}
+}
+
+
+void TimerWidget::updateBluetoothSolve()
+{
+	if (m_bluetoothCube && m_bluetoothCubeClient)
+	{
+		TimedCubeMoveSequence moves = m_bluetoothCubeClient->GetLatestMoves();
+		if (moves.moves.size() != 0)
+			m_bluetoothLastTimestamp = moves.moves[moves.moves.size() - 1].timestamp;
+
+		if (m_state == TIMER_BLUETOOTH_READY)
+		{
+			if (moves.moves.size() != 0)
+			{
+				m_bluetoothStartTimestamp = moves.moves[0].timestamp;
+				m_startTime = chrono::steady_clock::now();
+				m_state = TIMER_RUNNING;
+				m_bluetoothTimeOverride = false;
+				emit started();
+				updateText();
+
+				m_solveMoves = moves;
+			}
+		}
+		else if (m_state == TIMER_RUNNING)
+		{
+			m_solveMoves.moves.insert(m_solveMoves.moves.end(), moves.moves.begin(), moves.moves.end());
+
+			if (m_bluetoothCube->GetCubeState().IsSolved())
+			{
+				m_endTime = chrono::steady_clock::now();
+
+				int realTime = (int)chrono::duration_cast<chrono::milliseconds>(m_endTime - m_startTime).count();
+				int bluetoothTime = m_bluetoothLastTimestamp - m_bluetoothStartTimestamp;
+
+				if (((bluetoothTime - realTime) > -500) && ((bluetoothTime - realTime) < 500))
+				{
+					// If Bluetooth cube's timing information is reasonable, use it
+					m_bluetoothTimeOverride = true;
+					m_bluetoothTimeValue = bluetoothTime;
+				}
+
+				m_state = TIMER_STOPPED;
+				m_updateTimer->stop();
+				updateText();
+				emit completed();
+				emit reset();
+			}
+		}
+	}
+}
+
+
+void TimerWidget::readyForBluetoothSolve()
+{
+	if (m_bluetoothCube && m_bluetoothCubeClient && (m_state == TIMER_STOPPED))
+	{
+		m_state = TIMER_BLUETOOTH_READY;
+		updateText();
+		emit aboutToStart();
+		m_updateTimer->start();
+	}
 }

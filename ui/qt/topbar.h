@@ -2,6 +2,7 @@
 
 #include <QtWidgets/QLabel>
 #include "utilwidgets.h"
+#include "bluetoothcube.h"
 
 class ModeLabel: public QLabel
 {
@@ -27,6 +28,13 @@ class TopBar: public QWidget
 	ModeLabel* m_graphMode;
 	ModeLabel* m_algorithmMode;
 	ClickableLabel* m_bluetooth;
+	QPicture m_disconnectedBluetoothIcon;
+	QPicture m_connectedBluetoothIcon;
+	QPicture m_hoverBluetoothIcon;
+	QLabel* m_bluetoothName;
+	QTimer* m_bluetoothUpdateTimer;
+
+	std::shared_ptr<BluetoothCube> m_bluetoothCube;
 
 	void timerModeClicked();
 	void historyModeClicked();
@@ -34,12 +42,19 @@ class TopBar: public QWidget
 	void algorithmModeClicked();
 	void bluetoothClicked();
 
+private slots:
+	void bluetoothUpdate();
+
 public:
 	TopBar(QWidget* parent);
+
+	void setBluetoothCube(const std::shared_ptr<BluetoothCube>& cube);
 
 signals:
 	void showTimer();
 	void showHistory();
 	void showGraphs();
 	void showAlgorithms();
+	void connectToBluetoothCube();
+	void disconnectFromBluetoothCube();
 };

@@ -38,6 +38,20 @@ void BluetoothDevice::Connect()
 }
 
 
+void BluetoothCubeClient::AddMove(TimedCubeMove move)
+{
+	m_moves.moves.push_back(move);
+}
+
+
+TimedCubeMoveSequence BluetoothCubeClient::GetLatestMoves()
+{
+	TimedCubeMoveSequence result = m_moves;
+	m_moves.moves.clear();
+	return result;
+}
+
+
 BluetoothCube::BluetoothCube(BluetoothDevice* dev): m_dev(dev)
 {
 }
@@ -58,6 +72,32 @@ void BluetoothCube::SetReadyCallback(const function<void()>& readyFunc)
 void BluetoothCube::Ready()
 {
 	m_readyFunc();
+}
+
+
+void BluetoothCube::AddClient(const shared_ptr<BluetoothCubeClient>& client)
+{
+	m_clients.push_back(client);
+}
+
+
+void BluetoothCube::RemoveClient(const shared_ptr<BluetoothCubeClient>& client)
+{
+	for (auto i = m_clients.begin(); i != m_clients.end(); ++i)
+	{
+		if (*i == client)
+		{
+			m_clients.erase(i);
+			break;
+		}
+	}
+}
+
+
+void BluetoothCube::AddMove(TimedCubeMove move)
+{
+	for (auto& i : m_clients)
+		i->AddMove(move);
 }
 
 
@@ -243,6 +283,8 @@ void GANCube::Connected()
 							m_dev->ConnectToService(m_dataService, [this]() {
 								// Get the initial battery status
 								UpdateBatteryState([this]() {
+									m_lastBatteryUpdateTime = chrono::steady_clock::now();
+
 									// Get the initial cube state
 									ReadCubeState([this](Cube3x3 cube) {
 										m_cube = cube;
@@ -269,14 +311,6 @@ void GANCube::Connected()
 Cube3x3 GANCube::GetCubeState()
 {
 	return m_cube;
-}
-
-
-TimedCubeMoveSequence GANCube::GetLatestMoves()
-{
-	TimedCubeMoveSequence result = m_pendingMoves;
-	m_pendingMoves.moves.clear();
-	return result;
 }
 
 
@@ -315,6 +349,15 @@ void GANCube::Update()
 	{
 		ResetCubeState([this]() {
 			m_cube = Cube3x3();
+			m_updateInProgress = false;
+		});
+		return;
+	}
+
+	if (chrono::duration_cast<chrono::seconds>(chrono::steady_clock::now() - m_lastBatteryUpdateTime).count() >= 5)
+	{
+		UpdateBatteryState([this]() {
+			m_lastBatteryUpdateTime = chrono::steady_clock::now();
 			m_updateInProgress = false;
 		});
 		return;
@@ -400,7 +443,7 @@ void GANCube::Update()
 							m_currentTimestamp += (uint64_t)((float)timeSinceLastMove / m_clockRatio);
 						}
 
-						m_pendingMoves.moves.push_back(TimedCubeMove { moveTable[move], m_currentTimestamp });
+						AddMove(TimedCubeMove { moveTable[move], m_currentTimestamp });
 						m_cube.Move(moveTable[move]);
 					}
 

@@ -25,6 +25,7 @@ class QtBluetoothDevice: public QObject, public BluetoothDevice
 	std::function<std::vector<uint8_t>(const std::vector<uint8_t>&)> m_decodeFunc;
 	bool m_readCharacteristicEncoded;
 	std::function<void()> m_writeCharacteristicDoneFunc;
+	std::function<void()> m_writeDescriptorDoneFunc;
 
 private slots:
 	void connected();
@@ -34,6 +35,8 @@ private slots:
 	void serviceStateChanged(QLowEnergyService::ServiceState state);
 	void characteristicRead(const QLowEnergyCharacteristic& characteristic, const QByteArray& value);
 	void characteristicWritten(const QLowEnergyCharacteristic& characteristic, const QByteArray& value);
+	void characteristicChanged(const QLowEnergyCharacteristic& characteristic, const QByteArray& value);
+	void descriptorWritten(const QLowEnergyDescriptor& descriptor, const QByteArray& value);
 	void failed(QLowEnergyController::Error error);
 
 public:
@@ -50,6 +53,7 @@ public:
 	virtual void SetDecoder(const std::function<std::vector<uint8_t>(const std::vector<uint8_t>&)>& decodeFunc) override;
 	virtual void WriteCharacteristic(const std::string& uuid, const std::vector<uint8_t>& data,
 		const std::function<void()>& doneFunc) override;
+	virtual void EnableNotifications(const std::string& uuid, const std::function<void()>& doneFunc) override;
 	virtual void Error(const std::string& msg) override;
 	virtual void DebugMessage(const std::string& msg) override;
 

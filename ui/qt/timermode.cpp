@@ -89,9 +89,15 @@ TimerMode::TimerMode(QWidget* parent): QWidget(parent)
 	m_scrambler = make_shared<Cube3x3RandomStateScramble>();
 	m_scrambleWidget = new ScrambleWidget(this);
 	m_scrambleWidget->setMaxMoveCount(m_scrambler->GetMaxMoveCount());
+	connect(m_scrambleWidget, &ScrambleWidget::scrambleComplete, this, &TimerMode::scrambleComplete);
 	m_rightAreaLayout->addWidget(m_scrambleWidget);
 	m_scrambleStretch = m_rightAreaLayout->count();
 	m_rightAreaLayout->addStretch(1);
+
+	m_cube3x3Widget = new Cube3x3Widget();
+	m_cube3x3Widget->hide();
+	m_cube3x3Widget->setBackgroundColor(Theme::backgroundDark);
+	m_rightAreaLayout->addWidget(m_cube3x3Widget, 32);
 
 	m_timer = new TimerWidget(this);
 	connect(m_timer, &TimerWidget::aboutToStart, this, &TimerMode::solveStarting);
@@ -252,4 +258,29 @@ void TimerMode::scrambleGenerated()
 void TimerMode::updateHistory()
 {
 	m_session->updateHistory();
+}
+
+
+void TimerMode::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
+{
+	m_bluetoothCube = cube;
+	m_cube3x3Widget->setBluetoothCube(cube);
+	m_scrambleWidget->setBluetoothCube(cube);
+	m_timer->setBluetoothCube(cube);
+	if (m_bluetoothCube)
+	{
+		m_cube3x3Widget->show();
+		m_rightAreaLayout->setStretch(2, 0);
+	}
+	else
+	{
+		m_cube3x3Widget->hide();
+		m_rightAreaLayout->setStretch(2, 1);
+	}
+}
+
+
+void TimerMode::scrambleComplete()
+{
+	m_timer->readyForBluetoothSolve();
 }

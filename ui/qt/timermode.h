@@ -9,6 +9,8 @@
 #include "scramblewidget.h"
 #include "timerwidget.h"
 #include "history.h"
+#include "bluetoothcube.h"
+#include "cube3x3widget.h"
 
 class ScrambleThread: public QThread
 {
@@ -56,6 +58,9 @@ class TimerMode: public QWidget
 	CubeMoveSequence m_pendingScramble;
 	ScrambleThread* m_scrambleThread;
 
+	std::shared_ptr<BluetoothCube> m_bluetoothCube;
+	Cube3x3Widget* m_cube3x3Widget;
+
 	void newScramble();
 	void updateFontSizes();
 
@@ -64,6 +69,7 @@ private slots:
 	void solveStopping();
 	void solveComplete();
 	void scrambleGenerated();
+	void scrambleComplete();
 
 protected:
 	virtual void resizeEvent(QResizeEvent* event);
@@ -78,6 +84,8 @@ public:
 	bool running() const;
 
 	void updateHistory();
+
+	void setBluetoothCube(const std::shared_ptr<BluetoothCube>& cube);
 
 signals:
 	void timerStarting();

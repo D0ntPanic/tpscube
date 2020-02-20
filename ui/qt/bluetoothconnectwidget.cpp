@@ -60,6 +60,18 @@ void QtBluetoothDevice::serviceStateChanged(QLowEnergyService::ServiceState stat
 	switch (state)
 	{
 	case QLowEnergyService::ServiceDiscovered:
+#ifdef BLUETOOTH_DEBUG
+		for (auto& i : m_service->characteristics())
+		{
+			printf("Characteristic %s (%s) %x\n", i.uuid().toString().toStdString().c_str(),
+				i.name().toStdString().c_str(), (int)i.properties());
+			for (auto& j : i.descriptors())
+			{
+				printf("  Descriptor %s (%s) %x\n", j.uuid().toString().toStdString().c_str(),
+					j.name().toStdString().c_str(), j.type());
+			}
+		}
+#endif
 		m_serviceConnectedFunc();
 		break;
 	case QLowEnergyService::InvalidService:
@@ -113,6 +125,30 @@ void QtBluetoothDevice::characteristicWritten(const QLowEnergyCharacteristic&, c
 }
 
 
+void QtBluetoothDevice::characteristicChanged(const QLowEnergyCharacteristic& characteristic, const QByteArray& value)
+{
+	vector<uint8_t> valueVector;
+	valueVector.insert(valueVector.begin(), (const uint8_t*)value.data(),
+		(const uint8_t*)(value.data() + value.size()));
+	if (m_decodeFunc)
+		valueVector = m_decodeFunc(valueVector);
+	printf("Characteristic %s changed:\n", characteristic.uuid().toString().toStdString().c_str());
+	for (size_t i = 0; i < valueVector.size(); i++)
+	{
+		if ((i != 0) && ((i & 15) == 0))
+			printf("\n    ");
+		printf("%.2x ", valueVector[i]);
+	}
+	printf("\n");
+}
+
+
+void QtBluetoothDevice::descriptorWritten(const QLowEnergyDescriptor&, const QByteArray&)
+{
+	m_writeDescriptorDoneFunc();
+}
+
+
 void QtBluetoothDevice::failed(QLowEnergyController::Error)
 {
 	emit error(m_control->errorString());
@@ -145,6 +181,8 @@ void QtBluetoothDevice::ConnectToService(const string& uuid,
 	connect(m_service, &QLowEnergyService::stateChanged, this, &QtBluetoothDevice::serviceStateChanged);
 	connect(m_service, &QLowEnergyService::characteristicRead, this, &QtBluetoothDevice::characteristicRead);
 	connect(m_service, &QLowEnergyService::characteristicWritten, this, &QtBluetoothDevice::characteristicWritten);
+	connect(m_service, &QLowEnergyService::characteristicChanged, this, &QtBluetoothDevice::characteristicChanged);
+	connect(m_service, &QLowEnergyService::descriptorWritten, this, &QtBluetoothDevice::descriptorWritten);
 	m_service->discoverDetails();
 }
 
@@ -226,6 +264,38 @@ void QtBluetoothDevice::WriteCharacteristic(const string& uuid, const std::vecto
 	}
 	m_writeCharacteristicDoneFunc = doneFunc;
 	m_service->writeCharacteristic(characteristic, QByteArray((const char*)&data[0], data.size()));
+}
+
+
+void QtBluetoothDevice::EnableNotifications(const string& uuid, const function<void()>& doneFunc)
+{
+#ifdef BLUETOOTH_DEBUG
+	printf("Enabling notifications for characteristic: %s\n", uuid.c_str());
+#endif
+	if (!m_service)
+	{
+		emit error("Enabling notifications for characteristic " + QString::fromStdString(uuid) + " without a connected service");
+		return;
+	}
+
+	QLowEnergyCharacteristic characteristic = m_service->characteristic(
+		QBluetoothUuid(QString::fromStdString(uuid)));
+	if (!characteristic.isValid())
+	{
+		emit error("Device does not have required characteristic " + QString::fromStdString(uuid));
+		return;
+	}
+
+	QLowEnergyDescriptor notification = characteristic.descriptor(QBluetoothUuid::ClientCharacteristicConfiguration);
+	if (!notification.isValid())
+	{
+		emit error("Device does not support notifications for characteristic " + QString::fromStdString(uuid));
+		return;
+	}
+
+	static char enable[2] = {1, 0};
+	m_writeDescriptorDoneFunc = doneFunc;
+	m_service->writeDescriptor(notification, QByteArray(enable, sizeof(enable)));
 }
 
 
