@@ -41,14 +41,15 @@ DetailedSplitTimes Solve::GenerateDetailedSplitTimes() const
 	SolveState state = SOLVESTATE_INITIAL;
 	int timestamp = 0;
 	result.cross.moveCount = 0;
+	CubeMove lastMove;
 	for (auto& i : solveMoves.moves)
 	{
 		SolveState newState = TransitionSolveState(cube, state);
 		for (SolveState j = (SolveState)((int)state + 1); j <= newState; j = (SolveState)((int)j + 1))
 		{
-			DetailedSplit* split = GetSplitForSolveState(state, &result);
+			DetailedSplit* split = GetSplitForSolveState(j, &result);
 			split->finishTime = timestamp;
-			split = GetSplitForSolveState(j, &result);
+			split = GetSplitForSolveState((SolveState)((int)j + 1), &result);
 			split->phaseStartTime = timestamp;
 			split->firstMoveTime = timestamp;
 			split->moveCount = 0;
@@ -58,17 +59,26 @@ DetailedSplitTimes Solve::GenerateDetailedSplitTimes() const
 		cube.Move(i.move);
 		timestamp = i.timestamp;
 
-		DetailedSplit* split = GetSplitForSolveState(state, &result);
-		split->moveCount++;
-		if (split->moveCount == 1)
+		DetailedSplit* split = GetSplitForSolveState((SolveState)((int)state + 1), &result);
+
+		// Update move count for this phase. Use outer turn metric for move counts.
+		if (split->moveCount == 0)
+		{
+			split->moveCount++;
 			split->firstMoveTime = timestamp;
+		}
+		else if (!CubeMoveSequence::IsSameOuterBlock(lastMove, i.move))
+		{
+			split->moveCount++;
+		}
+		lastMove = i.move;
 	}
 
-	for (SolveState i = (SolveState)((int)state + 1); i <= SOLVESTATE_SOLVED; i = (SolveState)((int)i + 1))
+	for (SolveState i = (SolveState)((int)state + 1); i < SOLVESTATE_SOLVED; i = (SolveState)((int)i + 1))
 	{
-		DetailedSplit* split = GetSplitForSolveState(state, &result);
+		DetailedSplit* split = GetSplitForSolveState(i, &result);
 		split->finishTime = timestamp;
-		split = GetSplitForSolveState(i, &result);
+		split = GetSplitForSolveState((SolveState)((int)i + 1), &result);
 		split->phaseStartTime = timestamp;
 		split->firstMoveTime = timestamp;
 		split->moveCount = 0;
@@ -78,6 +88,40 @@ DetailedSplitTimes Solve::GenerateDetailedSplitTimes() const
 	result.cross.phaseStartTime = 0;
 	result.cross.firstMoveTime = 0;
 	result.pllFinish.finishTime = timestamp;
+
+	result.idleTime = (result.cross.firstMoveTime - result.cross.phaseStartTime) +
+		(result.f2lPair[0].firstMoveTime - result.f2lPair[0].phaseStartTime) +
+		(result.f2lPair[1].firstMoveTime - result.f2lPair[1].phaseStartTime) +
+		(result.f2lPair[2].firstMoveTime - result.f2lPair[2].phaseStartTime) +
+		(result.f2lPair[3].firstMoveTime - result.f2lPair[3].phaseStartTime) +
+		(result.ollCross.firstMoveTime - result.ollCross.phaseStartTime) +
+		(result.ollFinish.firstMoveTime - result.ollFinish.phaseStartTime) +
+		(result.pllCorner.firstMoveTime - result.pllCorner.phaseStartTime) +
+		(result.pllFinish.firstMoveTime - result.pllFinish.phaseStartTime);
+
+	// Turns per second should be not count the starting move in a sequence in the
+	// number of moves in the time period (a two move sequence one second apart is
+	// 1 TPS, not 2 TPS)
+	size_t firstMoves = 1;
+	if (result.f2lPair[0].firstMoveTime != result.f2lPair[0].phaseStartTime)
+		firstMoves++;
+	if (result.f2lPair[1].firstMoveTime != result.f2lPair[1].phaseStartTime)
+		firstMoves++;
+	if (result.f2lPair[2].firstMoveTime != result.f2lPair[2].phaseStartTime)
+		firstMoves++;
+	if (result.f2lPair[3].firstMoveTime != result.f2lPair[3].phaseStartTime)
+		firstMoves++;
+	if (result.ollCross.firstMoveTime != result.ollCross.phaseStartTime)
+		firstMoves++;
+	if (result.ollFinish.firstMoveTime != result.ollFinish.phaseStartTime)
+		firstMoves++;
+	if (result.pllCorner.firstMoveTime != result.pllCorner.phaseStartTime)
+		firstMoves++;
+	if (result.pllFinish.firstMoveTime != result.pllFinish.phaseStartTime)
+		firstMoves++;
+
+	result.moveCount = solveMoves.GetOuterTurnCount();
+	result.tps = (float)(result.moveCount - firstMoves) / ((float)(time - (penalty + result.idleTime)) / 1000.0f);
 	return result;
 }
 

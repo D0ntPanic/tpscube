@@ -56,6 +56,9 @@ struct DetailedSplitTimes
 	DetailedSplit ollFinish;
 	DetailedSplit pllCorner;
 	DetailedSplit pllFinish;
+	size_t moveCount;
+	uint32_t idleTime;
+	float tps;
 };
 
 struct Solve

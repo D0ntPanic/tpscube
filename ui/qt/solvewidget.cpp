@@ -127,17 +127,6 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 		if (solve.solveMoves.moves.size() != 0)
 		{
 			DetailedSplitTimes splits = solve.GenerateDetailedSplitTimes();
-			int idle = (splits.cross.firstMoveTime - splits.cross.phaseStartTime) +
-				(splits.f2lPair[0].firstMoveTime - splits.f2lPair[0].phaseStartTime) +
-				(splits.f2lPair[1].firstMoveTime - splits.f2lPair[1].phaseStartTime) +
-				(splits.f2lPair[2].firstMoveTime - splits.f2lPair[2].phaseStartTime) +
-				(splits.f2lPair[3].firstMoveTime - splits.f2lPair[3].phaseStartTime) +
-				(splits.ollCross.firstMoveTime - splits.ollCross.phaseStartTime) +
-				(splits.ollFinish.firstMoveTime - splits.ollFinish.phaseStartTime) +
-				(splits.pllCorner.firstMoveTime - splits.pllCorner.phaseStartTime) +
-				(splits.pllFinish.firstMoveTime - splits.pllFinish.phaseStartTime);
-
-			size_t moves = solve.solveMoves.GetOuterTurnCount();
 			splitLayout->setColumnMinimumWidth(5, 16);
 			QLabel* movesLabel = new QLabel("Moves");
 			movesLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
@@ -145,7 +134,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 			movesLabel->setToolTip("Number of moves (outer turn metric)");
 			splitLayout->addWidget(movesLabel, 0, 6);
 			QLabel* moveCount = new QLabel(QString::asprintf("<span style='font-size:%fpt'>%d</span>",
-				relativeFontSize(1.0f), (int)moves));
+				relativeFontSize(1.0f), (int)splits.moveCount));
 			moveCount->setAlignment(Qt::AlignCenter);
 			moveCount->setToolTip("Number of moves (outer turn metric)");
 			splitLayout->addWidget(moveCount, 1, 6);
@@ -154,7 +143,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 			idleLabel->setAlignment(Qt::AlignCenter);
 			idleLabel->setToolTip("Time spent not performing moves (recognition time)");
 			splitLayout->addWidget(idleLabel, 0, 7);
-			QLabel* idleTime = new QLabel(SessionWidget::stringForTime(idle));
+			QLabel* idleTime = new QLabel(SessionWidget::stringForTime(splits.idleTime));
 			idleTime->setAlignment(Qt::AlignCenter);
 			idleTime->setToolTip("Time spent not performing moves (recognition time)");
 			splitLayout->addWidget(idleTime, 1, 7);
@@ -164,7 +153,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 			tpsLabel->setToolTip("Turns per second (excluding idle time)");
 			splitLayout->addWidget(tpsLabel, 0, 8);
 			QLabel* tps = new QLabel(QString::asprintf("<span style='font-size:%fpt'>%.2f</span>",
-				relativeFontSize(1.0f), (float)moves / ((float)(solve.time - (idle + solve.penalty)) / 1000.0f)));
+				relativeFontSize(1.0f), splits.tps));
 			tps->setAlignment(Qt::AlignCenter);
 			tps->setToolTip("Turns per second (excluding idle time)");
 			splitLayout->addWidget(tps, 1, 8);
