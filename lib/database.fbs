@@ -49,25 +49,25 @@ table CubeSolveMove
 
 table CubeSolveSplits
 {
-	white_cross_time: uint;
+	cross_time: uint;
 	f2l_first_pair_time: uint;
 	f2l_second_pair_time: uint;
 	f2l_third_pair_time: uint;
 	f2l_finish_time: uint;
-	oll_yellow_cross_time: uint;
+	oll_cross_time: uint;
 	oll_finish_time: uint;
 	pll_corner_time: uint;
 }
 
 table CubeSolve
 {
-    scramble: [CubeMove];
+	scramble: [CubeMove];
 	created: uint64;
 	update: Update;
 	ok: bool;
 	time: uint;
 	penalty: uint;
-	solve_method_name: string;
+	solve_device: string;
 	solve_moves: [CubeSolveMove];
 	solve_splits: CubeSolveSplits;
 }

@@ -225,6 +225,35 @@ void TimerMode::solveComplete()
 	solve.time = m_timer->value();
 	solve.penalty = 0;
 	solve.dirty = true;
+
+	// Check for valid solve move sequence and create splits if valid
+	Cube3x3 cube;
+	cube.Apply(m_currentScramble);
+	for (auto& i : m_timer->solveMoves().moves)
+		cube.Move(i.move);
+	if (cube.IsSolved() && (m_timer->solveMoves().moves.size() != 0))
+	{
+		solve.solveMoves = m_timer->solveMoves();
+		for (size_t i = 1; i < solve.solveMoves.moves.size(); i++)
+			solve.solveMoves.moves[i].timestamp -= solve.solveMoves.moves[0].timestamp;
+		solve.solveMoves.moves[0].timestamp = 0;
+		solve.GenerateSplitTimesFromMoves();
+
+		printf("Solve splits:\n");
+		printf("Cross:      %u\n", solve.crossTime);
+		printf("F2L 1:      %u\n", solve.f2lPairTimes[0]);
+		printf("F2L 2:      %u\n", solve.f2lPairTimes[1]);
+		printf("F2L 3:      %u\n", solve.f2lPairTimes[2]);
+		printf("F2L 4:      %u\n", solve.f2lPairTimes[3]);
+		printf("OLL cross:  %u\n", solve.ollCrossTime);
+		printf("OLL:        %u\n", solve.ollFinishTime);
+		printf("PLL corner: %u\n", solve.pllCornerTime);
+		printf("Solved:     %u\n\n", solve.time - solve.penalty);
+	}
+
+	if (m_bluetoothCube)
+		solve.solveDevice = m_bluetoothCube->GetDevice()->GetName();
+
 	History::instance.RecordSolve(m_solveType, solve);
 	m_session->updateHistory();
 

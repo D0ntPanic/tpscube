@@ -138,6 +138,7 @@ void TimerWidget::buttonUp()
 		{
 			m_startTime = chrono::steady_clock::now();
 			m_state = TIMER_RUNNING;
+			m_solveMoves.moves.clear();
 			m_bluetoothTimeOverride = false;
 			emit started();
 			updateText();
@@ -248,6 +249,17 @@ void TimerWidget::updateBluetoothSolve()
 					m_bluetoothTimeOverride = true;
 					m_bluetoothTimeValue = bluetoothTime;
 				}
+				else if (m_solveMoves.moves.size() != 0)
+				{
+					// Rebase individual move times to use real time
+					double ratio = (double)realTime / (double)bluetoothTime;
+					for (size_t i = 1; i < m_solveMoves.moves.size(); i++)
+						m_solveMoves.moves[i].timestamp -= m_solveMoves.moves[0].timestamp;
+					m_solveMoves.moves[0].timestamp = 0;
+					for (auto& i : m_solveMoves.moves)
+						i.timestamp = (uint64_t)((double)i.timestamp * ratio);
+					m_solveMoves.moves[m_solveMoves.moves.size() - 1].timestamp = (uint64_t)realTime;
+				}
 
 				m_state = TIMER_STOPPED;
 				m_updateTimer->stop();
@@ -264,7 +276,10 @@ void TimerWidget::readyForBluetoothSolve()
 {
 	if (m_bluetoothCube && m_bluetoothCubeClient && (m_state == TIMER_STOPPED))
 	{
+		m_bluetoothCubeClient->GetLatestMoves();
+
 		m_state = TIMER_BLUETOOTH_READY;
+		m_solveMoves.moves.clear();
 		updateText();
 		emit aboutToStart();
 		m_updateTimer->start();

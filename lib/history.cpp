@@ -9,6 +9,273 @@ using namespace std;
 History History::instance;
 
 
+void Solve::GenerateSplitTimesFromMoves()
+{
+	Cube3x3 cube;
+	cube.Apply(scramble);
+
+	SolveState state = SOLVESTATE_INITIAL;
+	int timestamp = 0;
+	for (auto& i : solveMoves.moves)
+	{
+		SolveState newState = TransitionSolveState(cube, state);
+		for (SolveState j = (SolveState)((int)state + 1); j <= newState; j = (SolveState)((int)j + 1))
+			RecordSplitTimeForSolveState(j, timestamp);
+		state = newState;
+
+		cube.Move(i.move);
+		timestamp = i.timestamp;
+	}
+
+	for (SolveState i = (SolveState)((int)state + 1); i <= SOLVESTATE_SOLVED; i = (SolveState)((int)i + 1))
+		RecordSplitTimeForSolveState(i, timestamp);
+}
+
+
+DetailedSplitTimes Solve::GenerateDetailedSplitTimes() const
+{
+	Cube3x3 cube;
+	cube.Apply(scramble);
+
+	DetailedSplitTimes result;
+	SolveState state = SOLVESTATE_INITIAL;
+	int timestamp = 0;
+	result.cross.moveCount = 0;
+	for (auto& i : solveMoves.moves)
+	{
+		SolveState newState = TransitionSolveState(cube, state);
+		for (SolveState j = (SolveState)((int)state + 1); j <= newState; j = (SolveState)((int)j + 1))
+		{
+			DetailedSplit* split = GetSplitForSolveState(state, &result);
+			split->finishTime = timestamp;
+			split = GetSplitForSolveState(j, &result);
+			split->phaseStartTime = timestamp;
+			split->firstMoveTime = timestamp;
+			split->moveCount = 0;
+			state = j;
+		}
+
+		cube.Move(i.move);
+		timestamp = i.timestamp;
+
+		DetailedSplit* split = GetSplitForSolveState(state, &result);
+		split->moveCount++;
+		if (split->moveCount == 1)
+			split->firstMoveTime = timestamp;
+	}
+
+	for (SolveState i = (SolveState)((int)state + 1); i <= SOLVESTATE_SOLVED; i = (SolveState)((int)i + 1))
+	{
+		DetailedSplit* split = GetSplitForSolveState(state, &result);
+		split->finishTime = timestamp;
+		split = GetSplitForSolveState(i, &result);
+		split->phaseStartTime = timestamp;
+		split->firstMoveTime = timestamp;
+		split->moveCount = 0;
+		state = i;
+	}
+
+	result.cross.phaseStartTime = 0;
+	result.cross.firstMoveTime = 0;
+	result.pllFinish.finishTime = timestamp;
+	return result;
+}
+
+
+void Solve::RecordSplitTimeForSolveState(SolveState state, int timestamp)
+{
+	switch (state)
+	{
+	case SOLVESTATE_CROSS:
+		crossTime = timestamp;
+		break;
+	case SOLVESTATE_F2L_FIRST_PAIR:
+		f2lPairTimes[0] = timestamp;
+		break;
+	case SOLVESTATE_F2L_SECOND_PAIR:
+		f2lPairTimes[1] = timestamp;
+		break;
+	case SOLVESTATE_F2L_THIRD_PAIR:
+		f2lPairTimes[2] = timestamp;
+		break;
+	case SOLVESTATE_F2L_COMPLETE:
+		f2lPairTimes[3] = timestamp;
+		break;
+	case SOLVESTATE_OLL_CROSS:
+		ollCrossTime = timestamp;
+		break;
+	case SOLVESTATE_OLL_COMPLETE:
+		ollFinishTime = timestamp;
+		break;
+	case SOLVESTATE_PLL_CORNERS:
+		pllCornerTime = timestamp;
+		break;
+	default:
+		break;
+	}
+}
+
+
+DetailedSplit* Solve::GetSplitForSolveState(SolveState state, DetailedSplitTimes* splits)
+{
+	switch (state)
+	{
+	case SOLVESTATE_CROSS:
+		return &splits->cross;
+	case SOLVESTATE_F2L_FIRST_PAIR:
+		return &splits->f2lPair[0];
+	case SOLVESTATE_F2L_SECOND_PAIR:
+		return &splits->f2lPair[1];
+	case SOLVESTATE_F2L_THIRD_PAIR:
+		return &splits->f2lPair[2];
+	case SOLVESTATE_F2L_COMPLETE:
+		return &splits->f2lPair[3];
+	case SOLVESTATE_OLL_CROSS:
+		return &splits->ollCross;
+	case SOLVESTATE_OLL_COMPLETE:
+		return &splits->ollFinish;
+	case SOLVESTATE_PLL_CORNERS:
+		return &splits->pllCorner;
+	default:
+		return &splits->pllFinish;
+	}
+}
+
+
+bool Solve::WhiteCrossValid(const Cube3x3Faces& faces)
+{
+	return (faces.GetColor(TOP, 0, 1) == WHITE) &&
+		(faces.GetColor(TOP, 1, 0) == WHITE) &&
+		(faces.GetColor(TOP, 1, 2) == WHITE) &&
+		(faces.GetColor(TOP, 2, 1) == WHITE) &&
+		(faces.GetColor(FRONT, 0, 1) == GREEN) &&
+		(faces.GetColor(RIGHT, 0, 1) == RED) &&
+		(faces.GetColor(BACK, 0, 1) == BLUE) &&
+		(faces.GetColor(LEFT, 0, 1) == ORANGE);
+}
+
+
+int Solve::GetF2LPairCount(const Cube3x3Faces& faces)
+{
+	int result = 0;
+	if ((faces.GetColor(TOP, 0, 0) == WHITE) &&
+		(faces.GetColor(BACK, 0, 2) == BLUE) &&
+		(faces.GetColor(BACK, 1, 2) == BLUE) &&
+		(faces.GetColor(LEFT, 0, 0) == ORANGE) &&
+		(faces.GetColor(LEFT, 1, 0) == ORANGE))
+		result++;
+	if ((faces.GetColor(TOP, 0, 2) == WHITE) &&
+		(faces.GetColor(BACK, 0, 0) == BLUE) &&
+		(faces.GetColor(BACK, 1, 0) == BLUE) &&
+		(faces.GetColor(RIGHT, 0, 2) == RED) &&
+		(faces.GetColor(RIGHT, 1, 2) == RED))
+		result++;
+	if ((faces.GetColor(TOP, 2, 0) == WHITE) &&
+		(faces.GetColor(FRONT, 0, 0) == GREEN) &&
+		(faces.GetColor(FRONT, 1, 0) == GREEN) &&
+		(faces.GetColor(LEFT, 0, 2) == ORANGE) &&
+		(faces.GetColor(LEFT, 1, 2) == ORANGE))
+		result++;
+	if ((faces.GetColor(TOP, 2, 2) == WHITE) &&
+		(faces.GetColor(FRONT, 0, 2) == GREEN) &&
+		(faces.GetColor(FRONT, 1, 2) == GREEN) &&
+		(faces.GetColor(RIGHT, 0, 0) == RED) &&
+		(faces.GetColor(RIGHT, 1, 0) == RED))
+		result++;
+	return result;
+}
+
+
+bool Solve::IsF2LSolved(const Cube3x3Faces& faces)
+{
+	return GetF2LPairCount(faces) == 4;
+}
+
+
+bool Solve::YellowCrossValid(const Cube3x3Faces& faces)
+{
+	return (faces.GetColor(BOTTOM, 0, 1) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 1, 0) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 1, 2) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 2, 1) == YELLOW);
+}
+
+
+bool Solve::LastLayerOriented(const Cube3x3Faces& faces)
+{
+	return (faces.GetColor(BOTTOM, 0, 0) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 0, 1) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 0, 2) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 1, 0) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 1, 2) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 2, 0) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 2, 1) == YELLOW) &&
+		(faces.GetColor(BOTTOM, 2, 2) == YELLOW);
+}
+
+
+bool Solve::LastLayerCornersValid(const Cube3x3Faces& faces)
+{
+	return (faces.GetColor(FRONT, 2, 0) == faces.GetColor(FRONT, 2, 2)) &&
+		(faces.GetColor(RIGHT, 2, 0) == faces.GetColor(RIGHT, 2, 2)) &&
+		(faces.GetColor(BACK, 2, 0) == faces.GetColor(BACK, 2, 2)) &&
+		(faces.GetColor(LEFT, 2, 0) == faces.GetColor(LEFT, 2, 2));
+}
+
+
+SolveState Solve::TransitionSolveState(const Cube3x3& cube, SolveState currentState)
+{
+	if (cube.IsSolved())
+		return SOLVESTATE_SOLVED;
+
+	Cube3x3Faces faces(cube);
+	SolveState lastState;
+	SolveState newState = currentState;
+	do
+	{
+		lastState = newState;
+		switch (lastState)
+		{
+		case SOLVESTATE_INITIAL:
+			if (WhiteCrossValid(faces))
+				newState = SOLVESTATE_CROSS;
+			break;
+		case SOLVESTATE_CROSS:
+			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) == 1))
+				newState = SOLVESTATE_F2L_FIRST_PAIR;
+			break;
+		case SOLVESTATE_F2L_FIRST_PAIR:
+			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) == 2))
+				newState = SOLVESTATE_F2L_SECOND_PAIR;
+			break;
+		case SOLVESTATE_F2L_SECOND_PAIR:
+			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) == 3))
+				newState = SOLVESTATE_F2L_THIRD_PAIR;
+			break;
+		case SOLVESTATE_F2L_THIRD_PAIR:
+			if (IsF2LSolved(faces))
+				newState = SOLVESTATE_F2L_COMPLETE;
+			break;
+		case SOLVESTATE_F2L_COMPLETE:
+			if (IsF2LSolved(faces) && YellowCrossValid(faces))
+				newState = SOLVESTATE_OLL_CROSS;
+			break;
+		case SOLVESTATE_OLL_CROSS:
+			if (IsF2LSolved(faces) && LastLayerOriented(faces))
+				newState = SOLVESTATE_OLL_COMPLETE;
+			break;
+		case SOLVESTATE_OLL_COMPLETE:
+			if (IsF2LSolved(faces) && LastLayerOriented(faces) && LastLayerCornersValid(faces))
+				newState = SOLVESTATE_PLL_CORNERS;
+			break;
+		default:
+			break;
+		}
+	} while (newState != lastState);
+	return newState;
+}
+
+
 int Session::avgOf(const vector<int>& times)
 {
 	vector<int> sorted = times;
@@ -407,6 +674,20 @@ string History::SerializeSolve(const Solve& solve)
 	auto updateSync = builder.CreateString(solve.update.sync);
 	auto update = database::CreateUpdate(builder, updateId, solve.update.date, updateSync);
 
+	auto solveDevice = builder.CreateString(solve.solveDevice);
+	auto solveSplits = database::CreateCubeSolveSplits(builder,
+		solve.crossTime, solve.f2lPairTimes[0], solve.f2lPairTimes[1],
+		solve.f2lPairTimes[2], solve.f2lPairTimes[3], solve.ollCrossTime,
+		solve.ollFinishTime, solve.pllCornerTime);
+
+	vector<flatbuffers::Offset<database::CubeSolveMove>> solveMoveList;
+	for (auto& i : solve.solveMoves.moves)
+	{
+		solveMoveList.push_back(database::CreateCubeSolveMove(builder,
+			(database::CubeMove)i.move, i.timestamp));
+	}
+	auto solveMoves = builder.CreateVector(solveMoveList);
+
 	database::CubeSolveBuilder solveBuilder(builder);
 	solveBuilder.add_scramble(scramble);
 	solveBuilder.add_created(solve.created);
@@ -414,6 +695,9 @@ string History::SerializeSolve(const Solve& solve)
 	solveBuilder.add_ok(solve.ok);
 	solveBuilder.add_time(solve.time);
 	solveBuilder.add_penalty(solve.penalty);
+	solveBuilder.add_solve_device(solveDevice);
+	solveBuilder.add_solve_moves(solveMoves);
+	solveBuilder.add_solve_splits(solveSplits);
 	auto solveData = solveBuilder.Finish();
 	auto data = database::CreateData(builder, database::Contents_cube_solve, solveData.Union());
 	database::FinishDataBuffer(builder, data);
@@ -490,6 +774,35 @@ leveldb::Status History::DeserializeSolve(const string& data, Solve& solve)
 		for (auto i : *scramble)
 			solve.scramble.moves.push_back((CubeMove)i);
 	}
+
+	auto solveMoves = solveData->solve_moves();
+	if (solveMoves)
+	{
+		for (size_t i = 0; i < solveMoves->Length(); i++)
+		{
+			solve.solveMoves.moves.push_back(TimedCubeMove {
+				(CubeMove)solveMoves->Get(i)->move(),
+				(uint32_t)solveMoves->Get(i)->milliseconds()
+			});
+		}
+	}
+
+	auto splits = solveData->solve_splits();
+	if (splits)
+	{
+		solve.crossTime = splits->cross_time();
+		solve.f2lPairTimes[0] = splits->f2l_first_pair_time();
+		solve.f2lPairTimes[1] = splits->f2l_second_pair_time();
+		solve.f2lPairTimes[2] = splits->f2l_third_pair_time();
+		solve.f2lPairTimes[3] = splits->f2l_finish_time();
+		solve.ollCrossTime = splits->oll_cross_time();
+		solve.ollFinishTime = splits->oll_finish_time();
+		solve.pllCornerTime = splits->pll_corner_time();
+	}
+
+	auto solveDevice = solveData->solve_device();
+	if (solveDevice)
+		solve.solveDevice = solveDevice->str();
 
 	solve.created = (time_t)solveData->created();
 	solve.ok = solveData->ok();

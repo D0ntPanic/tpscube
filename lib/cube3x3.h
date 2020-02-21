@@ -113,7 +113,7 @@ public:
 	CubePiece& Edge(CubeEdge edge) { return m_edges[edge]; }
 	const CubePiece& Edge(CubeEdge edge) const { return m_edges[edge]; }
 
-	bool IsSolved();
+	bool IsSolved() const;
 	bool operator==(const Cube3x3& cube) const;
 	bool operator!=(const Cube3x3& cube) const;
 
@@ -156,7 +156,7 @@ public:
 	CubeColor GetCornerColor(CubeCorner corner, size_t i) const;
 	CubeColor GetEdgeColor(CubeEdge edge, size_t i) const;
 
-	CubeColor SetColor(CubeFace face, uint8_t row, uint8_t col, CubeColor color);
+	void SetColor(CubeFace face, uint8_t row, uint8_t col, CubeColor color);
 
 	bool IsSolved() const;
 	bool operator==(const Cube3x3Faces& cube) const;

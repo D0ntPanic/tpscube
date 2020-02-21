@@ -7,6 +7,7 @@
 #include "historymode.h"
 #include "utilwidgets.h"
 #include "theme.h"
+#include "solvebarwidget.h"
 
 using namespace std;
 
@@ -93,6 +94,7 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 	timeLayout->setColumnStretch(4, 0);
 	timeLayout->setSpacing(0);
 
+	int row = 0;
 	for (size_t i = 0; i < m_solves.size(); i++)
 	{
 		Solve solve = m_solves[i];
@@ -101,7 +103,7 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 		QPalette pal = palette();
 		pal.setColor(QPalette::WindowText, Theme::disabled);
 		num->setPalette(pal);
-		timeLayout->addWidget(num, (int)i, 0, Qt::AlignRight);
+		timeLayout->addWidget(num, row, 0, Qt::AlignRight);
 
 		ClickableLabel* timeLabel;
 		function<void()> showSolve = [=]() {
@@ -123,7 +125,7 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 			timeLabel->setColors(Theme::selectionLight, Theme::blue);
 		}
 		timeLabel->setCursor(Qt::PointingHandCursor);
-		timeLayout->addWidget(timeLabel, (int)i, 1, Qt::AlignRight);
+		timeLayout->addWidget(timeLabel, row, 1, Qt::AlignRight);
 
 		QLabel* penalty;
 		if (solve.ok && solve.penalty)
@@ -132,7 +134,7 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 			penalty = new QLabel("");
 		pal.setColor(QPalette::WindowText, Theme::red);
 		penalty->setPalette(pal);
-		timeLayout->addWidget(penalty, (int)i, 2, Qt::AlignLeft);
+		timeLayout->addWidget(penalty, row, 2, Qt::AlignLeft);
 
 		if (fullDetails)
 		{
@@ -141,14 +143,26 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 				Theme::content, Theme::blue, showSolve);
 			scramble->setFont(fontOfRelativeSize(1.0f, QFont::Thin));
 			scramble->setCursor(Qt::PointingHandCursor);
-			timeLayout->addWidget(scramble, (int)i, 3, Qt::AlignLeft);
+			timeLayout->addWidget(scramble, row, 3, Qt::AlignLeft);
 		}
 
 		ClickableLabel* timeOfSolve = new ClickableLabel("   " + HistoryMode::shortStringForDate(solve.created),
 			Theme::content, Theme::blue, showSolve);
 		timeOfSolve->setFont(fontOfRelativeSize(1.0f, QFont::Thin));
 		timeOfSolve->setCursor(Qt::PointingHandCursor);
-		timeLayout->addWidget(timeOfSolve, (int)i, fullDetails ? 4 : 3, Qt::AlignLeft);
+		timeLayout->addWidget(timeOfSolve, row, fullDetails ? 4 : 3, Qt::AlignLeft);
+
+		if (solve.ok && solve.crossTime && solve.f2lPairTimes[3] && solve.ollFinishTime)
+		{
+			row++;
+			SolveBarWidget* bar = new SolveBarWidget(solve);
+			bar->setBarHeight(1);
+			bar->setBarRelativeWidth((float)solve.time / (float)m_solves[highest].time);
+			bar->setPadding(0, 2);
+			timeLayout->addWidget(bar, row, 1, 1, fullDetails ? 4 : 3);
+		}
+
+		row++;
 	}
 
 	layout->addLayout(timeLayout);

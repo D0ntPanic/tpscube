@@ -684,7 +684,7 @@ void Cube3x3::GenerateRandomState(RandomSource& rng)
 }
 
 
-bool Cube3x3::IsSolved()
+bool Cube3x3::IsSolved() const
 {
 	// Cube is solved if every piece is in its identity position and
 	// there are no orientation changes
@@ -1118,7 +1118,7 @@ CubeColor Cube3x3Faces::GetEdgeColor(CubeEdge edge, size_t i) const
 }
 
 
-CubeColor Cube3x3Faces::SetColor(CubeFace face, uint8_t row, uint8_t col, CubeColor color)
+void Cube3x3Faces::SetColor(CubeFace face, uint8_t row, uint8_t col, CubeColor color)
 {
 	m_state[IDX(face, row, col)] = color;
 }

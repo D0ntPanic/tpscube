@@ -4,7 +4,7 @@
 #include <string>
 #include <functional>
 #include <time.h>
-#include "cubecommon.h"
+#include "cube3x3.h"
 #include "leveldb/db.h"
 
 enum SolveType
@@ -26,6 +26,38 @@ struct Update
 	std::string sync;
 };
 
+enum SolveState
+{
+	SOLVESTATE_INITIAL = 0,
+	SOLVESTATE_CROSS = 1,
+	SOLVESTATE_F2L_FIRST_PAIR = 2,
+	SOLVESTATE_F2L_SECOND_PAIR = 3,
+	SOLVESTATE_F2L_THIRD_PAIR = 4,
+	SOLVESTATE_F2L_COMPLETE = 5,
+	SOLVESTATE_OLL_CROSS = 6,
+	SOLVESTATE_OLL_COMPLETE = 7,
+	SOLVESTATE_PLL_CORNERS = 8,
+	SOLVESTATE_SOLVED = 9
+};
+
+struct DetailedSplit
+{
+	uint32_t phaseStartTime;
+	uint32_t firstMoveTime;
+	uint32_t finishTime;
+	size_t moveCount;
+};
+
+struct DetailedSplitTimes
+{
+	DetailedSplit cross;
+	DetailedSplit f2lPair[4];
+	DetailedSplit ollCross;
+	DetailedSplit ollFinish;
+	DetailedSplit pllCorner;
+	DetailedSplit pllFinish;
+};
+
 struct Solve
 {
 	std::string id;
@@ -34,7 +66,27 @@ struct Solve
 	Update update;
 	bool ok;
 	uint32_t time, penalty;
+	std::string solveDevice;
+	TimedCubeMoveSequence solveMoves;
+	uint32_t crossTime = 0;
+	uint32_t f2lPairTimes[4] = {0, 0, 0, 0};
+	uint32_t ollCrossTime = 0;
+	uint32_t ollFinishTime = 0;
+	uint32_t pllCornerTime = 0;
 	bool dirty;
+
+	void GenerateSplitTimesFromMoves();
+	DetailedSplitTimes GenerateDetailedSplitTimes() const;
+	void RecordSplitTimeForSolveState(SolveState state, int timestamp);
+	static DetailedSplit* GetSplitForSolveState(SolveState state, DetailedSplitTimes* splits);
+
+	static SolveState TransitionSolveState(const Cube3x3& cube, SolveState currentState);
+	static bool WhiteCrossValid(const Cube3x3Faces& faces);
+	static int GetF2LPairCount(const Cube3x3Faces& faces);
+	static bool IsF2LSolved(const Cube3x3Faces& faces);
+	static bool YellowCrossValid(const Cube3x3Faces& faces);
+	static bool LastLayerOriented(const Cube3x3Faces& faces);
+	static bool LastLayerCornersValid(const Cube3x3Faces& faces);
 };
 
 struct Session

@@ -340,17 +340,17 @@ inline flatbuffers::Offset<CubeSolveMove> CreateCubeSolveMove(
 
 struct CubeSolveSplits FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_WHITE_CROSS_TIME = 4,
+    VT_CROSS_TIME = 4,
     VT_F2L_FIRST_PAIR_TIME = 6,
     VT_F2L_SECOND_PAIR_TIME = 8,
     VT_F2L_THIRD_PAIR_TIME = 10,
     VT_F2L_FINISH_TIME = 12,
-    VT_OLL_YELLOW_CROSS_TIME = 14,
+    VT_OLL_CROSS_TIME = 14,
     VT_OLL_FINISH_TIME = 16,
     VT_PLL_CORNER_TIME = 18
   };
-  uint32_t white_cross_time() const {
-    return GetField<uint32_t>(VT_WHITE_CROSS_TIME, 0);
+  uint32_t cross_time() const {
+    return GetField<uint32_t>(VT_CROSS_TIME, 0);
   }
   uint32_t f2l_first_pair_time() const {
     return GetField<uint32_t>(VT_F2L_FIRST_PAIR_TIME, 0);
@@ -364,8 +364,8 @@ struct CubeSolveSplits FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   uint32_t f2l_finish_time() const {
     return GetField<uint32_t>(VT_F2L_FINISH_TIME, 0);
   }
-  uint32_t oll_yellow_cross_time() const {
-    return GetField<uint32_t>(VT_OLL_YELLOW_CROSS_TIME, 0);
+  uint32_t oll_cross_time() const {
+    return GetField<uint32_t>(VT_OLL_CROSS_TIME, 0);
   }
   uint32_t oll_finish_time() const {
     return GetField<uint32_t>(VT_OLL_FINISH_TIME, 0);
@@ -375,12 +375,12 @@ struct CubeSolveSplits FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint32_t>(verifier, VT_WHITE_CROSS_TIME) &&
+           VerifyField<uint32_t>(verifier, VT_CROSS_TIME) &&
            VerifyField<uint32_t>(verifier, VT_F2L_FIRST_PAIR_TIME) &&
            VerifyField<uint32_t>(verifier, VT_F2L_SECOND_PAIR_TIME) &&
            VerifyField<uint32_t>(verifier, VT_F2L_THIRD_PAIR_TIME) &&
            VerifyField<uint32_t>(verifier, VT_F2L_FINISH_TIME) &&
-           VerifyField<uint32_t>(verifier, VT_OLL_YELLOW_CROSS_TIME) &&
+           VerifyField<uint32_t>(verifier, VT_OLL_CROSS_TIME) &&
            VerifyField<uint32_t>(verifier, VT_OLL_FINISH_TIME) &&
            VerifyField<uint32_t>(verifier, VT_PLL_CORNER_TIME) &&
            verifier.EndTable();
@@ -390,8 +390,8 @@ struct CubeSolveSplits FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
 struct CubeSolveSplitsBuilder {
   flatbuffers::FlatBufferBuilder &fbb_;
   flatbuffers::uoffset_t start_;
-  void add_white_cross_time(uint32_t white_cross_time) {
-    fbb_.AddElement<uint32_t>(CubeSolveSplits::VT_WHITE_CROSS_TIME, white_cross_time, 0);
+  void add_cross_time(uint32_t cross_time) {
+    fbb_.AddElement<uint32_t>(CubeSolveSplits::VT_CROSS_TIME, cross_time, 0);
   }
   void add_f2l_first_pair_time(uint32_t f2l_first_pair_time) {
     fbb_.AddElement<uint32_t>(CubeSolveSplits::VT_F2L_FIRST_PAIR_TIME, f2l_first_pair_time, 0);
@@ -405,8 +405,8 @@ struct CubeSolveSplitsBuilder {
   void add_f2l_finish_time(uint32_t f2l_finish_time) {
     fbb_.AddElement<uint32_t>(CubeSolveSplits::VT_F2L_FINISH_TIME, f2l_finish_time, 0);
   }
-  void add_oll_yellow_cross_time(uint32_t oll_yellow_cross_time) {
-    fbb_.AddElement<uint32_t>(CubeSolveSplits::VT_OLL_YELLOW_CROSS_TIME, oll_yellow_cross_time, 0);
+  void add_oll_cross_time(uint32_t oll_cross_time) {
+    fbb_.AddElement<uint32_t>(CubeSolveSplits::VT_OLL_CROSS_TIME, oll_cross_time, 0);
   }
   void add_oll_finish_time(uint32_t oll_finish_time) {
     fbb_.AddElement<uint32_t>(CubeSolveSplits::VT_OLL_FINISH_TIME, oll_finish_time, 0);
@@ -428,23 +428,23 @@ struct CubeSolveSplitsBuilder {
 
 inline flatbuffers::Offset<CubeSolveSplits> CreateCubeSolveSplits(
     flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t white_cross_time = 0,
+    uint32_t cross_time = 0,
     uint32_t f2l_first_pair_time = 0,
     uint32_t f2l_second_pair_time = 0,
     uint32_t f2l_third_pair_time = 0,
     uint32_t f2l_finish_time = 0,
-    uint32_t oll_yellow_cross_time = 0,
+    uint32_t oll_cross_time = 0,
     uint32_t oll_finish_time = 0,
     uint32_t pll_corner_time = 0) {
   CubeSolveSplitsBuilder builder_(_fbb);
   builder_.add_pll_corner_time(pll_corner_time);
   builder_.add_oll_finish_time(oll_finish_time);
-  builder_.add_oll_yellow_cross_time(oll_yellow_cross_time);
+  builder_.add_oll_cross_time(oll_cross_time);
   builder_.add_f2l_finish_time(f2l_finish_time);
   builder_.add_f2l_third_pair_time(f2l_third_pair_time);
   builder_.add_f2l_second_pair_time(f2l_second_pair_time);
   builder_.add_f2l_first_pair_time(f2l_first_pair_time);
-  builder_.add_white_cross_time(white_cross_time);
+  builder_.add_cross_time(cross_time);
   return builder_.Finish();
 }
 
@@ -456,7 +456,7 @@ struct CubeSolve FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_OK = 10,
     VT_TIME = 12,
     VT_PENALTY = 14,
-    VT_SOLVE_METHOD_NAME = 16,
+    VT_SOLVE_DEVICE = 16,
     VT_SOLVE_MOVES = 18,
     VT_SOLVE_SPLITS = 20
   };
@@ -478,8 +478,8 @@ struct CubeSolve FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   uint32_t penalty() const {
     return GetField<uint32_t>(VT_PENALTY, 0);
   }
-  const flatbuffers::String *solve_method_name() const {
-    return GetPointer<const flatbuffers::String *>(VT_SOLVE_METHOD_NAME);
+  const flatbuffers::String *solve_device() const {
+    return GetPointer<const flatbuffers::String *>(VT_SOLVE_DEVICE);
   }
   const flatbuffers::Vector<flatbuffers::Offset<CubeSolveMove>> *solve_moves() const {
     return GetPointer<const flatbuffers::Vector<flatbuffers::Offset<CubeSolveMove>> *>(VT_SOLVE_MOVES);
@@ -497,8 +497,8 @@ struct CubeSolve FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            VerifyField<uint8_t>(verifier, VT_OK) &&
            VerifyField<uint32_t>(verifier, VT_TIME) &&
            VerifyField<uint32_t>(verifier, VT_PENALTY) &&
-           VerifyOffset(verifier, VT_SOLVE_METHOD_NAME) &&
-           verifier.VerifyString(solve_method_name()) &&
+           VerifyOffset(verifier, VT_SOLVE_DEVICE) &&
+           verifier.VerifyString(solve_device()) &&
            VerifyOffset(verifier, VT_SOLVE_MOVES) &&
            verifier.VerifyVector(solve_moves()) &&
            verifier.VerifyVectorOfTables(solve_moves()) &&
@@ -529,8 +529,8 @@ struct CubeSolveBuilder {
   void add_penalty(uint32_t penalty) {
     fbb_.AddElement<uint32_t>(CubeSolve::VT_PENALTY, penalty, 0);
   }
-  void add_solve_method_name(flatbuffers::Offset<flatbuffers::String> solve_method_name) {
-    fbb_.AddOffset(CubeSolve::VT_SOLVE_METHOD_NAME, solve_method_name);
+  void add_solve_device(flatbuffers::Offset<flatbuffers::String> solve_device) {
+    fbb_.AddOffset(CubeSolve::VT_SOLVE_DEVICE, solve_device);
   }
   void add_solve_moves(flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<CubeSolveMove>>> solve_moves) {
     fbb_.AddOffset(CubeSolve::VT_SOLVE_MOVES, solve_moves);
@@ -558,14 +558,14 @@ inline flatbuffers::Offset<CubeSolve> CreateCubeSolve(
     bool ok = false,
     uint32_t time = 0,
     uint32_t penalty = 0,
-    flatbuffers::Offset<flatbuffers::String> solve_method_name = 0,
+    flatbuffers::Offset<flatbuffers::String> solve_device = 0,
     flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<CubeSolveMove>>> solve_moves = 0,
     flatbuffers::Offset<CubeSolveSplits> solve_splits = 0) {
   CubeSolveBuilder builder_(_fbb);
   builder_.add_created(created);
   builder_.add_solve_splits(solve_splits);
   builder_.add_solve_moves(solve_moves);
-  builder_.add_solve_method_name(solve_method_name);
+  builder_.add_solve_device(solve_device);
   builder_.add_penalty(penalty);
   builder_.add_time(time);
   builder_.add_update(update);
@@ -582,11 +582,11 @@ inline flatbuffers::Offset<CubeSolve> CreateCubeSolveDirect(
     bool ok = false,
     uint32_t time = 0,
     uint32_t penalty = 0,
-    const char *solve_method_name = nullptr,
+    const char *solve_device = nullptr,
     const std::vector<flatbuffers::Offset<CubeSolveMove>> *solve_moves = nullptr,
     flatbuffers::Offset<CubeSolveSplits> solve_splits = 0) {
   auto scramble__ = scramble ? _fbb.CreateVector<uint8_t>(*scramble) : 0;
-  auto solve_method_name__ = solve_method_name ? _fbb.CreateString(solve_method_name) : 0;
+  auto solve_device__ = solve_device ? _fbb.CreateString(solve_device) : 0;
   auto solve_moves__ = solve_moves ? _fbb.CreateVector<flatbuffers::Offset<CubeSolveMove>>(*solve_moves) : 0;
   return database::CreateCubeSolve(
       _fbb,
@@ -596,7 +596,7 @@ inline flatbuffers::Offset<CubeSolve> CreateCubeSolveDirect(
       ok,
       time,
       penalty,
-      solve_method_name__,
+      solve_device__,
       solve_moves__,
       solve_splits);
 }

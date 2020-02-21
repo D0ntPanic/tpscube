@@ -88,8 +88,10 @@ struct CubeMoveSequence
 	static std::string MoveToString(CubeMove move);
 	static CubeMove InvertedMove(CubeMove move);
 	static CubeMove RandomMove(RandomSource& rng);
+	static bool IsSameOuterBlock(CubeMove a, CubeMove b);
 	std::string ToString() const;
 	CubeMoveSequence Inverted() const;
+	size_t GetOuterTurnCount() const;
 };
 
 struct TimedCubeMove
@@ -101,6 +103,8 @@ struct TimedCubeMove
 struct TimedCubeMoveSequence
 {
 	std::vector<TimedCubeMove> moves;
+
+	size_t GetOuterTurnCount() const;
 };
 
 int NChooseK(int n, int k);
