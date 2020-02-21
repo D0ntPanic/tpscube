@@ -59,6 +59,7 @@ struct DetailedSplitTimes
 	size_t moveCount;
 	uint32_t idleTime;
 	float tps;
+	float etps;
 };
 
 struct Solve

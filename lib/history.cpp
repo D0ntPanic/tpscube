@@ -121,7 +121,8 @@ DetailedSplitTimes Solve::GenerateDetailedSplitTimes() const
 		firstMoves++;
 
 	result.moveCount = solveMoves.GetOuterTurnCount();
-	result.tps = (float)(result.moveCount - firstMoves) / ((float)(time - (penalty + result.idleTime)) / 1000.0f);
+	result.etps = (float)(result.moveCount - firstMoves) / ((float)(time - (penalty + result.idleTime)) / 1000.0f);
+	result.tps = (float)(result.moveCount) / ((float)(time - penalty) / 1000.0f);
 	return result;
 }
 
