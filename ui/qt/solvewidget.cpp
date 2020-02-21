@@ -176,6 +176,18 @@ QString SolveWidget::solveDetailsText()
 	result += QString::fromStdString(m_solve.scramble.ToString());
 	result += "   @";
 	result += QDateTime::fromSecsSinceEpoch(m_solve.created).toString(Qt::DateFormat::TextDate);
+	if (m_solve.solveMoves.moves.size() != 0)
+	{
+		result += "\nSolve:";
+		for (auto i: m_solve.solveMoves.moves)
+		{
+			result += QString(" ");
+			result += QString::fromStdString(CubeMoveSequence::MoveToString(i.move));
+			result += QString::asprintf("@%d", (int) i.timestamp);
+		}
+
+
+	}
 	return result;
 }
 
