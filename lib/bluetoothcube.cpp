@@ -1,7 +1,8 @@
 #ifdef __APPLE__
 #include <CommonCrypto/CommonCryptor.h>
 #else
-#include <tomcrypt.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/modes.h>
 #endif
 #include <math.h>
 #include "bluetoothcube.h"
@@ -127,15 +128,15 @@ vector<uint8_t> GANCube::Decode(const vector<uint8_t>& data)
 		&result[0], 16, output, 16, &outLen);
 	memcpy(&result[0], output, 16);
 #else
-	symmetric_key key;
-	aes_setup(m_deviceKey, 16, 0, &key);
+	CryptoPP::ECB_Mode<CryptoPP::AES>::Decryption d;
+	d.SetKey(m_deviceKey, 16);
 	uint8_t output[16];
 	if (result.size() > 16)
 	{
-		aes_ecb_decrypt(&result[result.size() - 16], output, &key);
+		d.ProcessData(output, &result[result.size() - 16], 16);
 		memcpy(&result[result.size() - 16], output, 16);
 	}
-	aes_ecb_decrypt(&result[0], output, &key);
+	d.ProcessData(output, &result[0], 16);
 	memcpy(&result[0], output, 16);
 #endif
 
@@ -213,7 +214,10 @@ void GANCube::ResetCubeState(const function<void()>& nextFunc)
 	vector<uint8_t> state;
 	for (size_t i = 0; i < 18; i++)
 		state.push_back(m_solvedState[i]);
-	m_dev->WriteCharacteristic(m_cubeStateCharacteristic, state, nextFunc);
+	m_dev->WriteCharacteristic(m_cubeStateCharacteristic, state, [=]() {
+		m_cube = Cube3x3();
+		nextFunc();
+	});
 }
 
 

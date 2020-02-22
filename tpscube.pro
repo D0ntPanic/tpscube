@@ -29,5 +29,5 @@ macx {
 }
 
 linux {
-    LIBS += -ltomcrypt
+    LIBS += -lcryptopp
 }
