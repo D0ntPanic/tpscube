@@ -286,15 +286,15 @@ SolveState Solve::TransitionSolveState(const Cube3x3& cube, SolveState currentSt
 				newState = SOLVESTATE_CROSS;
 			break;
 		case SOLVESTATE_CROSS:
-			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) == 1))
+			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) >= 1))
 				newState = SOLVESTATE_F2L_FIRST_PAIR;
 			break;
 		case SOLVESTATE_F2L_FIRST_PAIR:
-			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) == 2))
+			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) >= 2))
 				newState = SOLVESTATE_F2L_SECOND_PAIR;
 			break;
 		case SOLVESTATE_F2L_SECOND_PAIR:
-			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) == 3))
+			if (WhiteCrossValid(faces) && (GetF2LPairCount(faces) >= 3))
 				newState = SOLVESTATE_F2L_THIRD_PAIR;
 			break;
 		case SOLVESTATE_F2L_THIRD_PAIR:
