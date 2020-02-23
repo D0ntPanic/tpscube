@@ -1,3 +1,4 @@
+#include <QtWidgets/QHBoxLayout>
 #include <QtCore/QUuid>
 #include "timermode.h"
 #include "cube3x3.h"
@@ -105,6 +106,14 @@ TimerMode::TimerMode(QWidget* parent): QWidget(parent)
 	connect(m_timer, &TimerWidget::completed, this, &TimerMode::solveComplete);
 	m_rightAreaLayout->addWidget(m_timer);
 
+	QHBoxLayout* statsLayout = new QHBoxLayout();
+	statsLayout->setContentsMargins(0, 0, 0, 0);
+	statsLayout->addStretch(1);
+	m_stats = new SolveStatsWidget();
+	statsLayout->addWidget(m_stats, 2);
+	statsLayout->addStretch(1);
+	m_rightAreaLayout->addLayout(statsLayout);
+
 	m_rightAreaLayout->addStretch(3);
 	layout->addLayout(m_rightAreaLayout, 1);
 	setLayout(layout);
@@ -157,12 +166,29 @@ void TimerMode::updateFontSizes()
 	if (h < size)
 		size = h;
 #ifdef __APPLE__
-	m_timer->setFontSize(size / 6);
-	m_scrambleWidget->setFontSize(size / 19);
+	if (m_stats->isVisible() && m_stats->hasValidStats())
+	{
+		m_timer->setFontSize(size / 12);
+		m_scrambleWidget->setFontSize(size / 23);
+	}
+	else
+	{
+		m_timer->setFontSize(size / 6);
+		m_scrambleWidget->setFontSize(size / 19);
+	}
 #else
-	m_timer->setFontSize(size / 7);
-	m_scrambleWidget->setFontSize(size / 22);
+	if (m_stats->isVisible() && m_stats->hasValidStats())
+	{
+		m_timer->setFontSize(size / 14);
+		m_scrambleWidget->setFontSize(size / 27);
+	}
+	else
+	{
+		m_timer->setFontSize(size / 7);
+		m_scrambleWidget->setFontSize(size / 22);
+	}
 #endif
+	m_stats->setScale((float)size / 500.0f);
 }
 
 
@@ -197,7 +223,9 @@ void TimerMode::solveStarting()
 	// On timer start, hide everything but the timer
 	m_scrambleWidget->hide();
 	m_session->hide();
+	m_stats->hide();
 	m_rightAreaLayout->setStretch(m_scrambleStretch, 0);
+	updateFontSizes();
 	emit timerStarting();
 }
 
@@ -207,7 +235,9 @@ void TimerMode::solveStopping()
 	// When timer is stopped, show the rest of the interface
 	m_scrambleWidget->show();
 	m_session->show();
+	m_stats->show();
 	m_rightAreaLayout->setStretch(m_scrambleStretch, 1);
+	updateFontSizes();
 	emit timerStopping();
 }
 
@@ -245,6 +275,9 @@ void TimerMode::solveComplete()
 
 	History::instance.RecordSolve(m_solveType, solve);
 	m_session->updateHistory();
+
+	m_stats->setSolve(solve);
+	updateFontSizes();
 
 	// Generate new scramble after solve
 	newScramble();

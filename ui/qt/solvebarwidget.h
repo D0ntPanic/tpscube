@@ -25,7 +25,9 @@ protected:
 	virtual void mouseMoveEvent(QMouseEvent* event) override;
 
 public:
+	SolveBarWidget();
 	SolveBarWidget(const Solve& solve);
+	void setSolve(const Solve& solve);
 	void setBarRelativeWidth(float width) { m_barWidth = width; }
 	void setBarHeight(int height) { m_barHeight = height; }
 	void setPadding(int top, int bot);

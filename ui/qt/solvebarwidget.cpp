@@ -5,13 +5,29 @@
 #include "theme.h"
 
 
+SolveBarWidget::SolveBarWidget()
+{
+	m_solve.ok = false;
+}
+
+
 SolveBarWidget::SolveBarWidget(const Solve& solve): m_solve(solve)
 {
 }
 
 
+void SolveBarWidget::setSolve(const Solve& solve)
+{
+	m_solve = solve;
+	update();
+}
+
+
 void SolveBarWidget::paintEvent(QPaintEvent*)
 {
+	if (!m_solve.ok || !m_solve.crossTime || !m_solve.f2lPairTimes[3] || !m_solve.ollFinishTime)
+		return;
+
 	QPainter p(this);
 
 	int x = 0;
@@ -168,6 +184,9 @@ void SolveBarWidget::setCurrentPos(int ms)
 
 void SolveBarWidget::reportSeekForX(int x)
 {
+	if (!m_solve.ok)
+		return;
+
 	int w = (int)(width() * m_barWidth) - 1;
 	if (m_showCurrentPos)
 	{

@@ -8,6 +8,7 @@
 #include "cube3x3widget.h"
 #include "solvebarwidget.h"
 #include "utilwidgets.h"
+#include "solvestatswidget.h"
 
 class SolveWidget: public QWidget
 {
@@ -26,6 +27,7 @@ class SolveWidget: public QWidget
 	std::chrono::time_point<std::chrono::steady_clock> m_lastPlaybackTick;
 	QLabel* m_playbackTimeLabel = nullptr;
 	SolveBarWidget* m_solveBar = nullptr;
+	SolveStatsWidget* m_stats = nullptr;
 
 	ClickableLabel* m_playButton = nullptr;
 	QPicture m_playIcon, m_playHoverIcon;

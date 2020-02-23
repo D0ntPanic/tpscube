@@ -102,7 +102,7 @@ SessionWidget::SessionWidget(QWidget* parent): QWidget(parent)
 }
 
 
-QString SessionWidget::stringForTime(int ms)
+QString SessionWidget::stringForTime(int ms, float scale)
 {
 	if (ms == -1)
 		return "-";
@@ -115,23 +115,26 @@ QString SessionWidget::stringForTime(int ms)
 	if (minutes > 0)
 	{
 		return QString::asprintf("<span style='font-size:%fpt'>%d:%02d</span>"
-			"<span style='font-size:%fpt'>.%02d</span>", relativeFontSize(1.0f),
-			minutes, seconds, relativeFontSize(0.75f), hs);
+			"<span style='font-size:%fpt'>.%02d</span>", relativeFontSize(scale),
+			minutes, seconds, relativeFontSize(scale * 0.75f), hs);
 	}
 	else
 	{
 		return QString::asprintf("<span style='font-size:%fpt'>%d</span>"
-			"<span style='font-size:%fpt'>.%02d</span>", relativeFontSize(1.0f),
-			seconds, relativeFontSize(0.75f), hs);
+			"<span style='font-size:%fpt'>.%02d</span>", relativeFontSize(scale),
+			seconds, relativeFontSize(scale * 0.75f), hs);
 	}
 }
 
 
-QString SessionWidget::stringForSolveTime(const Solve& solve)
+QString SessionWidget::stringForSolveTime(const Solve& solve, float scale)
 {
 	if (!solve.ok)
-		return "DNF";
-	return stringForTime(solve.time);
+	{
+		return QString::asprintf("<span style='font-size:%fpt'>DNF</span>",
+			relativeFontSize(scale));
+	}
+	return stringForTime(solve.time, scale);
 }
 
 

@@ -11,6 +11,7 @@
 #include "history.h"
 #include "bluetoothcube.h"
 #include "cube3x3widget.h"
+#include "solvestatswidget.h"
 
 class ScrambleThread: public QThread
 {
@@ -60,6 +61,8 @@ class TimerMode: public QWidget
 
 	std::shared_ptr<BluetoothCube> m_bluetoothCube;
 	Cube3x3Widget* m_cube3x3Widget;
+
+	SolveStatsWidget* m_stats;
 
 	void newScramble();
 	void updateFontSizes();

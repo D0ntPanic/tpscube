@@ -39,6 +39,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 			(solve.solveMoves.moves.size() != 0))
 		{
 			showSolveBarAsScrubBar = true;
+			m_playback = AnimatedMoveSequence(solve.solveMoves);
 
 			QGridLayout* playbackLayout = new QGridLayout();
 			playbackLayout->setSpacing(12);
@@ -103,33 +104,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 	if (m_solve.ok && (m_solve.penalty > 0))
 		penaltyStr = QString::asprintf("  (+%d)", (int)(m_solve.penalty / 1000));
 
-	QString timeText;
-	if (m_solve.ok)
-	{
-		int hs = (m_solve.time + 5) / 10;
-		int minutes = hs / 6000;
-		int seconds = (hs / 100) % 60;
-		hs %= 100;
-
-		if (minutes > 0)
-		{
-			timeText = QString::asprintf("<span style='font-size:%fpt'>%d:%02d</span>"
-				"<span style='font-size:%fpt'>.%02d%s</span>", relativeFontSize(2.0f),
-				minutes, seconds, relativeFontSize(1.75f), hs, penaltyStr.toStdString().c_str());
-		}
-		else
-		{
-			timeText = QString::asprintf("<span style='font-size:%fpt'>%d</span>"
-				"<span style='font-size:%fpt'>.%02d%s</span>", relativeFontSize(2.0f),
-				seconds, relativeFontSize(1.75f), hs, penaltyStr.toStdString().c_str());
-		}
-	}
-	else
-	{
-		timeText = QString::asprintf("<span style='font-size:%fpt'>DNF</span>",
-			relativeFontSize(2.0f));
-	}
-
+	QString timeText = SessionWidget::stringForTime(m_solve.time, 2.0f);
 	m_timer = new QLabel(timeText);
 	m_timer->setAlignment(Qt::AlignVCenter | Qt::AlignCenter);
 	QPalette pal(m_timer->palette());
@@ -142,105 +117,10 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 
 	if (solve.ok && solve.crossTime && solve.f2lPairTimes[3] && solve.ollFinishTime)
 	{
-		if (!showSolveBarAsScrubBar)
-		{
-			SolveBarWidget* bar = new SolveBarWidget(solve);
-			layout->addWidget(bar);
-		}
-
-		QGridLayout* splitLayout = new QGridLayout();
-		splitLayout->setHorizontalSpacing(16);
-		splitLayout->setVerticalSpacing(0);
-
-		QLabel* crossLabel = new QLabel("Cross");
-		crossLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-		crossLabel->setAlignment(Qt::AlignCenter);
-		crossLabel->setToolTip("Time spent in the cross phase");
-		splitLayout->addWidget(crossLabel, 0, 1);
-		QLabel* crossTime = new QLabel(SessionWidget::stringForTime(solve.crossTime));
-		crossTime->setAlignment(Qt::AlignCenter);
-		crossTime->setToolTip("Time spent in the cross phase");
-		splitLayout->addWidget(crossTime, 1, 1);
-		QLabel* f2lLabel = new QLabel("F2L");
-		f2lLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-		f2lLabel->setAlignment(Qt::AlignCenter);
-		f2lLabel->setToolTip("Time spent in the first two layers phase");
-		splitLayout->addWidget(f2lLabel, 0, 2);
-		QLabel* f2lTime = new QLabel(SessionWidget::stringForTime(solve.f2lPairTimes[3] - solve.crossTime));
-		f2lTime->setAlignment(Qt::AlignCenter);
-		f2lTime->setToolTip("Time spent in the first two layers phase");
-		splitLayout->addWidget(f2lTime, 1, 2);
-		QLabel* ollLabel = new QLabel("OLL");
-		ollLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-		ollLabel->setAlignment(Qt::AlignCenter);
-		ollLabel->setToolTip("Time spent in the orient last layer phase");
-		splitLayout->addWidget(ollLabel, 0, 3);
-		QLabel* ollTime = new QLabel(SessionWidget::stringForTime(solve.ollFinishTime - solve.f2lPairTimes[3]));
-		ollTime->setAlignment(Qt::AlignCenter);
-		ollTime->setToolTip("Time spent in the orient last layer phase");
-		splitLayout->addWidget(ollTime, 1, 3);
-		QLabel* pllLabel = new QLabel("PLL");
-		pllLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-		pllLabel->setAlignment(Qt::AlignCenter);
-		pllLabel->setToolTip("Time spent in the permute last layer phase");
-		splitLayout->addWidget(pllLabel, 0, 4);
-		QLabel* pllTime = new QLabel(SessionWidget::stringForTime((solve.time - solve.penalty) - solve.ollFinishTime));
-		pllTime->setAlignment(Qt::AlignCenter);
-		pllTime->setToolTip("Time spent in the permute last layer phase");
-		splitLayout->addWidget(pllTime, 1, 4);
-		int columns = 4;
-
-		if (solve.solveMoves.moves.size() != 0)
-		{
-			DetailedSplitTimes splits = solve.GenerateDetailedSplitTimes();
-			splitLayout->setColumnMinimumWidth(5, 16);
-			QLabel* movesLabel = new QLabel("Moves");
-			movesLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-			movesLabel->setAlignment(Qt::AlignCenter);
-			movesLabel->setToolTip("Number of moves (outer turn metric)");
-			splitLayout->addWidget(movesLabel, 0, 6);
-			QLabel* moveCount = new QLabel(QString::asprintf("<span style='font-size:%fpt'>%d</span>",
-				relativeFontSize(1.0f), (int)splits.moveCount));
-			moveCount->setAlignment(Qt::AlignCenter);
-			moveCount->setToolTip("Number of moves (outer turn metric)");
-			splitLayout->addWidget(moveCount, 1, 6);
-			QLabel* idleLabel = new QLabel("Idle");
-			idleLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-			idleLabel->setAlignment(Qt::AlignCenter);
-			idleLabel->setToolTip("Time spent not performing moves (recognition time)");
-			splitLayout->addWidget(idleLabel, 0, 7);
-			QLabel* idleTime = new QLabel(SessionWidget::stringForTime(splits.idleTime));
-			idleTime->setAlignment(Qt::AlignCenter);
-			idleTime->setToolTip("Time spent not performing moves (recognition time)");
-			splitLayout->addWidget(idleTime, 1, 7);
-			QLabel* etpsLabel = new QLabel("eTPS");
-			etpsLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-			etpsLabel->setAlignment(Qt::AlignCenter);
-			etpsLabel->setToolTip("Execution turns per second (excludes idle time)");
-			splitLayout->addWidget(etpsLabel, 0, 8);
-			QLabel* etps = new QLabel(QString::asprintf("<span style='font-size:%fpt'>%.2f</span>",
-				relativeFontSize(1.0f), splits.etps));
-			etps->setAlignment(Qt::AlignCenter);
-			etps->setToolTip("Execution turns per second (excludes idle time)");
-			splitLayout->addWidget(etps, 1, 8);
-			QLabel* tpsLabel = new QLabel("TPS");
-			tpsLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
-			tpsLabel->setAlignment(Qt::AlignCenter);
-			tpsLabel->setToolTip("Turns per second (includes idle time)");
-			splitLayout->addWidget(tpsLabel, 0, 9);
-			QLabel* tps = new QLabel(QString::asprintf("<span style='font-size:%fpt'>%.2f</span>",
-				relativeFontSize(1.0f), splits.tps));
-			tps->setAlignment(Qt::AlignCenter);
-			tps->setToolTip("Turns per second (includes idle time)");
-			splitLayout->addWidget(tps, 1, 9);
-			columns = 9;
-
-			m_playback = AnimatedMoveSequence(solve.solveMoves);
-		}
-
-		splitLayout->setColumnStretch(0, 1);
-		splitLayout->setColumnStretch(columns + 1, 1);
-		layout->addLayout(splitLayout);
+		m_stats = new SolveStatsWidget();
+		m_stats->setSolveBarEnabled(!showSolveBarAsScrubBar);
+		m_stats->setSolve(solve);
+		layout->addWidget(m_stats);
 	}
 
 	setLayout(layout);

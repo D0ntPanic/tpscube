@@ -52,6 +52,6 @@ public:
 
 	void updateHistory();
 
-	static QString stringForTime(int ms);
-	static QString stringForSolveTime(const Solve& solve);
+	static QString stringForTime(int ms, float scale = 1.0f);
+	static QString stringForSolveTime(const Solve& solve, float scale = 1.0f);
 };
