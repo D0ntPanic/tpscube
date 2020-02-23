@@ -90,6 +90,9 @@ struct CubeMoveSequence
 	static CubeMove InvertedMove(CubeMove move);
 	static CubeMove RandomMove(RandomSource& rng);
 	static bool IsSameOuterBlock(CubeMove a, CubeMove b);
+	static CubeFace GetMoveFace(CubeMove move);
+	static int GetMoveDirection(CubeMove move);
+	static CubeMove GetMoveForFaceAndDirection(CubeFace face, int dir);
 	std::string ToString() const;
 	CubeMoveSequence Inverted() const;
 	size_t GetOuterTurnCount() const;
@@ -106,6 +109,21 @@ struct TimedCubeMoveSequence
 	std::vector<TimedCubeMove> moves;
 
 	size_t GetOuterTurnCount() const;
+};
+
+struct AnimatedCubeMove
+{
+	CubeMove move;
+	uint32_t timestamp;
+	float tps;
+};
+
+struct AnimatedMoveSequence
+{
+	std::vector<AnimatedCubeMove> moves;
+
+	AnimatedMoveSequence();
+	AnimatedMoveSequence(const TimedCubeMoveSequence& moves);
 };
 
 int NChooseK(int n, int k);

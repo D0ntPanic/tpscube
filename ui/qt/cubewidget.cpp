@@ -225,6 +225,14 @@ void CubeWidget::paintGL()
 	}
 	else if (!m_movementQueue.empty())
 	{
+		while ((m_movementQueue.size() > 5) && (m_movementQueue.front().allowAccel))
+		{
+			QueuedCubeMove move = m_movementQueue.front();
+			m_movementQueue.pop();
+			applyMove(move.move);
+			m_cubeNeedsUpdate = true;
+		}
+
 		float tps = m_movementQueue.front().tps;
 		if (m_movementQueue.front().allowAccel)
 			tps *= m_movementQueue.size();
@@ -524,96 +532,26 @@ void CubeWidget::startAnimation(CubeMove move, float tps)
 	m_movementActive = true;
 	m_lastFrameTime = chrono::steady_clock::now();
 
-	switch (move)
+	m_movementFace = CubeMoveSequence::GetMoveFace(move);
+	m_movementAngle = 90 * CubeMoveSequence::GetMoveDirection(move);
+	switch (m_movementFace)
 	{
-	case MOVE_U:
-		m_movementFace = TOP;
-		m_movementAngle = 90;
+	case TOP:
 		m_movementAxis = QVector3D(0, 1, 0);
 		break;
-	case MOVE_Up:
-		m_movementFace = TOP;
-		m_movementAngle = -90;
-		m_movementAxis = QVector3D(0, 1, 0);
-		break;
-	case MOVE_U2:
-		m_movementFace = TOP;
-		m_movementAngle = 180;
-		m_movementAxis = QVector3D(0, 1, 0);
-		break;
-	case MOVE_F:
-		m_movementFace = FRONT;
-		m_movementAngle = 90;
+	case FRONT:
 		m_movementAxis = QVector3D(0, 0, 1);
 		break;
-	case MOVE_Fp:
-		m_movementFace = FRONT;
-		m_movementAngle = -90;
-		m_movementAxis = QVector3D(0, 0, 1);
-		break;
-	case MOVE_F2:
-		m_movementFace = FRONT;
-		m_movementAngle = 180;
-		m_movementAxis = QVector3D(0, 0, 1);
-		break;
-	case MOVE_R:
-		m_movementFace = RIGHT;
-		m_movementAngle = 90;
+	case RIGHT:
 		m_movementAxis = QVector3D(1, 0, 0);
 		break;
-	case MOVE_Rp:
-		m_movementFace = RIGHT;
-		m_movementAngle = -90;
-		m_movementAxis = QVector3D(1, 0, 0);
-		break;
-	case MOVE_R2:
-		m_movementFace = RIGHT;
-		m_movementAngle = 180;
-		m_movementAxis = QVector3D(1, 0, 0);
-		break;
-	case MOVE_B:
-		m_movementFace = BACK;
-		m_movementAngle = 90;
+	case BACK:
 		m_movementAxis = QVector3D(0, 0, -1);
 		break;
-	case MOVE_Bp:
-		m_movementFace = BACK;
-		m_movementAngle = -90;
-		m_movementAxis = QVector3D(0, 0, -1);
-		break;
-	case MOVE_B2:
-		m_movementFace = BACK;
-		m_movementAngle = 180;
-		m_movementAxis = QVector3D(0, 0, -1);
-		break;
-	case MOVE_L:
-		m_movementFace = LEFT;
-		m_movementAngle = 90;
+	case LEFT:
 		m_movementAxis = QVector3D(-1, 0, 0);
 		break;
-	case MOVE_Lp:
-		m_movementFace = LEFT;
-		m_movementAngle = -90;
-		m_movementAxis = QVector3D(-1, 0, 0);
-		break;
-	case MOVE_L2:
-		m_movementFace = LEFT;
-		m_movementAngle = 180;
-		m_movementAxis = QVector3D(-1, 0, 0);
-		break;
-	case MOVE_D:
-		m_movementFace = BOTTOM;
-		m_movementAngle = 90;
-		m_movementAxis = QVector3D(0, -1, 0);
-		break;
-	case MOVE_Dp:
-		m_movementFace = BOTTOM;
-		m_movementAngle = -90;
-		m_movementAxis = QVector3D(0, -1, 0);
-		break;
-	case MOVE_D2:
-		m_movementFace = BOTTOM;
-		m_movementAngle = 180;
+	case BOTTOM:
 		m_movementAxis = QVector3D(0, -1, 0);
 		break;
 	}
@@ -672,6 +610,13 @@ void CubeWidget::updateCubeModelColors()
 		m_animVertexArray->bind();
 		m_animVertexArray->write(0, &m_animVerts[0], sizeof(CubeVertex) * m_animVerts.size());
 	}
+}
+
+
+void CubeWidget::apply(CubeMove move, float tps, bool accel)
+{
+	m_movementQueue.push(QueuedCubeMove { move, tps, accel });
+	m_animationTimer->start();
 }
 
 

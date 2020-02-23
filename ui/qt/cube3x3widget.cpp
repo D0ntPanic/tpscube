@@ -41,6 +41,18 @@ vector<CubeColor> Cube3x3Widget::cubeFaceColors() const
 }
 
 
+void Cube3x3Widget::setCubeState(const Cube3x3& cube)
+{
+	m_cube = cube;
+
+	while (!m_movementQueue.empty())
+		m_movementQueue.pop();
+	m_movementActive = false;
+	m_cubeNeedsUpdate = true;
+	m_animationTimer->stop();
+}
+
+
 void Cube3x3Widget::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 {
 	if (m_bluetoothCube && m_bluetoothCubeClient)
@@ -53,16 +65,9 @@ void Cube3x3Widget::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 
 	if (m_bluetoothCube)
 	{
-		m_cube = cube->GetCubeState();
+		setCubeState(cube->GetCubeState());
 		m_bluetoothCubeClient = make_shared<BluetoothCubeClient>();
 		m_bluetoothCube->AddClient(m_bluetoothCubeClient);
-
-		while (!m_movementQueue.empty())
-			m_movementQueue.pop();
-		m_movementActive = false;
-		m_cubeNeedsUpdate = true;
-		m_animationTimer->stop();
-
 		m_updateTimer->start();
 	}
 	else

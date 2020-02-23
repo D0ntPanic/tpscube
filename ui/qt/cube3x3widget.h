@@ -25,6 +25,7 @@ public:
 	const Cube3x3& cube() const { return m_cube; }
 	virtual int cubeSize() const override { return 3; }
 	virtual std::vector<CubeColor> cubeFaceColors() const override;
+	void setCubeState(const Cube3x3& cube);
 
 	void setBluetoothCube(const std::shared_ptr<BluetoothCube>& cube);
 };

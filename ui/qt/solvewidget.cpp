@@ -1,9 +1,10 @@
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QGridLayout>
+#include <QtGui/QKeyEvent>
+#include <QtGui/QPainter>
 #include <QtCore/QDateTime>
 #include "solvewidget.h"
 #include "historymode.h"
-#include "utilwidgets.h"
 #include "theme.h"
 #include "sessionwidget.h"
 #include "solvebarwidget.h"
@@ -25,6 +26,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 	m_scramble->setFontSize(relativeFontSize(1.25f));
 	layout->addWidget(m_scramble);
 
+	bool showSolveBarAsScrubBar = false;
 	if (fullDetails)
 	{
 		layout->addSpacing(8);
@@ -32,6 +34,67 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 		m_cube = new Cube3x3Widget();
 		m_cube->applyImmediate(m_solve.scramble);
 		layout->addWidget(m_cube, 1);
+
+		if (solve.ok && solve.crossTime && solve.f2lPairTimes[3] && solve.ollFinishTime &&
+			(solve.solveMoves.moves.size() != 0))
+		{
+			showSolveBarAsScrubBar = true;
+
+			QGridLayout* playbackLayout = new QGridLayout();
+			playbackLayout->setSpacing(12);
+
+			QFontMetrics metrics(font());
+
+			QImage playImage(":/images/play.png");
+			QPainter playPainter(&m_playIcon);
+			playPainter.setRenderHint(QPainter::SmoothPixmapTransform);
+			playPainter.drawImage(QRect(0, 0, 16, 16), playImage);
+
+			QImage playHoverImage(":/images/play_hover.png");
+			QPainter playHoverPainter(&m_playHoverIcon);
+			playHoverPainter.setRenderHint(QPainter::SmoothPixmapTransform);
+			playHoverPainter.drawImage(QRect(0, 0, 16, 16), playHoverImage);
+
+			QImage pauseImage(":/images/pause.png");
+			QPainter pausePainter(&m_pauseIcon);
+			pausePainter.setRenderHint(QPainter::SmoothPixmapTransform);
+			pausePainter.drawImage(QRect(0, 0, 16, 16), pauseImage);
+
+			QImage pauseHoverImage(":/images/pause_hover.png");
+			QPainter pauseHoverPainter(&m_pauseHoverIcon);
+			pauseHoverPainter.setRenderHint(QPainter::SmoothPixmapTransform);
+			pauseHoverPainter.drawImage(QRect(0, 0, 16, 16), pauseHoverImage);
+
+			m_playButton = new ClickableLabel("",
+				Theme::content, Theme::blue, [this]() {
+					if (m_playbackRunning)
+						pausePlayback();
+					else
+						startPlayback();
+				});
+			m_playButton->setPictures(m_playIcon, m_playHoverIcon);
+			m_playButton->setCursor(Qt::PointingHandCursor);
+			m_playButton->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+			playbackLayout->addWidget(m_playButton, 0, 0);
+
+			m_playbackTimeLabel = new QLabel(SessionWidget::stringForTime(0));
+			m_playbackTimeLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+			playbackLayout->addWidget(m_playbackTimeLabel, 0, 1);
+
+			m_solveBar = new SolveBarWidget(solve);
+			m_solveBar->setBarHeight(4);
+			m_solveBar->setPadding(7, 4);
+			m_solveBar->setShowCurrentPos(true);
+			connect(m_solveBar, &SolveBarWidget::seek, this, &SolveWidget::seekInPlayback);
+			playbackLayout->addWidget(m_solveBar, 0, 2);
+
+			playbackLayout->setColumnStretch(0, 0);
+			playbackLayout->setColumnMinimumWidth(1, metrics.boundingRect(
+				solveTimeText(solve)).width());
+			playbackLayout->setColumnStretch(1, 0);
+			playbackLayout->setColumnStretch(2, 1);
+			layout->addLayout(playbackLayout);
+		}
 	}
 
 	layout->addSpacing(8);
@@ -79,8 +142,11 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 
 	if (solve.ok && solve.crossTime && solve.f2lPairTimes[3] && solve.ollFinishTime)
 	{
-		SolveBarWidget* bar = new SolveBarWidget(solve);
-		layout->addWidget(bar);
+		if (!showSolveBarAsScrubBar)
+		{
+			SolveBarWidget* bar = new SolveBarWidget(solve);
+			layout->addWidget(bar);
+		}
 
 		QGridLayout* splitLayout = new QGridLayout();
 		splitLayout->setHorizontalSpacing(16);
@@ -168,6 +234,8 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 			tps->setToolTip("Turns per second (includes idle time)");
 			splitLayout->addWidget(tps, 1, 9);
 			columns = 9;
+
+			m_playback = AnimatedMoveSequence(solve.solveMoves);
 		}
 
 		splitLayout->setColumnStretch(0, 1);
@@ -176,7 +244,13 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 	}
 
 	setLayout(layout);
+
+	m_playbackTimer = new QTimer(this);
+	m_playbackTimer->setSingleShot(false);
+	m_playbackTimer->setInterval(1000 / 60);
+	connect(m_playbackTimer, &QTimer::timeout, this, &SolveWidget::updatePlayback);
 }
+
 
 
 QString SolveWidget::solveDetailsText()
@@ -322,4 +396,123 @@ bool SolveWidget::solveFromText(const QString& text, Solve& solve)
 	}
 
 	return true;
+}
+
+
+void SolveWidget::startPlayback()
+{
+	if (m_playback.moves.size() == 0)
+		return;
+	if (!m_cube)
+		return;
+	if (m_playbackMoveIndex >= m_playback.moves.size())
+	{
+		// If at end of playback, restart playback
+		m_playbackMoveIndex = 0;
+		m_playbackTimestamp = -1000;
+		m_cube->setCubeState(Cube3x3());
+		m_cube->applyImmediate(m_solve.scramble);
+		m_cube->update();
+	}
+
+	m_playbackRunning = true;
+	m_lastPlaybackTick = chrono::steady_clock::now();
+	m_playbackTimer->start();
+	m_playButton->setPictures(m_pauseIcon, m_pauseHoverIcon);
+
+	updateCurrentTimestampDisplay();
+}
+
+
+void SolveWidget::pausePlayback()
+{
+	m_playbackRunning = false;
+	m_playbackTimer->stop();
+	m_playButton->setPictures(m_playIcon, m_playHoverIcon);
+}
+
+
+void SolveWidget::seekInPlayback(int timestamp)
+{
+	pausePlayback();
+
+	size_t oldIndex = m_playbackMoveIndex;
+
+	// Find current move in playback sequence for this timestamp
+	m_playbackMoveIndex = 0;
+	m_playbackTimestamp = timestamp;
+	for (size_t i = 0; i < m_playback.moves.size(); i++)
+	{
+		if ((int)m_playback.moves[i].timestamp > timestamp)
+			break;
+		m_playbackMoveIndex = i + 1;
+	}
+
+	if (m_playbackMoveIndex > oldIndex)
+	{
+		// Moving forward, animate moves in sequence
+		for (size_t i = oldIndex; i < m_playbackMoveIndex; i++)
+			m_cube->apply(m_playback.moves[i].move, 3.0f, true);
+	}
+	else if (m_playbackMoveIndex < oldIndex)
+	{
+		// Move backward, animate inverted moves
+		for (size_t i = 1; i <= (oldIndex - m_playbackMoveIndex); i++)
+			m_cube->apply(CubeMoveSequence::InvertedMove(m_playback.moves[oldIndex - i].move), 3.0f, true);
+	}
+
+	updateCurrentTimestampDisplay();
+}
+
+
+void SolveWidget::updatePlayback()
+{
+	if (!m_cube)
+		return;
+	if (!m_playbackRunning)
+	{
+		m_playbackTimer->stop();
+		return;
+	}
+
+	chrono::time_point<chrono::steady_clock> curTime = chrono::steady_clock::now();
+	m_playbackTimestamp += (int)chrono::duration_cast<chrono::milliseconds>(curTime - m_lastPlaybackTick).count();
+
+	// Update current move and play animations as they occur in the playback list
+	while ((m_playbackMoveIndex < m_playback.moves.size()) &&
+		(m_playbackTimestamp >= (int)m_playback.moves[m_playbackMoveIndex].timestamp))
+	{
+		m_cube->apply(m_playback.moves[m_playbackMoveIndex].move,
+			m_playback.moves[m_playbackMoveIndex].tps);
+		m_playbackMoveIndex++;
+	}
+
+	m_lastPlaybackTick = curTime;
+	updateCurrentTimestampDisplay();
+
+	if (m_playbackMoveIndex >= m_playback.moves.size())
+		pausePlayback();
+}
+
+
+void SolveWidget::updateCurrentTimestampDisplay()
+{
+	if (m_playbackTimeLabel)
+	{
+		if (m_playbackMoveIndex >= m_playback.moves.size())
+			m_playbackTimeLabel->setText(SessionWidget::stringForTime(m_solve.time - m_solve.penalty));
+		else if (m_playbackTimestamp >= 0)
+			m_playbackTimeLabel->setText(SessionWidget::stringForTime(m_playbackTimestamp));
+		else
+			m_playbackTimeLabel->setText(SessionWidget::stringForTime(0));
+	}
+	if (m_solveBar)
+	{
+		if (m_playbackMoveIndex >= m_playback.moves.size())
+			m_solveBar->setCurrentPos(m_solve.time - m_solve.penalty);
+		else if (m_playbackTimestamp >= 0)
+			m_solveBar->setCurrentPos(m_playbackTimestamp);
+		else
+			m_solveBar->setCurrentPos(0);
+	}
 }

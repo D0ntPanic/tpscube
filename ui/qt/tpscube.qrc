@@ -15,5 +15,9 @@
 		<file>images/bluetooth.png</file>
 		<file>images/bluetooth_deselect.png</file>
 		<file>images/bluetooth_hover.png</file>
+		<file>images/play.png</file>
+		<file>images/play_hover.png</file>
+		<file>images/pause.png</file>
+		<file>images/pause_hover.png</file>
 	</qresource>
 </RCC>

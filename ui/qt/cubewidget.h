@@ -143,6 +143,7 @@ public:
 	virtual int cubeSize() const = 0;
 	virtual std::vector<CubeColor> cubeFaceColors() const = 0;
 
+	void apply(CubeMove move, float tps, bool accel = false);
 	void apply(const CubeMoveSequence& moves, float tps, bool accel = false);
 	void applyImmediate(const CubeMoveSequence& moves);
 
