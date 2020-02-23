@@ -460,6 +460,7 @@ void SolveWidget::seekInPlayback(int timestamp)
 		for (size_t i = 1; i <= (oldIndex - m_playbackMoveIndex); i++)
 			m_cube->apply(CubeMoveSequence::InvertedMove(m_playback.moves[oldIndex - i].move), 3.0f, true);
 	}
+	m_cube->update();
 
 	updateCurrentTimestampDisplay();
 }
