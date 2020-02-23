@@ -155,7 +155,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 			QLabel* etps = new QLabel(QString::asprintf("<span style='font-size:%fpt'>%.2f</span>",
 				relativeFontSize(1.0f), splits.etps));
 			etps->setAlignment(Qt::AlignCenter);
-			etps->setToolTip("Turns per second (excluding idle time)");
+			etps->setToolTip("Execution turns per second (excludes idle time)");
 			splitLayout->addWidget(etps, 1, 8);
 			QLabel* tpsLabel = new QLabel("TPS");
 			tpsLabel->setFont(fontOfRelativeSize(0.8f, QFont::Thin));
@@ -165,7 +165,7 @@ SolveWidget::SolveWidget(const Solve& solve, bool fullDetails): m_solve(solve)
 			QLabel* tps = new QLabel(QString::asprintf("<span style='font-size:%fpt'>%.2f</span>",
 				relativeFontSize(1.0f), splits.tps));
 			tps->setAlignment(Qt::AlignCenter);
-			tps->setToolTip("Effective Turns per second (including idle time)");
+			tps->setToolTip("Turns per second (includes idle time)");
 			splitLayout->addWidget(tps, 1, 9);
 			columns = 9;
 		}
