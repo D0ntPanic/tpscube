@@ -1,11 +1,15 @@
 #include <QtWidgets/QVBoxLayout>
+#include <QtWidgets/QAction>
 #include <QtGui/QKeyEvent>
+#include <QtGui/QGuiApplication>
+#include <QtGui/QClipboard>
 #include "mainwindow.h"
 #include "theme.h"
 #include "topbar.h"
 #include "timermode.h"
 #include "historymode.h"
 #include "bluetoothdialog.h"
+#include "solvedialog.h"
 
 using namespace std;
 
@@ -46,6 +50,11 @@ MainWindow::MainWindow()
 	m_historyModeIndex = m_stackedWidget->addWidget(m_historyMode);
 
 	m_stackedWidget->setCurrentIndex(m_timerModeIndex);
+
+	QAction* pasteAction = new QAction(this);
+	pasteAction->setShortcut(QKeySequence::Paste);
+	connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
+	addAction(pasteAction);
 
 	container->setLayout(containerLayout);
 	setCentralWidget(container);
@@ -145,4 +154,20 @@ void MainWindow::disconnectFromBluetoothCube()
 {
 	m_timerMode->setBluetoothCube(shared_ptr<BluetoothCube>());
 	m_topBar->setBluetoothCube(shared_ptr<BluetoothCube>());
+}
+
+
+void MainWindow::paste()
+{
+	QString text = QGuiApplication::clipboard()->text();
+	QStringList lines = text.split('\n');
+	if ((lines.size() == 1) || ((lines.size() >= 2) && (lines[1].startsWith("Solve:"))))
+	{
+		Solve solve;
+		if (SolveWidget::solveFromText(text, solve))
+		{
+			SolveDialog* dlg = new SolveDialog(solve);
+			dlg->show();
+		}
+	}
 }

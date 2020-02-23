@@ -17,4 +17,5 @@ public:
 
 	QString solveDetailsText();
 	static QString solveTimeText(const Solve& solve);
+	static bool solveFromText(const QString& text, Solve& solve);
 };

@@ -86,6 +86,7 @@ struct CubeMoveSequence
 	std::vector<CubeMove> moves;
 
 	static std::string MoveToString(CubeMove move);
+	static bool MoveFromString(const std::string& name, CubeMove& move);
 	static CubeMove InvertedMove(CubeMove move);
 	static CubeMove RandomMove(RandomSource& rng);
 	static bool IsSameOuterBlock(CubeMove a, CubeMove b);

@@ -31,6 +31,50 @@ string CubeMoveSequence::MoveToString(CubeMove move)
 }
 
 
+bool CubeMoveSequence::MoveFromString(const string& name, CubeMove& move)
+{
+	if (name == "U")
+		move = MOVE_U;
+	else if (name == "U'")
+		move = MOVE_Up;
+	else if (name == "U2")
+		move = MOVE_U2;
+	else if (name == "F")
+		move = MOVE_F;
+	else if (name == "F'")
+		move = MOVE_Fp;
+	else if (name == "F2")
+		move = MOVE_F2;
+	else if (name == "R")
+		move = MOVE_R;
+	else if (name == "R'")
+		move = MOVE_Rp;
+	else if (name == "R2")
+		move = MOVE_R2;
+	else if (name == "B")
+		move = MOVE_B;
+	else if (name == "B'")
+		move = MOVE_Bp;
+	else if (name == "B2")
+		move = MOVE_B2;
+	else if (name == "L")
+		move = MOVE_L;
+	else if (name == "L'")
+		move = MOVE_Lp;
+	else if (name == "L2")
+		move = MOVE_L2;
+	else if (name == "D")
+		move = MOVE_D;
+	else if (name == "D'")
+		move = MOVE_Dp;
+	else if (name == "D2")
+		move = MOVE_D2;
+	else
+		return false;
+	return true;
+}
+
+
 CubeMove CubeMoveSequence::InvertedMove(CubeMove move)
 {
 	static CubeMove inverted[MOVE_D2 + 1] = {

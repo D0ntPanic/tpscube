@@ -218,3 +218,108 @@ QString SolveWidget::solveTimeText(const Solve& solve)
 	}
 	return "DNF";
 }
+
+
+bool SolveWidget::solveFromText(const QString& text, Solve& solve)
+{
+	QStringList lines = text.split('\n', QString::SkipEmptyParts);
+	if (lines.size() == 0)
+		return false;
+
+	int timePos = lines[0].lastIndexOf('@');
+	if (timePos == -1)
+		return false;
+	solve.id = History::instance.idGenerator->GenerateId();
+	QDateTime created = QDateTime::fromString(lines[0].mid(timePos + 1));
+	if (!created.isValid())
+		return false;
+	solve.created = (time_t)created.toSecsSinceEpoch();
+	solve.update.date = solve.created;
+	solve.update.id = History::instance.idGenerator->GenerateId();
+	solve.dirty = true;
+	solve.penalty = 0;
+
+	QStringList firstLineParts = lines[0].mid(0, timePos).split(' ', QString::SkipEmptyParts);
+	if (firstLineParts.size() == 0)
+		return false;
+
+	QString timeStr = firstLineParts[0];
+	if (timeStr == "DNF")
+	{
+		solve.ok = false;
+	}
+	else
+	{
+		int colonPos = timeStr.indexOf(':');
+		bool ok;
+		if (colonPos == -1)
+		{
+			double t = timeStr.toDouble(&ok);
+			if (!ok)
+				return false;
+			solve.time = (int)(t * 1000.0f + 0.5f);
+		}
+		else
+		{
+			int minutes = timeStr.mid(0, colonPos).toInt(&ok);
+			if (!ok)
+				return false;
+			double seconds = timeStr.mid(colonPos + 1).toDouble(&ok);
+			if (!ok)
+				return false;
+			solve.time = (int)(seconds * 1000.0f + 0.5f) + minutes * 60000;
+		}
+		solve.ok = true;
+	}
+
+	for (int i = 1; i < firstLineParts.size(); i++)
+	{
+		QString moveStr = firstLineParts[i];
+		CubeMove move;
+		if (!CubeMoveSequence::MoveFromString(moveStr.toStdString(), move))
+			return false;
+		solve.scramble.moves.push_back(move);
+	}
+
+	if (lines.size() > 1)
+	{
+		QStringList secondLineParts = lines[1].split(' ', QString::SkipEmptyParts);
+		if ((secondLineParts.size() >= 2) && (secondLineParts[0] == "Solve:"))
+		{
+			TimedCubeMoveSequence solveMoves;
+			bool ok = true;
+			for (int i = 1; i < secondLineParts.size(); i++)
+			{
+				QString moveStr = secondLineParts[i];
+				int atPos = moveStr.indexOf('@');
+				if (atPos == -1)
+				{
+					ok = false;
+					break;
+				}
+
+				QString moveName = moveStr.mid(0, atPos);
+				TimedCubeMove move;
+				if (!CubeMoveSequence::MoveFromString(moveName.toStdString(), move.move))
+				{
+					ok = false;
+					break;
+				}
+
+				move.timestamp = moveStr.mid(atPos + 1).toUInt(&ok);
+				if (!ok)
+					break;
+
+				solveMoves.moves.push_back(move);
+			}
+
+			if (ok)
+			{
+				solve.solveMoves = solveMoves;
+				solve.GenerateSplitTimesFromMoves();
+			}
+		}
+	}
+
+	return true;
+}
