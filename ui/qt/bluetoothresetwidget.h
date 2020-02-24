@@ -10,6 +10,7 @@ class BluetoothResetWidget: public QWidget
 	Q_OBJECT
 
 	std::shared_ptr<BluetoothCube> m_cube;
+	std::shared_ptr<BluetoothCubeClient> m_cubeClient;
 	Heading* m_heading;
 	Cube3x3Widget* m_cubeWidget;
 
@@ -19,6 +20,7 @@ private slots:
 
 public:
 	BluetoothResetWidget();
+	~BluetoothResetWidget();
 
 	void setCube(const std::shared_ptr<BluetoothCube>& cube);
 

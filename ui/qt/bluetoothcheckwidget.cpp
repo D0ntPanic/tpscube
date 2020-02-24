@@ -2,6 +2,7 @@
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QMessageBox>
 #include "bluetoothcheckwidget.h"
 
 using namespace std;
@@ -39,9 +40,25 @@ BluetoothCheckWidget::BluetoothCheckWidget()
 }
 
 
+BluetoothCheckWidget::~BluetoothCheckWidget()
+{
+	if (m_cube && m_cubeClient)
+		m_cube->RemoveClient(m_cubeClient);
+}
+
+
 void BluetoothCheckWidget::setCube(const shared_ptr<BluetoothCube>& cube)
 {
 	m_cube = cube;
+	m_cubeClient = make_shared<BluetoothCubeClient>();
+	string name = m_cube->GetDevice()->GetName();
+	m_cubeClient->SetErrorCallback([=](const string& msg) {
+		QMessageBox::critical(this, QString::fromStdString(name),
+			QString::fromStdString(msg));
+		emit cancel();
+	});
+	m_cube->AddClient(m_cubeClient);
+
 	m_cubeWidget->setBluetoothCube(cube);
 	m_heading->setName("Synchronize " + QString::fromStdString(m_cube->GetDevice()->GetName()));
 }

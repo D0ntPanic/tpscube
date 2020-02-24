@@ -22,6 +22,7 @@ BluetoothDialog::BluetoothDialog()
 	m_checkIndex = m_stackedWidget->addWidget(m_check);
 	connect(m_check, &BluetoothCheckWidget::correct, this, &BluetoothDialog::stateCorrect);
 	connect(m_check, &BluetoothCheckWidget::incorrect, this, &BluetoothDialog::stateIncorrect);
+	connect(m_check, &BluetoothCheckWidget::cancel, this, &BluetoothDialog::reject);
 
 	m_reset = new BluetoothResetWidget();
 	m_resetIndex = m_stackedWidget->addWidget(m_reset);

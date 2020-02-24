@@ -19,11 +19,13 @@ class BluetoothCube;
 class BluetoothDevice
 {
 	std::function<void()> m_connectedFunc;
+	std::function<void(const std::string& msg)> m_errorHandler;
 
 public:
 	virtual ~BluetoothDevice() {}
 
 	void SetConnectedCallback(const std::function<void()>& connectedFunc);
+	void SetErrorCallback(const std::function<void(const std::string& msg)>& errorHandler);
 	void Connect();
 
 	virtual std::string GetName() = 0;
@@ -37,17 +39,21 @@ public:
 	virtual void WriteCharacteristic(const std::string& uuid, const std::vector<uint8_t>& data,
 		const std::function<void()>& doneFunc) = 0;
 	virtual void EnableNotifications(const std::string& uuid, const std::function<void()>& doneFunc) = 0;
-	virtual void Error(const std::string& msg) { (void)msg; }
+	void Error(const std::string& msg);
 	virtual void DebugMessage(const std::string& msg) { (void)msg; }
 };
 
 class BluetoothCubeClient
 {
 	TimedCubeMoveSequence m_moves;
+	std::function<void(const std::string& msg)> m_errorHandler;
 
 public:
-	void AddMove(TimedCubeMove move);
 	TimedCubeMoveSequence GetLatestMoves();
+	void SetErrorCallback(const std::function<void(const std::string& msg)>& errorHandler);
+
+	void AddMove(TimedCubeMove move);
+	void Error(const std::string& msg);
 };
 
 class BluetoothCube

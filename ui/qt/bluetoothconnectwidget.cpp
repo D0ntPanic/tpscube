@@ -3,6 +3,7 @@
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QLabel>
+#include <QtWidgets/QMessageBox>
 #include "bluetoothconnectwidget.h"
 #include "theme.h"
 
@@ -38,7 +39,7 @@ void QtBluetoothDevice::connected()
 
 void QtBluetoothDevice::disconnected()
 {
-	emit error("Device disconnected");
+	Error("Device disconnected");
 }
 
 
@@ -75,7 +76,7 @@ void QtBluetoothDevice::serviceStateChanged(QLowEnergyService::ServiceState stat
 		m_serviceConnectedFunc();
 		break;
 	case QLowEnergyService::InvalidService:
-		emit error("Accessing invalid service of device");
+		Error("Accessing invalid service of device");
 		break;
 	default:
 		break;
@@ -151,7 +152,7 @@ void QtBluetoothDevice::descriptorWritten(const QLowEnergyDescriptor&, const QBy
 
 void QtBluetoothDevice::failed(QLowEnergyController::Error)
 {
-	emit error(m_control->errorString());
+	Error(m_control->errorString().toStdString());
 }
 
 
@@ -167,7 +168,7 @@ void QtBluetoothDevice::ConnectToService(const string& uuid,
 	QBluetoothUuid service(QString::fromStdString(uuid));
 	if (m_services.count(service) == 0)
 	{
-		emit error("Device does not have required service " + QString::fromStdString(uuid));
+		Error(("Device does not have required service " + QString::fromStdString(uuid)).toStdString());
 		return;
 	}
 
@@ -195,7 +196,8 @@ void QtBluetoothDevice::ReadCharacteristic(const string& uuid,
 #endif
 	if (!m_service)
 	{
-		emit error("Reading characteristic " + QString::fromStdString(uuid) + " without a connected service");
+		Error(("Reading characteristic " + QString::fromStdString(uuid) +
+			" without a connected service").toStdString());
 		return;
 	}
 
@@ -203,7 +205,8 @@ void QtBluetoothDevice::ReadCharacteristic(const string& uuid,
 		QBluetoothUuid(QString::fromStdString(uuid)));
 	if (!characteristic.isValid())
 	{
-		emit error("Device does not have required characteristic " + QString::fromStdString(uuid));
+		Error(("Device does not have required characteristic " +
+			QString::fromStdString(uuid)).toStdString());
 		return;
 	}
 	m_readCharacteristicResultFunc = resultFunc;
@@ -220,7 +223,8 @@ void QtBluetoothDevice::ReadEncodedCharacteristic(const string& uuid,
 #endif
 	if (!m_service)
 	{
-		emit error("Reading characteristic " + QString::fromStdString(uuid) + " without a connected service");
+		Error(("Reading characteristic " + QString::fromStdString(uuid) +
+			" without a connected service").toStdString());
 		return;
 	}
 
@@ -228,7 +232,8 @@ void QtBluetoothDevice::ReadEncodedCharacteristic(const string& uuid,
 		QBluetoothUuid(QString::fromStdString(uuid)));
 	if (!characteristic.isValid())
 	{
-		emit error("Device does not have required characteristic " + QString::fromStdString(uuid));
+		Error(("Device does not have required characteristic " +
+			QString::fromStdString(uuid)).toStdString());
 		return;
 	}
 	m_readCharacteristicResultFunc = resultFunc;
@@ -251,7 +256,8 @@ void QtBluetoothDevice::WriteCharacteristic(const string& uuid, const std::vecto
 #endif
 	if (!m_service)
 	{
-		emit error("Writing characteristic " + QString::fromStdString(uuid) + " without a connected service");
+		Error(("Writing characteristic " + QString::fromStdString(uuid) +
+			" without a connected service").toStdString());
 		return;
 	}
 
@@ -259,7 +265,8 @@ void QtBluetoothDevice::WriteCharacteristic(const string& uuid, const std::vecto
 		QBluetoothUuid(QString::fromStdString(uuid)));
 	if (!characteristic.isValid())
 	{
-		emit error("Device does not have required characteristic " + QString::fromStdString(uuid));
+		Error(("Device does not have required characteristic " +
+			QString::fromStdString(uuid)).toStdString());
 		return;
 	}
 	m_writeCharacteristicDoneFunc = doneFunc;
@@ -274,7 +281,8 @@ void QtBluetoothDevice::EnableNotifications(const string& uuid, const function<v
 #endif
 	if (!m_service)
 	{
-		emit error("Enabling notifications for characteristic " + QString::fromStdString(uuid) + " without a connected service");
+		Error(("Enabling notifications for characteristic " +
+			QString::fromStdString(uuid) + " without a connected service").toStdString());
 		return;
 	}
 
@@ -282,29 +290,22 @@ void QtBluetoothDevice::EnableNotifications(const string& uuid, const function<v
 		QBluetoothUuid(QString::fromStdString(uuid)));
 	if (!characteristic.isValid())
 	{
-		emit error("Device does not have required characteristic " + QString::fromStdString(uuid));
+		Error(("Device does not have required characteristic " +
+			QString::fromStdString(uuid)).toStdString());
 		return;
 	}
 
 	QLowEnergyDescriptor notification = characteristic.descriptor(QBluetoothUuid::ClientCharacteristicConfiguration);
 	if (!notification.isValid())
 	{
-		emit error("Device does not support notifications for characteristic " + QString::fromStdString(uuid));
+		Error(("Device does not support notifications for characteristic " +
+			QString::fromStdString(uuid)).toStdString());
 		return;
 	}
 
 	static char enable[2] = {1, 0};
 	m_writeDescriptorDoneFunc = doneFunc;
 	m_service->writeDescriptor(notification, QByteArray(enable, sizeof(enable)));
-}
-
-
-void QtBluetoothDevice::Error(const string& msg)
-{
-#ifdef BLUETOOTH_DEBUG
-	printf("ERROR: %s\n", msg.c_str());
-#endif
-	emit error(QString::fromStdString(msg));
 }
 
 
@@ -338,6 +339,13 @@ BluetoothConnectWidget::BluetoothConnectWidget()
 }
 
 
+BluetoothConnectWidget::~BluetoothConnectWidget()
+{
+	if (m_cube && m_cubeClient)
+		m_cube->RemoveClient(m_cubeClient);
+}
+
+
 void BluetoothConnectWidget::cancelPushed()
 {
 	emit cancel();
@@ -350,5 +358,12 @@ void BluetoothConnectWidget::connectToDevice(const QBluetoothDeviceInfo& device,
 	QtBluetoothDevice* deviceObj = new QtBluetoothDevice(device);
 	m_cube = cubeType->Create(deviceObj);
 	m_cube->SetReadyCallback([this]() { emit next(); });
+	m_cubeClient = make_shared<BluetoothCubeClient>();
+	QString name = device.name();
+	m_cubeClient->SetErrorCallback([=](const string& msg) {
+		QMessageBox::critical(this, name, QString::fromStdString(msg));
+		emit cancel();
+	});
+	m_cube->AddClient(m_cubeClient);
 	deviceObj->connectToDevice();
 }

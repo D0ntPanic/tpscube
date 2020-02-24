@@ -54,11 +54,7 @@ public:
 	virtual void WriteCharacteristic(const std::string& uuid, const std::vector<uint8_t>& data,
 		const std::function<void()>& doneFunc) override;
 	virtual void EnableNotifications(const std::string& uuid, const std::function<void()>& doneFunc) override;
-	virtual void Error(const std::string& msg) override;
 	virtual void DebugMessage(const std::string& msg) override;
-
-signals:
-	void error(QString msg);
 };
 
 class BluetoothConnectWidget: public QWidget
@@ -67,12 +63,14 @@ class BluetoothConnectWidget: public QWidget
 
 	QLabel* m_label;
 	std::shared_ptr<BluetoothCube> m_cube;
+	std::shared_ptr<BluetoothCubeClient> m_cubeClient;
 
 private slots:
 	void cancelPushed();
 
 public:
 	BluetoothConnectWidget();
+	~BluetoothConnectWidget();
 	void connectToDevice(const QBluetoothDeviceInfo& device, BluetoothCubeType* cubeType);
 
 	std::shared_ptr<BluetoothCube> cube() const { return m_cube; }

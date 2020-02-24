@@ -1,4 +1,5 @@
 #include <QtWidgets/QHBoxLayout>
+#include <QtWidgets/QMessageBox>
 #include <QtGui/QPainter>
 #include <QtGui/QPicture>
 #include "topbar.h"
@@ -112,10 +113,25 @@ TopBar::TopBar(QWidget* parent): QWidget(parent)
 
 void TopBar::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 {
+	if (m_bluetoothCube && m_bluetoothCubeClient)
+	{
+		m_bluetoothCube->RemoveClient(m_bluetoothCubeClient);
+		m_bluetoothCubeClient.reset();
+	}
+
 	m_bluetoothCube = cube;
 
 	if (m_bluetoothCube)
 	{
+		m_bluetoothCubeClient = make_shared<BluetoothCubeClient>();
+		string name = m_bluetoothCube->GetDevice()->GetName();
+		m_bluetoothCubeClient->SetErrorCallback([=](const string& msg) {
+			QMessageBox::critical(this, QString::fromStdString(name),
+				QString::fromStdString(msg));
+			emit disconnectFromBluetoothCube();
+		});
+		m_bluetoothCube->AddClient(m_bluetoothCubeClient);
+
 		m_bluetooth->setPictures(m_connectedBluetoothIcon, m_hoverBluetoothIcon);
 		m_bluetooth->setToolTip("Disconnect from the Bluetooth cube");
 		if (m_bluetoothCube->GetBatteryState().charging)

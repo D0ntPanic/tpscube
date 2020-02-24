@@ -35,6 +35,7 @@ class TopBar: public QWidget
 	QTimer* m_bluetoothUpdateTimer;
 
 	std::shared_ptr<BluetoothCube> m_bluetoothCube;
+	std::shared_ptr<BluetoothCubeClient> m_bluetoothCubeClient;
 
 	void timerModeClicked();
 	void historyModeClicked();

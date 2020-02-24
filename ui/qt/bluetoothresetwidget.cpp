@@ -2,6 +2,7 @@
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QMessageBox>
 #include "bluetoothresetwidget.h"
 
 using namespace std;
@@ -38,9 +39,25 @@ BluetoothResetWidget::BluetoothResetWidget()
 }
 
 
+BluetoothResetWidget::~BluetoothResetWidget()
+{
+	if (m_cube && m_cubeClient)
+		m_cube->RemoveClient(m_cubeClient);
+}
+
+
 void BluetoothResetWidget::setCube(const shared_ptr<BluetoothCube>& cube)
 {
 	m_cube = cube;
+	m_cubeClient = make_shared<BluetoothCubeClient>();
+	string name = m_cube->GetDevice()->GetName();
+	m_cubeClient->SetErrorCallback([=](const string& msg) {
+		QMessageBox::critical(this, QString::fromStdString(name),
+			QString::fromStdString(msg));
+		emit cancel();
+	});
+	m_cube->AddClient(m_cubeClient);
+
 	m_heading->setName("Synchronize " + QString::fromStdString(m_cube->GetDevice()->GetName()));
 }
 

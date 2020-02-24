@@ -33,15 +33,41 @@ void BluetoothDevice::SetConnectedCallback(const std::function<void()>& connecte
 }
 
 
+void BluetoothDevice::SetErrorCallback(const function<void(const string& msg)>& errorHandler)
+{
+	m_errorHandler = errorHandler;
+}
+
+
 void BluetoothDevice::Connect()
 {
 	m_connectedFunc();
 }
 
 
+void BluetoothDevice::Error(const string& msg)
+{
+	if (m_errorHandler)
+		m_errorHandler(msg);
+}
+
+
 void BluetoothCubeClient::AddMove(TimedCubeMove move)
 {
 	m_moves.moves.push_back(move);
+}
+
+
+void BluetoothCubeClient::Error(const string& msg)
+{
+	if (m_errorHandler)
+		m_errorHandler(msg);
+}
+
+
+void BluetoothCubeClient::SetErrorCallback(const function<void(const string& msg)>& errorHandler)
+{
+	m_errorHandler = errorHandler;
 }
 
 
@@ -55,6 +81,11 @@ TimedCubeMoveSequence BluetoothCubeClient::GetLatestMoves()
 
 BluetoothCube::BluetoothCube(BluetoothDevice* dev): m_dev(dev)
 {
+	dev->SetErrorCallback([this](const string& msg) {
+		vector<shared_ptr<BluetoothCubeClient>> clients = m_clients;
+		for (auto& i : clients)
+			i->Error(msg);
+	});
 }
 
 
@@ -215,7 +246,6 @@ void GANCube::ResetCubeState(const function<void()>& nextFunc)
 	for (size_t i = 0; i < 18; i++)
 		state.push_back(m_solvedState[i]);
 	m_dev->WriteCharacteristic(m_cubeStateCharacteristic, state, [=]() {
-		m_cube = Cube3x3();
 		nextFunc();
 	});
 }
@@ -321,6 +351,7 @@ Cube3x3 GANCube::GetCubeState()
 void GANCube::ResetToSolved()
 {
 	m_resetRequested = true;
+	m_cube = Cube3x3();
 }
 
 
