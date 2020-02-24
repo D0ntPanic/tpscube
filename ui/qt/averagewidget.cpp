@@ -8,6 +8,7 @@
 #include "utilwidgets.h"
 #include "theme.h"
 #include "solvebarwidget.h"
+#include "tooltip.h"
 
 using namespace std;
 
@@ -94,7 +95,7 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 	timeLayout->setColumnStretch(4, 0);
 	timeLayout->setSpacing(0);
 
-	int row = 0;
+	bool hasSolveBars = false;
 	for (size_t i = 0; i < m_solves.size(); i++)
 	{
 		Solve solve = m_solves[i];
@@ -103,13 +104,19 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 		QPalette pal = palette();
 		pal.setColor(QPalette::WindowText, Theme::disabled);
 		num->setPalette(pal);
-		timeLayout->addWidget(num, row, 0, Qt::AlignRight);
+		timeLayout->addWidget(num, (int)i, 0, Qt::AlignRight);
 
 		ClickableLabel* timeLabel;
 		function<void()> showSolve = [=]() {
 			SolveDialog* dlg = new SolveDialog(solve);
 			dlg->show();
 		};
+		function<void()> solveHover = [=]() {
+			SolveWidget* widget = new SolveWidget(solve);
+			Tooltip* tooltip = new Tooltip(widget);
+			tooltip->show(this);
+		};
+
 		if (solve.ok)
 		{
 			timeLabel = new ClickableLabel(SessionWidget::stringForTime(solve.time),
@@ -125,7 +132,8 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 			timeLabel->setColors(Theme::selectionLight, Theme::blue);
 		}
 		timeLabel->setCursor(Qt::PointingHandCursor);
-		timeLayout->addWidget(timeLabel, row, 1, Qt::AlignRight);
+		timeLabel->setTooltipFunction(solveHover);
+		timeLayout->addWidget(timeLabel, (int)i, 1, Qt::AlignRight);
 
 		QLabel* penalty;
 		if (solve.ok && solve.penalty)
@@ -134,35 +142,56 @@ AverageWidget::AverageWidget(const vector<Solve>& solves, bool fullDetails): m_s
 			penalty = new QLabel("");
 		pal.setColor(QPalette::WindowText, Theme::red);
 		penalty->setPalette(pal);
-		timeLayout->addWidget(penalty, row, 2, Qt::AlignLeft);
-
-		if (fullDetails)
-		{
-			ClickableLabel* scramble = new ClickableLabel("   " +
-				QString::fromStdString(solve.scramble.ToString()) + "   ",
-				Theme::content, Theme::blue, showSolve);
-			scramble->setFont(fontOfRelativeSize(1.0f, QFont::Thin));
-			scramble->setCursor(Qt::PointingHandCursor);
-			timeLayout->addWidget(scramble, row, 3, Qt::AlignLeft);
-		}
+		timeLayout->addWidget(penalty, (int)i, 2, Qt::AlignLeft);
 
 		ClickableLabel* timeOfSolve = new ClickableLabel("   " + HistoryMode::shortStringForDate(solve.created),
 			Theme::content, Theme::blue, showSolve);
 		timeOfSolve->setFont(fontOfRelativeSize(1.0f, QFont::Thin));
 		timeOfSolve->setCursor(Qt::PointingHandCursor);
-		timeLayout->addWidget(timeOfSolve, row, fullDetails ? 4 : 3, Qt::AlignLeft);
+		timeOfSolve->setTooltipFunction(solveHover);
+		timeLayout->addWidget(timeOfSolve, (int)i, 4, Qt::AlignLeft);
 
 		if (solve.ok && solve.crossTime && solve.f2lPairTimes[3] && solve.ollFinishTime)
 		{
-			row++;
 			SolveBarWidget* bar = new SolveBarWidget(solve);
-			bar->setBarHeight(1);
+			bar->setBarHeight(4);
+			bar->setPadding(7, 4);
 			bar->setBarRelativeWidth((float)solve.time / (float)m_solves[highest].time);
-			bar->setPadding(0, 2);
-			timeLayout->addWidget(bar, row, 1, 1, fullDetails ? 4 : 3);
+			timeLayout->addWidget(bar, (int)i, 6);
+			hasSolveBars = true;
 		}
+	}
 
-		row++;
+	if (hasSolveBars)
+	{
+		timeLayout->setColumnMinimumWidth(5, 16);
+		timeLayout->setColumnMinimumWidth(6, 300);
+	}
+	else if (fullDetails)
+	{
+		// If there aren't any solve bars and we are in full details mode, show scramble
+		// instead of bars
+		for (size_t i = 0; i < m_solves.size(); i++)
+		{
+			Solve solve = m_solves[i];
+			function<void()> showSolve = [=]() {
+				SolveDialog* dlg = new SolveDialog(solve);
+				dlg->show();
+			};
+			function<void()> solveHover = [=]() {
+				SolveWidget* widget = new SolveWidget(solve);
+				Tooltip* tooltip = new Tooltip(widget);
+				tooltip->show(this);
+			};
+
+			ClickableLabel* scramble = new ClickableLabel("   " +
+				QString::fromStdString(solve.scramble.ToString()) + "   ",
+				Theme::content, Theme::blue, showSolve);
+			scramble->setFont(fontOfRelativeSize(1.0f, QFont::Thin));
+			scramble->setCursor(Qt::PointingHandCursor);
+			scramble->setTooltipFunction(solveHover);
+			timeLayout->addWidget(scramble, (int)i, 3, Qt::AlignLeft);
+		}
 	}
 
 	layout->addLayout(timeLayout);

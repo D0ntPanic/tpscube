@@ -62,6 +62,8 @@ ClickableLabel::ClickableLabel(const QString& text, QColor defaultColor, QColor 
 	m_hoverTimer->setSingleShot(true);
 	m_hoverTimer->setInterval(500);
 	connect(m_hoverTimer, &QTimer::timeout, this, &ClickableLabel::hoverTooltip);
+
+	setMouseTracking(true);
 }
 
 
