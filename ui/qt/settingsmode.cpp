@@ -172,6 +172,7 @@ void SettingsMode::importSolves()
 		importedSession->id = session["id"].toString().toStdString();
 		importedSession->update.date = (qint64)session["updated"].toDouble();
 		importedSession->update.id = History::instance.idGenerator->GenerateId();
+		importedSession->dirty = true;
 		if (importedSession->id.size() == 0)
 		{
 			QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid session ID");
@@ -218,6 +219,7 @@ void SettingsMode::importSolves()
 			importedSolve.pllCornerTime = solve["pllcorner"].toInt();
 			importedSolve.update.date = (qint64)solve["updated"].toDouble();
 			importedSolve.update.id = History::instance.idGenerator->GenerateId();
+			importedSolve.dirty = true;
 			importedSession->solves.push_back(importedSolve);
 			totalImportedSolves++;
 		}
