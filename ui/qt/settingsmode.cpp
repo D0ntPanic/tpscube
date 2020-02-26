@@ -10,7 +10,6 @@
 #include <set>
 #include <algorithm>
 #include "settingsmode.h"
-#include "history.h"
 
 using namespace std;
 
@@ -135,6 +134,157 @@ void SettingsMode::exportSolves()
 }
 
 
+bool SettingsMode::importNativeJson(const QJsonObject& solveData, vector<shared_ptr<Session>>& result)
+{
+	QJsonArray sessions = solveData["sessions"].toArray();
+	int totalImportedSolves = 0;
+	for (auto sessionValue : sessions)
+	{
+		QJsonObject session = sessionValue.toObject();
+		shared_ptr<Session> importedSession = make_shared<Session>();
+		importedSession->name = session["name"].toString().toStdString();
+		importedSession->id = session["id"].toString().toStdString();
+		importedSession->update.date = (qint64)session["updated"].toDouble();
+		importedSession->update.id = History::instance.idGenerator->GenerateId();
+		importedSession->dirty = true;
+		if (importedSession->id.size() == 0)
+		{
+			QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid session ID");
+			return false;
+		}
+		if (!Session::GetSolveTypeByName(session["type"].toString().toStdString(), importedSession->type))
+		{
+			QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid session type '" +
+				session["type"].toString() + "'");
+			return false;
+		}
+
+		QJsonArray solves = session["solves"].toArray();
+		for (auto solveValue : solves)
+		{
+			QJsonObject solve = solveValue.toObject();
+			Solve importedSolve;
+			importedSolve.id = solve["id"].toString().toStdString();
+			if (importedSolve.id.size() == 0)
+			{
+				QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid solve ID");
+				return false;
+			}
+			importedSolve.created = (qint64)solve["timestamp"].toDouble();
+			if (!CubeMoveSequence::FromString(solve["scramble"].toString().toStdString(),
+				importedSolve.scramble))
+			{
+				QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid scramble");
+				return false;
+			}
+			importedSolve.ok = solve["ok"].toBool();
+			importedSolve.time = solve["time"].toInt();
+			importedSolve.penalty = solve["penalty"].toInt();
+			importedSolve.solveDevice = solve["device"].toString().toStdString();
+			TimedCubeMoveSequence::FromString(solve["solve"].toString().toStdString(),
+				importedSolve.solveMoves);
+			importedSolve.crossTime = solve["cross"].toInt();
+			importedSolve.f2lPairTimes[0] = solve["pair1"].toInt();
+			importedSolve.f2lPairTimes[1] = solve["pair2"].toInt();
+			importedSolve.f2lPairTimes[2] = solve["pair3"].toInt();
+			importedSolve.f2lPairTimes[3] = solve["f2l"].toInt();
+			importedSolve.ollCrossTime = solve["ollcross"].toInt();
+			importedSolve.ollFinishTime = solve["oll"].toInt();
+			importedSolve.pllCornerTime = solve["pllcorner"].toInt();
+			importedSolve.update.date = (qint64)solve["updated"].toDouble();
+			importedSolve.update.id = History::instance.idGenerator->GenerateId();
+			importedSolve.dirty = true;
+			importedSession->solves.push_back(importedSolve);
+			totalImportedSolves++;
+		}
+
+		result.push_back(importedSession);
+	}
+	return true;
+}
+
+
+bool SettingsMode::importCstimerJson(const QJsonObject& solveData, vector<shared_ptr<Session>>& result)
+{
+	QJsonParseError error;
+	QJsonDocument sessionData = QJsonDocument::fromJson(
+		solveData["properties"].toObject()["sessionData"].toString().toUtf8());
+	if (sessionData.isNull())
+	{
+		QMessageBox::critical(this, "Error", "Unable to parse solve file:\n" + error.errorString());
+		return false;
+	}
+
+	for (auto i : solveData.keys())
+	{
+		if (!i.startsWith("session"))
+			continue;
+		QString sessionIndex = i.mid(7);
+		QString solveType = sessionData[sessionIndex].toObject()["opt"].toObject()["scrType"].toString();
+		SolveType type;
+		if ((solveType.isNull()) || (solveType == ""))
+			type = SOLVE_3X3X3;
+		else if (solveType == "333oh")
+			type = SOLVE_3X3X3_OH;
+		else if (solveType == "333bld")
+			type = SOLVE_3X3X3_BF;
+		else if (solveType == "222")
+			type = SOLVE_2X2X2;
+		else if (solveType == "444")
+			type = SOLVE_4X4X4;
+		else if (solveType == "444bld")
+			type = SOLVE_4X4X4_BF;
+		else if (solveType == "555")
+			type = SOLVE_5X5X5;
+		else if (solveType == "555bld")
+			type = SOLVE_5X5X5_BF;
+		else
+			continue;
+
+		shared_ptr<Session> importedSession = make_shared<Session>();
+		importedSession->type = type;
+		importedSession->id = ("cstimer:" + sessionIndex).toStdString();
+		importedSession->update.date = time(NULL);
+		importedSession->update.id = History::instance.idGenerator->GenerateId();
+		importedSession->dirty = true;
+
+		QJsonArray solveArray = solveData[i].toArray();
+		for (auto solve : solveArray)
+		{
+			Solve importedSolve;
+			importedSolve.penalty = solve.toArray()[0].toArray()[0].toInt();
+			importedSolve.time = solve.toArray()[0].toArray()[1].toInt();
+			if (!CubeMoveSequence::FromString(solve.toArray()[1].toString().toStdString(),
+				importedSolve.scramble))
+			{
+				QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid scramble");
+				return false;
+			}
+			importedSolve.created = (qint64)solve.toArray()[3].toDouble();
+			importedSolve.id = QString("cstimer:%1").arg((qulonglong)importedSolve.created).toStdString();
+			if (!TimedCubeMoveSequence::FromString(solve.toArray()[4].toArray()[0].toString().toStdString(),
+				importedSolve.solveMoves))
+			{
+				QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid solve sequence");
+				return false;
+			}
+			importedSolve.ok = (importedSolve.penalty != (uint32_t)-1);
+			if (!importedSolve.ok)
+				importedSolve.penalty = 0;
+			if (importedSolve.solveMoves.moves.size() != 0)
+				importedSolve.GenerateSplitTimesFromMoves();
+			importedSolve.update.date = time(NULL);
+			importedSolve.update.id = History::instance.idGenerator->GenerateId();
+			importedSolve.dirty = true;
+			importedSession->solves.push_back(importedSolve);
+		}
+
+		result.push_back(importedSession);
+	}
+	return true;
+}
+
+
 void SettingsMode::importSolves()
 {
 	QString path = QFileDialog::getOpenFileName(this, "Import solve history", QString(),
@@ -161,71 +311,22 @@ void SettingsMode::importSolves()
 
 	// Parse solve data in file
 	QJsonObject solveData = doc.object();
-	QJsonArray sessions = solveData["sessions"].toArray();
 	vector<shared_ptr<Session>> importedSessions;
-	int totalImportedSolves = 0;
-	for (auto sessionValue : sessions)
+
+	if (solveData.contains("properties") && solveData["properties"].toObject().contains("sessionData"))
 	{
-		QJsonObject session = sessionValue.toObject();
-		shared_ptr<Session> importedSession = make_shared<Session>();
-		importedSession->name = session["name"].toString().toStdString();
-		importedSession->id = session["id"].toString().toStdString();
-		importedSession->update.date = (qint64)session["updated"].toDouble();
-		importedSession->update.id = History::instance.idGenerator->GenerateId();
-		importedSession->dirty = true;
-		if (importedSession->id.size() == 0)
-		{
-			QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid session ID");
+		if (!importCstimerJson(solveData, importedSessions))
 			return;
-		}
-		if (!Session::GetSolveTypeByName(session["type"].toString().toStdString(), importedSession->type))
-		{
-			QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid session type '" +
-				session["type"].toString() + "'");
-			return;
-		}
-
-		QJsonArray solves = session["solves"].toArray();
-		for (auto solveValue : solves)
-		{
-			QJsonObject solve = solveValue.toObject();
-			Solve importedSolve;
-			importedSolve.id = solve["id"].toString().toStdString();
-			if (importedSolve.id.size() == 0)
-			{
-				QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid solve ID");
-				return;
-			}
-			importedSolve.created = (qint64)solve["timestamp"].toDouble();
-			if (!CubeMoveSequence::FromString(solve["scramble"].toString().toStdString(),
-				importedSolve.scramble))
-			{
-				QMessageBox::critical(this, "Error", "Unable to parse solve file:\nInvalid scramble");
-				return;
-			}
-			importedSolve.ok = solve["ok"].toBool();
-			importedSolve.time = solve["time"].toInt();
-			importedSolve.penalty = solve["penalty"].toInt();
-			importedSolve.solveDevice = solve["device"].toString().toStdString();
-			TimedCubeMoveSequence::FromString(solve["solve"].toString().toStdString(),
-				importedSolve.solveMoves);
-			importedSolve.crossTime = solve["cross"].toInt();
-			importedSolve.f2lPairTimes[0] = solve["pair1"].toInt();
-			importedSolve.f2lPairTimes[1] = solve["pair2"].toInt();
-			importedSolve.f2lPairTimes[2] = solve["pair3"].toInt();
-			importedSolve.f2lPairTimes[3] = solve["f2l"].toInt();
-			importedSolve.ollCrossTime = solve["ollcross"].toInt();
-			importedSolve.ollFinishTime = solve["oll"].toInt();
-			importedSolve.pllCornerTime = solve["pllcorner"].toInt();
-			importedSolve.update.date = (qint64)solve["updated"].toDouble();
-			importedSolve.update.id = History::instance.idGenerator->GenerateId();
-			importedSolve.dirty = true;
-			importedSession->solves.push_back(importedSolve);
-			totalImportedSolves++;
-		}
-
-		importedSessions.push_back(importedSession);
 	}
+	else
+	{
+		if (!importNativeJson(solveData, importedSessions))
+			return;
+	}
+
+	int totalImportedSolves = 0;
+	for (auto& i : importedSessions)
+		totalImportedSolves += (int)i->solves.size();
 
 	int newSolves = 0;
 	int updatedSolves = 0;
@@ -260,7 +361,8 @@ void SettingsMode::importSolves()
 			{
 				// Solve exists by ID, see if it might be updated
 				Solve& existingSolve = idIter->second.session->solves[idIter->second.solveIndex];
-				if (importedSolve.update.date > existingSolve.update.date)
+				if ((importedSolve.update.date > existingSolve.update.date) &&
+					(importedSolve != existingSolve))
 				{
 					// Solve has updates, use the new information
 					existingSolve = importedSolve;
@@ -282,7 +384,8 @@ void SettingsMode::importSolves()
 
 				// Solve already exists, see if it might be updated
 				Solve& existingSolve = timeIter->second.session->solves[timeIter->second.solveIndex];
-				if (importedSolve.update.date > existingSolve.update.date)
+				if ((importedSolve.update.date > existingSolve.update.date) &&
+					(importedSolve != existingSolve))
 				{
 					// Solve has updates, use the new information
 					existingSolve = importedSolve;

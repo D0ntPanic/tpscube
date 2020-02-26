@@ -97,6 +97,9 @@ struct CubeMoveSequence
 	std::string ToString() const;
 	CubeMoveSequence Inverted() const;
 	size_t GetOuterTurnCount() const;
+
+	bool operator==(const CubeMoveSequence& other) const;
+	bool operator!=(const CubeMoveSequence& other) const;
 };
 
 struct TimedCubeMove
@@ -112,6 +115,9 @@ struct TimedCubeMoveSequence
 	size_t GetOuterTurnCount() const;
 	std::string ToString() const;
 	static bool FromString(const std::string& text, TimedCubeMoveSequence& result);
+
+	bool operator==(const TimedCubeMoveSequence& other) const;
+	bool operator!=(const TimedCubeMoveSequence& other) const;
 };
 
 struct AnimatedCubeMove

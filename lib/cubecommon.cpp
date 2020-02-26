@@ -351,6 +351,25 @@ bool CubeMoveSequence::FromString(const string& text, CubeMoveSequence& result)
 }
 
 
+bool CubeMoveSequence::operator==(const CubeMoveSequence& other) const
+{
+	if (moves.size() != other.moves.size())
+		return false;
+	for (size_t i = 0; i < moves.size(); i++)
+	{
+		if (moves[i] != other.moves[i])
+			return false;
+	}
+	return true;
+}
+
+
+bool CubeMoveSequence::operator!=(const CubeMoveSequence& other) const
+{
+	return !(*this == other);
+}
+
+
 size_t TimedCubeMoveSequence::GetOuterTurnCount() const
 {
 	if (moves.size() == 0)
@@ -411,6 +430,27 @@ bool TimedCubeMoveSequence::FromString(const string& text, TimedCubeMoveSequence
 		result.moves.push_back(move);
 	}
 	return true;
+}
+
+
+bool TimedCubeMoveSequence::operator==(const TimedCubeMoveSequence& other) const
+{
+	if (moves.size() != other.moves.size())
+		return false;
+	for (size_t i = 0; i < moves.size(); i++)
+	{
+		if (moves[i].move != other.moves[i].move)
+			return false;
+		if (moves[i].timestamp != other.moves[i].timestamp)
+			return false;
+	}
+	return true;
+}
+
+
+bool TimedCubeMoveSequence::operator!=(const TimedCubeMoveSequence& other) const
+{
+	return !(*this == other);
 }
 
 

@@ -92,6 +92,9 @@ struct Solve
 	static bool YellowCrossValid(const Cube3x3Faces& faces);
 	static bool LastLayerOriented(const Cube3x3Faces& faces);
 	static bool LastLayerCornersValid(const Cube3x3Faces& faces);
+
+	bool operator==(const Solve& other) const;
+	bool operator!=(const Solve& other) const;
 };
 
 struct Session

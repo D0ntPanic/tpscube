@@ -332,6 +332,48 @@ SolveState Solve::TransitionSolveState(const Cube3x3& cube, SolveState currentSt
 }
 
 
+bool Solve::operator==(const Solve& other) const
+{
+	if (scramble != other.scramble)
+		return false;
+	if (created != other.created)
+		return false;
+	if (ok != other.ok)
+		return false;
+	if (time != other.time)
+		return false;
+	if (penalty != other.penalty)
+		return false;
+	if (solveDevice != other.solveDevice)
+		return false;
+	if (solveMoves != other.solveMoves)
+		return false;
+	if (crossTime != other.crossTime)
+		return false;
+	if (f2lPairTimes[0] != other.f2lPairTimes[0])
+		return false;
+	if (f2lPairTimes[1] != other.f2lPairTimes[1])
+		return false;
+	if (f2lPairTimes[2] != other.f2lPairTimes[2])
+		return false;
+	if (f2lPairTimes[3] != other.f2lPairTimes[3])
+		return false;
+	if (ollCrossTime != other.ollCrossTime)
+		return false;
+	if (ollFinishTime != other.ollFinishTime)
+		return false;
+	if (pllCornerTime != other.pllCornerTime)
+		return false;
+	return true;
+}
+
+
+bool Solve::operator!=(const Solve& other) const
+{
+	return !(*this == other);
+}
+
+
 int Session::avgOf(const vector<int>& times)
 {
 	vector<int> sorted = times;

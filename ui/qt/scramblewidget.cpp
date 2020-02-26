@@ -98,6 +98,7 @@ void ScrambleWidget::updateText()
 		}
 	}
 
+	setTextFormat(Qt::RichText);
 	setText(text);
 }
 
