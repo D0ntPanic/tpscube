@@ -8,6 +8,7 @@
 #include "topbar.h"
 #include "timermode.h"
 #include "historymode.h"
+#include "settingsmode.h"
 #include "bluetoothdialog.h"
 #include "solvedialog.h"
 
@@ -35,6 +36,7 @@ MainWindow::MainWindow()
 	connect(m_topBar, &TopBar::showHistory, this, &MainWindow::showHistory);
 	connect(m_topBar, &TopBar::showGraphs, this, &MainWindow::showGraphs);
 	connect(m_topBar, &TopBar::showAlgorithms, this, &MainWindow::showAlgorithms);
+	connect(m_topBar, &TopBar::showSettings, this, &MainWindow::showSettings);
 	connect(m_topBar, &TopBar::connectToBluetoothCube, this, &MainWindow::connectToBluetoothCube);
 	connect(m_topBar, &TopBar::disconnectFromBluetoothCube, this, &MainWindow::disconnectFromBluetoothCube);
 
@@ -48,6 +50,9 @@ MainWindow::MainWindow()
 
 	m_historyMode = new HistoryMode(this);
 	m_historyModeIndex = m_stackedWidget->addWidget(m_historyMode);
+
+	m_settingsMode = new SettingsMode(this);
+	m_settingsModeIndex = m_stackedWidget->addWidget(m_settingsMode);
 
 	m_stackedWidget->setCurrentIndex(m_timerModeIndex);
 
@@ -136,6 +141,12 @@ void MainWindow::showGraphs()
 
 void MainWindow::showAlgorithms()
 {
+}
+
+
+void MainWindow::showSettings()
+{
+	m_stackedWidget->setCurrentIndex(m_settingsModeIndex);
 }
 
 

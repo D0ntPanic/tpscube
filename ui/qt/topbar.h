@@ -27,6 +27,7 @@ class TopBar: public QWidget
 	ModeLabel* m_historyMode;
 	ModeLabel* m_graphMode;
 	ModeLabel* m_algorithmMode;
+	ModeLabel* m_settingsMode;
 	ClickableLabel* m_bluetooth;
 	QPicture m_disconnectedBluetoothIcon;
 	QPicture m_connectedBluetoothIcon;
@@ -41,6 +42,7 @@ class TopBar: public QWidget
 	void historyModeClicked();
 	void graphModeClicked();
 	void algorithmModeClicked();
+	void settingsModeClicked();
 	void bluetoothClicked();
 
 private slots:
@@ -56,6 +58,7 @@ signals:
 	void showHistory();
 	void showGraphs();
 	void showAlgorithms();
+	void showSettings();
 	void connectToBluetoothCube();
 	void disconnectFromBluetoothCube();
 };

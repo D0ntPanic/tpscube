@@ -18,6 +18,7 @@ Subheading::Subheading(const QString& name, const QColor& color, bool large)
 		m_label->setFont(fontOfRelativeSize(1.0f, QFont::DemiBold));
 	QPalette headerPalette(palette());
 	headerPalette.setColor(QPalette::WindowText, color);
+	headerPalette.setColor(QPalette::Text, color);
 	m_label->setPalette(headerPalette);
 	layout->addWidget(m_label);
 
@@ -26,6 +27,7 @@ Subheading::Subheading(const QString& name, const QColor& color, bool large)
 	frame->setFrameShadow(QFrame::Plain);
 	QPalette framePalette(palette());
 	framePalette.setColor(QPalette::WindowText, color.darker());
+	framePalette.setColor(QPalette::Text, color.darker());
 	frame->setPalette(framePalette);
 	layout->addWidget(frame);
 
@@ -56,6 +58,7 @@ ClickableLabel::ClickableLabel(const QString& text, QColor defaultColor, QColor 
 {
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
+	pal.setColor(QPalette::Text, m_defaultColor);
 	setPalette(pal);
 
 	m_hoverTimer = new QTimer(this);
@@ -85,6 +88,7 @@ void ClickableLabel::enterEvent(QEvent*)
 {
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_hoverColor);
+	pal.setColor(QPalette::Text, m_hoverColor);
 	setPalette(pal);
 	if (m_usePictures)
 		setPicture(m_hoverPicture);
@@ -95,6 +99,7 @@ void ClickableLabel::leaveEvent(QEvent*)
 {
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
+	pal.setColor(QPalette::Text, m_defaultColor);
 	setPalette(pal);
 	if (m_usePictures)
 		setPicture(m_normalPicture);
@@ -115,6 +120,7 @@ void ClickableLabel::setColors(QColor defaultColor, QColor hoverColor)
 	m_hoverColor = hoverColor;
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_defaultColor);
+	pal.setColor(QPalette::Text, m_defaultColor);
 	setPalette(pal);
 }
 

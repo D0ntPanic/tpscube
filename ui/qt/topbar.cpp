@@ -63,6 +63,9 @@ TopBar::TopBar(QWidget* parent): QWidget(parent)
 	m_historyMode = new ModeLabel("History", [this]() { historyModeClicked(); });
 	layout->addWidget(m_historyMode);
 	layout->addSpacing(12);
+	m_settingsMode = new ModeLabel("Settings", [this]() { settingsModeClicked(); });
+	layout->addWidget(m_settingsMode);
+	layout->addSpacing(12);
 	m_graphMode = new ModeLabel("Graphs", [this]() { graphModeClicked(); });
 	layout->addWidget(m_graphMode);
 	layout->addSpacing(12);
@@ -181,6 +184,7 @@ void TopBar::timerModeClicked()
 	m_historyMode->setActive(false);
 	m_graphMode->setActive(false);
 	m_algorithmMode->setActive(false);
+	m_settingsMode->setActive(false);
 	emit showTimer();
 }
 
@@ -191,6 +195,7 @@ void TopBar::historyModeClicked()
 	m_historyMode->setActive(true);
 	m_graphMode->setActive(false);
 	m_algorithmMode->setActive(false);
+	m_settingsMode->setActive(false);
 	emit showHistory();
 }
 
@@ -201,6 +206,7 @@ void TopBar::graphModeClicked()
 	m_historyMode->setActive(false);
 	m_graphMode->setActive(true);
 	m_algorithmMode->setActive(false);
+	m_settingsMode->setActive(false);
 	emit showGraphs();
 }
 
@@ -211,7 +217,19 @@ void TopBar::algorithmModeClicked()
 	m_historyMode->setActive(false);
 	m_graphMode->setActive(false);
 	m_algorithmMode->setActive(true);
+	m_settingsMode->setActive(false);
 	emit showAlgorithms();
+}
+
+
+void TopBar::settingsModeClicked()
+{
+	m_timerMode->setActive(false);
+	m_historyMode->setActive(false);
+	m_graphMode->setActive(false);
+	m_algorithmMode->setActive(false);
+	m_settingsMode->setActive(true);
+	emit showSettings();
 }
 
 

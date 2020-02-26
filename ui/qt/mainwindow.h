@@ -4,6 +4,7 @@
 class TopBar;
 class TimerMode;
 class HistoryMode;
+class SettingsMode;
 
 class MainWindow: public QMainWindow
 {
@@ -15,6 +16,8 @@ class MainWindow: public QMainWindow
 	int m_timerModeIndex;
 	HistoryMode* m_historyMode;
 	int m_historyModeIndex;
+	SettingsMode* m_settingsMode;
+	int m_settingsModeIndex;
 
 	static MainWindow* m_instance;
 
@@ -25,6 +28,7 @@ private slots:
 	void showHistory();
 	void showGraphs();
 	void showAlgorithms();
+	void showSettings();
 	void connectToBluetoothCube();
 	void disconnectFromBluetoothCube();
 	void paste();

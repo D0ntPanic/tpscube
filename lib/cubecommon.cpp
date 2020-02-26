@@ -1,7 +1,31 @@
+#include <stdexcept>
 #include "cubecommon.h"
 #include "scramble.h"
 
 using namespace std;
+
+
+vector<string> SplitString(const string& text)
+{
+	vector<string> result;
+	for (size_t pos = 0; pos < text.size(); )
+	{
+		size_t next = text.find(' ', pos);
+		if (next == string::npos)
+		{
+			result.push_back(text.substr(pos));
+			break;
+		}
+		if (next == pos)
+		{
+			pos++;
+			continue;
+		}
+		result.push_back(text.substr(pos, next - pos));
+		pos = next + 1;
+	}
+	return result;
+}
 
 
 string CubeMoveSequence::MoveToString(CubeMove move)
@@ -312,6 +336,21 @@ size_t CubeMoveSequence::GetOuterTurnCount() const
 }
 
 
+bool CubeMoveSequence::FromString(const string& text, CubeMoveSequence& result)
+{
+	vector<string> parts = SplitString(text);
+	result.moves.clear();
+	for (auto& i : parts)
+	{
+		CubeMove move;
+		if (!CubeMoveSequence::MoveFromString(i, move))
+			return false;
+		result.moves.push_back(move);
+	}
+	return true;
+}
+
+
 size_t TimedCubeMoveSequence::GetOuterTurnCount() const
 {
 	if (moves.size() == 0)
@@ -323,6 +362,55 @@ size_t TimedCubeMoveSequence::GetOuterTurnCount() const
 			result++;
 	}
 	return result;
+}
+
+
+string TimedCubeMoveSequence::ToString() const
+{
+	string result;
+	for (auto& i: moves)
+	{
+		if (result.size() != 0)
+			result += " ";
+		result += CubeMoveSequence::MoveToString(i.move);
+		char timeStr[64];
+		sprintf(timeStr, "@%d", (int)i.timestamp);
+		result += timeStr;
+	}
+	return result;
+}
+
+
+bool TimedCubeMoveSequence::FromString(const string& text, TimedCubeMoveSequence& result)
+{
+	vector<string> parts = SplitString(text);
+	result.moves.clear();
+	for (auto& i : parts)
+	{
+		size_t atPos = i.find('@');
+		if (atPos == string::npos)
+			return false;
+
+		TimedCubeMove move;
+		if (!CubeMoveSequence::MoveFromString(i.substr(0, atPos), move.move))
+			return false;
+
+		try
+		{
+			move.timestamp = stoll(i.substr(atPos + 1));
+		}
+		catch (invalid_argument&)
+		{
+			return false;
+		}
+		catch (out_of_range&)
+		{
+			return false;
+		}
+
+		result.moves.push_back(move);
+	}
+	return true;
 }
 
 

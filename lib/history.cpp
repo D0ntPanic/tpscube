@@ -8,6 +8,17 @@ using namespace std;
 
 History History::instance;
 
+map<SolveType, string> Session::solveTypeNames = {
+	{SOLVE_3X3X3, "3x3x3"},
+	{SOLVE_3X3X3_OH, "3x3x3 One Handed"},
+	{SOLVE_3X3X3_BF, "3x3x3 Blindfolded"},
+	{SOLVE_2X2X2, "2x2x2"},
+	{SOLVE_4X4X4, "4x4x4"},
+	{SOLVE_4X4X4_BF, "4x4x4 Blindfolded"},
+	{SOLVE_5X5X5, "5x5x5"},
+	{SOLVE_5X5X5_BF, "5x5x5 Blindfolded"}
+};
+
 
 void Solve::GenerateSplitTimesFromMoves()
 {
@@ -424,6 +435,29 @@ int Session::bestAvgOf(size_t count, int* start)
 int Session::sessionAvg()
 {
 	return avgOfLast(solves.size(), true);
+}
+
+
+string Session::GetSolveTypeName(SolveType type)
+{
+	auto i = solveTypeNames.find(type);
+	if (i == solveTypeNames.end())
+		return "";
+	return i->second;
+}
+
+
+bool Session::GetSolveTypeByName(const std::string& name, SolveType& result)
+{
+	for (auto& i : solveTypeNames)
+	{
+		if (name == i.second)
+		{
+			result = i.first;
+			return true;
+		}
+	}
+	return false;
 }
 
 

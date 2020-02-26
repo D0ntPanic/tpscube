@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <functional>
+#include <map>
 #include <time.h>
 #include "cube3x3.h"
 #include "leveldb/db.h"
@@ -106,6 +107,10 @@ struct Session
 	static int avgOf(const std::vector<int>& times);
 	int avgOfLast(size_t count, bool ignoreDNF = false);
 	int sessionAvg();
+
+	static std::map<SolveType, std::string> solveTypeNames;
+	static std::string GetSolveTypeName(SolveType type);
+	static bool GetSolveTypeByName(const std::string& name, SolveType& result);
 };
 
 class IdGenerator

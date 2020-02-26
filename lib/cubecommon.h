@@ -93,6 +93,7 @@ struct CubeMoveSequence
 	static CubeFace GetMoveFace(CubeMove move);
 	static int GetMoveDirection(CubeMove move);
 	static CubeMove GetMoveForFaceAndDirection(CubeFace face, int dir);
+	static bool FromString(const std::string& text, CubeMoveSequence& result);
 	std::string ToString() const;
 	CubeMoveSequence Inverted() const;
 	size_t GetOuterTurnCount() const;
@@ -109,6 +110,8 @@ struct TimedCubeMoveSequence
 	std::vector<TimedCubeMove> moves;
 
 	size_t GetOuterTurnCount() const;
+	std::string ToString() const;
+	static bool FromString(const std::string& text, TimedCubeMoveSequence& result);
 };
 
 struct AnimatedCubeMove
@@ -126,4 +129,5 @@ struct AnimatedMoveSequence
 	AnimatedMoveSequence(const TimedCubeMoveSequence& moves);
 };
 
+std::vector<std::string> SplitString(const std::string& text);
 int NChooseK(int n, int k);
