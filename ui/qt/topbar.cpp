@@ -8,49 +8,6 @@
 using namespace std;
 
 
-ModeLabel::ModeLabel(const QString& text, const function<void()>& func):
-	QLabel(text), m_onClick(func)
-{
-	QPalette pal = palette();
-	pal.setColor(QPalette::WindowText, Theme::disabled);
-	setPalette(pal);
-	setFont(fontOfRelativeSize(1.0f, QFont::Light));
-	setCursor(Qt::PointingHandCursor);
-}
-
-
-void ModeLabel::mousePressEvent(QMouseEvent*)
-{
-	m_onClick();
-}
-
-
-void ModeLabel::enterEvent(QEvent*)
-{
-	QPalette pal = palette();
-	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::content);
-	setPalette(pal);
-}
-
-
-void ModeLabel::leaveEvent(QEvent*)
-{
-	QPalette pal = palette();
-	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::disabled);
-	setPalette(pal);
-}
-
-
-void ModeLabel::setActive(bool active)
-{
-	m_active = active;
-	setFont(fontOfRelativeSize(1.0f, active ? QFont::Bold : QFont::Light));
-	QPalette pal = palette();
-	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::disabled);
-	setPalette(pal);
-}
-
-
 TopBar::TopBar(QWidget* parent): QWidget(parent)
 {
 	setBackgroundRole(QPalette::Window);
@@ -63,17 +20,16 @@ TopBar::TopBar(QWidget* parent): QWidget(parent)
 	m_historyMode = new ModeLabel("History", [this]() { historyModeClicked(); });
 	layout->addWidget(m_historyMode);
 	layout->addSpacing(12);
-	m_settingsMode = new ModeLabel("Settings", [this]() { settingsModeClicked(); });
-	layout->addWidget(m_settingsMode);
-	layout->addSpacing(12);
 	m_graphMode = new ModeLabel("Graphs", [this]() { graphModeClicked(); });
 	layout->addWidget(m_graphMode);
+	layout->addSpacing(12);
+	m_settingsMode = new ModeLabel("Settings", [this]() { settingsModeClicked(); });
+	layout->addWidget(m_settingsMode);
 	layout->addSpacing(12);
 	m_algorithmMode = new ModeLabel("Algorithms", [this]() { algorithmModeClicked(); });
 	layout->addWidget(m_algorithmMode);
 	layout->addSpacing(12);
 	m_timerMode->setActive(true);
-	m_graphMode->setVisible(false);
 	m_algorithmMode->setVisible(false);
 
 	layout->addStretch(1);

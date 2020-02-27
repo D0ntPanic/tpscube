@@ -133,7 +133,7 @@ DetailedSplitTimes Solve::GenerateDetailedSplitTimes() const
 
 	result.moveCount = solveMoves.GetOuterTurnCount();
 	result.etps = (float)(result.moveCount - firstMoves) / ((float)(time - (penalty + result.idleTime)) / 1000.0f);
-	result.tps = (float)(result.moveCount) / ((float)(time - penalty) / 1000.0f);
+	result.tps = (float)(result.moveCount - 1) / ((float)(time - penalty) / 1000.0f);
 	return result;
 }
 
@@ -857,7 +857,6 @@ string History::SerializeSession(const shared_ptr<Session>& session)
 	auto data = database::CreateData(builder, database::Contents_session, sessionData.Union());
 	database::FinishDataBuffer(builder, data);
 	return string((const char*)builder.GetBufferPointer(), builder.GetSize());
-	return "";
 }
 
 

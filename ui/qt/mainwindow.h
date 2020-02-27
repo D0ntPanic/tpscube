@@ -4,6 +4,7 @@
 class TopBar;
 class TimerMode;
 class HistoryMode;
+class GraphMode;
 class SettingsMode;
 
 class MainWindow: public QMainWindow
@@ -16,6 +17,8 @@ class MainWindow: public QMainWindow
 	int m_timerModeIndex;
 	HistoryMode* m_historyMode;
 	int m_historyModeIndex;
+	GraphMode* m_graphMode;
+	int m_graphModeIndex;
 	SettingsMode* m_settingsMode;
 	int m_settingsModeIndex;
 

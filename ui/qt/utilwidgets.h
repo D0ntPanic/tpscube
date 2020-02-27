@@ -55,3 +55,22 @@ public:
 	void setPictures(QPicture normalPicture, QPicture hoverPicture);
 	void setTooltipFunction(const std::function<void()>& func);
 };
+
+class ModeLabel: public QLabel
+{
+	bool m_active = false;
+	bool m_sizeToLargest = false;
+	std::function<void()> m_onClick;
+
+protected:
+	virtual void mousePressEvent(QMouseEvent* event);
+	virtual void enterEvent(QEvent* event);
+	virtual void leaveEvent(QEvent* event);
+
+public:
+	ModeLabel(const QString& text, const std::function<void()>& func);
+	void setActive(bool active);
+
+	void sizeToLargest() { m_sizeToLargest = true; }
+	virtual QSize sizeHint() const override;
+};

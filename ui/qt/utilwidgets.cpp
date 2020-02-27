@@ -139,3 +139,57 @@ void ClickableLabel::setTooltipFunction(const function<void()>& func)
 	m_tooltip = func;
 	m_hoverTimer->stop();
 }
+
+
+ModeLabel::ModeLabel(const QString& text, const function<void()>& func):
+	QLabel(text), m_onClick(func)
+{
+	QPalette pal = palette();
+	pal.setColor(QPalette::WindowText, Theme::disabled);
+	setPalette(pal);
+	setFont(fontOfRelativeSize(1.0f, QFont::Light));
+	setCursor(Qt::PointingHandCursor);
+}
+
+
+void ModeLabel::mousePressEvent(QMouseEvent*)
+{
+	m_onClick();
+}
+
+
+void ModeLabel::enterEvent(QEvent*)
+{
+	QPalette pal = palette();
+	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::content);
+	setPalette(pal);
+}
+
+
+void ModeLabel::leaveEvent(QEvent*)
+{
+	QPalette pal = palette();
+	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::disabled);
+	setPalette(pal);
+}
+
+
+void ModeLabel::setActive(bool active)
+{
+	m_active = active;
+	setFont(fontOfRelativeSize(1.0f, active ? QFont::Bold : QFont::Light));
+	QPalette pal = palette();
+	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::disabled);
+	setPalette(pal);
+}
+
+
+QSize ModeLabel::sizeHint() const
+{
+	if (m_sizeToLargest)
+	{
+		QFontMetrics metrics(fontOfRelativeSize(1.0f, QFont::Bold));
+		return metrics.boundingRect(text()).size();
+	}
+	return QLabel::sizeHint();
+}

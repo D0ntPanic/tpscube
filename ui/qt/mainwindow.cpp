@@ -8,6 +8,7 @@
 #include "topbar.h"
 #include "timermode.h"
 #include "historymode.h"
+#include "graphmode.h"
 #include "settingsmode.h"
 #include "bluetoothdialog.h"
 #include "solvedialog.h"
@@ -50,6 +51,9 @@ MainWindow::MainWindow()
 
 	m_historyMode = new HistoryMode(this);
 	m_historyModeIndex = m_stackedWidget->addWidget(m_historyMode);
+
+	m_graphMode = new GraphMode(this);
+	m_graphModeIndex = m_stackedWidget->addWidget(m_graphMode);
 
 	m_settingsMode = new SettingsMode(this);
 	m_settingsModeIndex = m_stackedWidget->addWidget(m_settingsMode);
@@ -136,6 +140,8 @@ void MainWindow::showHistory()
 
 void MainWindow::showGraphs()
 {
+	m_graphMode->updateGraph();
+	m_stackedWidget->setCurrentIndex(m_graphModeIndex);
 }
 
 

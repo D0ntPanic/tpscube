@@ -4,21 +4,6 @@
 #include "utilwidgets.h"
 #include "bluetoothcube.h"
 
-class ModeLabel: public QLabel
-{
-	bool m_active = false;
-	std::function<void()> m_onClick;
-
-protected:
-	virtual void mousePressEvent(QMouseEvent* event);
-	virtual void enterEvent(QEvent* event);
-	virtual void leaveEvent(QEvent* event);
-
-public:
-	ModeLabel(const QString& text, const std::function<void()>& func);
-	void setActive(bool active);
-};
-
 class TopBar: public QWidget
 {
 	Q_OBJECT
