@@ -21,6 +21,7 @@ SOURCES -= ui/qt/qrc_tpscube.cpp
 
 INCLUDEPATH += lib
 INCLUDEPATH += ui/qt
+INCLUDEPATH += include
 LIBS += -lleveldb
 
 macx {
