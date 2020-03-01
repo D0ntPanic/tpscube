@@ -45,10 +45,16 @@ class GraphMode: public QWidget
 	ModeLabel* m_thisMonth;
 	ModeLabel* m_thisWeek;
 
+	ModeLabel* m_ao5;
+	ModeLabel* m_ao12;
+	ModeLabel* m_ao100;
+
 	GraphPhase m_phase = GRAPHPHASE_ALL;
 	GraphStatistic m_stat = GRAPHSTAT_TIME;
 	int64_t m_timePeriod = -1;
+	size_t m_averageSize = 5;
 
+	QLabel* m_graphLabel;
 	GraphWidget* m_graph;
 
 	void showEntireSolve();
@@ -69,6 +75,10 @@ class GraphMode: public QWidget
 	void showThisQuarter();
 	void showThisMonth();
 	void showThisWeek();
+
+	void showAverageOf5();
+	void showAverageOf12();
+	void showAverageOf100();
 
 	float valueForPhase(float* values, GraphPhase phase);
 	void timeForAllPhases(const Solve& solve, float* values);

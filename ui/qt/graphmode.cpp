@@ -111,7 +111,29 @@ GraphMode::GraphMode(QWidget *parent) : QWidget(parent)
 	leftAreaScroll->verticalScrollBar()->setStyleSheet("QScrollBar { width:0px; }");
 	layout->addWidget(leftAreaScroll);
 
-	QVBoxLayout *rightAreaLayout = new QVBoxLayout();
+	QVBoxLayout* rightAreaLayout = new QVBoxLayout();
+	m_graphLabel = new QLabel();
+	m_graphLabel->setFont(fontOfRelativeSize(1.75f, QFont::Thin));
+	m_graphLabel->setAlignment(Qt::AlignCenter);
+	QPalette pal(m_graphLabel->palette());
+	pal.setColor(QPalette::Text, Theme::blue);
+	m_graphLabel->setPalette(pal);
+	rightAreaLayout->addWidget(m_graphLabel);
+
+	QHBoxLayout* avgLayout = new QHBoxLayout();
+	avgLayout->addStretch(1);
+	m_ao5 = new ModeLabel("Average of 5", [this]() { showAverageOf5(); });
+	avgLayout->addWidget(m_ao5);
+	avgLayout->addSpacing(24);
+	m_ao12 = new ModeLabel("Average of 12", [this]() { showAverageOf12(); });
+	avgLayout->addWidget(m_ao12);
+	avgLayout->addSpacing(24);
+	m_ao100 = new ModeLabel("Average of 100", [this]() { showAverageOf100(); });
+	avgLayout->addWidget(m_ao100);
+	avgLayout->addStretch(1);
+	rightAreaLayout->addLayout(avgLayout);
+	m_ao5->setActive(true);
+
 	m_graph = new GraphWidget();
 	rightAreaLayout->addWidget(m_graph, 1);
 	layout->addLayout(rightAreaLayout, 1);
@@ -314,6 +336,36 @@ void GraphMode::showThisWeek()
 	m_thisMonth->setActive(false);
 	m_thisWeek->setActive(true);
 	m_timePeriod = 7 * 24 * 3600;
+	updateGraph();
+}
+
+
+void GraphMode::showAverageOf5()
+{
+	m_ao5->setActive(true);
+	m_ao12->setActive(false);
+	m_ao100->setActive(false);
+	m_averageSize = 5;
+	updateGraph();
+}
+
+
+void GraphMode::showAverageOf12()
+{
+	m_ao5->setActive(false);
+	m_ao12->setActive(true);
+	m_ao100->setActive(false);
+	m_averageSize = 12;
+	updateGraph();
+}
+
+
+void GraphMode::showAverageOf100()
+{
+	m_ao5->setActive(false);
+	m_ao12->setActive(false);
+	m_ao100->setActive(true);
+	m_averageSize = 100;
 	updateGraph();
 }
 
@@ -575,6 +627,8 @@ void GraphMode::updateGraph()
 				else
 				{
 					plot.value[0] = etpsForPhase(j, m_phase);
+					if (m_phase == GRAPHPHASE_ALL)
+						plot.value[0] /= 4.0f;
 				}
 				break;
 			case GRAPHSTAT_TPS:
@@ -618,15 +672,80 @@ void GraphMode::updateGraph()
 		}
 	}
 
-	if (splitsRequired && (solvesWithoutSplits >= 2))
+	if (splitsRequired && (solvesWithoutSplits > (int)m_averageSize))
 		m_graph->setMessage("This graph requires solves with split timing.");
-	else if (fullMovesRequired && (solvesWithoutMoves >= 2))
+	else if (fullMovesRequired && (solvesWithoutMoves > (int)m_averageSize))
 		m_graph->setMessage("This graph requires solves with a Bluetooth cube.");
 	else
 		m_graph->setMessage("Not enough data to display this graph.");
 
+	QString title;
+	switch (m_stat)
+	{
+	case GRAPHSTAT_TIME:
+		title = "Time for ";
+		m_graph->setYAxisLabel("Time (Seconds)");
+		m_graph->setValuesAreTimes(true);
+		break;
+	case GRAPHSTAT_MOVES:
+		title = "Move Count for ";
+		m_graph->setYAxisLabel("Move Count");
+		m_graph->setValuesAreTimes(false);
+		break;
+	case GRAPHSTAT_IDLE:
+		title = "Idle Time for ";
+		m_graph->setYAxisLabel("Idle Time (Seconds)");
+		m_graph->setValuesAreTimes(true);
+		break;
+	case GRAPHSTAT_ETPS:
+		title = "Execution Turns per Second for ";
+		m_graph->setYAxisLabel("Execution Turns per Second");
+		m_graph->setValuesAreTimes(false);
+		break;
+	case GRAPHSTAT_TPS:
+		title = "Turns per Second for ";
+		m_graph->setYAxisLabel("Turns per Second");
+		m_graph->setValuesAreTimes(false);
+		break;
+	default:
+		break;
+	}
+
+	vector<QColor> colors;
+	switch (m_phase)
+	{
+	case GRAPHPHASE_ALL:
+		title += "Entire Solve";
+		colors = vector<QColor> { Theme::blue };
+		break;
+	case GRAPHPHASE_BREAKDOWN:
+		title += "All Phases";
+		colors = vector<QColor> { Theme::red, Theme::blue, Theme::yellow, Theme::green };
+		break;
+	case GRAPHPHASE_CROSS:
+		title += "Cross Phase";
+		colors = vector<QColor> { Theme::red };
+		break;
+	case GRAPHPHASE_F2L:
+		title += "F2L Phase";
+		colors = vector<QColor> { Theme::blue };
+		break;
+	case GRAPHPHASE_OLL:
+		title += "OLL Phase";
+		colors = vector<QColor> { Theme::yellow };
+		break;
+	case GRAPHPHASE_PLL:
+		title += "PLL Phase";
+		colors = vector<QColor> { Theme::green };
+		break;
+	default:
+		break;
+	}
+
+	m_graphLabel->setText(title);
+
 	if (m_phase == GRAPHPHASE_BREAKDOWN)
-		m_graph->setPlots(plots, 4);
+		m_graph->setPlots(plots, 4, colors, m_averageSize);
 	else
-		m_graph->setPlots(plots, 1);
+		m_graph->setPlots(plots, 1, colors, m_averageSize);
 }

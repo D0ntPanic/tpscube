@@ -146,6 +146,7 @@ ModeLabel::ModeLabel(const QString& text, const function<void()>& func):
 {
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, Theme::disabled);
+	pal.setColor(QPalette::Text, Theme::disabled);
 	setPalette(pal);
 	setFont(fontOfRelativeSize(1.0f, QFont::Light));
 	setCursor(Qt::PointingHandCursor);
@@ -162,6 +163,7 @@ void ModeLabel::enterEvent(QEvent*)
 {
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::content);
+	pal.setColor(QPalette::Text, m_active ? Theme::green : Theme::content);
 	setPalette(pal);
 }
 
@@ -170,6 +172,7 @@ void ModeLabel::leaveEvent(QEvent*)
 {
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::disabled);
+	pal.setColor(QPalette::Text, m_active ? Theme::green : Theme::disabled);
 	setPalette(pal);
 }
 
@@ -180,6 +183,7 @@ void ModeLabel::setActive(bool active)
 	setFont(fontOfRelativeSize(1.0f, active ? QFont::Bold : QFont::Light));
 	QPalette pal = palette();
 	pal.setColor(QPalette::WindowText, m_active ? Theme::green : Theme::disabled);
+	pal.setColor(QPalette::Text, m_active ? Theme::green : Theme::disabled);
 	setPalette(pal);
 }
 
