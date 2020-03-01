@@ -37,6 +37,7 @@ public:
 	TopBar(QWidget* parent);
 
 	void setBluetoothCube(const std::shared_ptr<BluetoothCube>& cube);
+	bool isConnectedToBluetoothCube() const;
 
 signals:
 	void showTimer();
@@ -46,4 +47,5 @@ signals:
 	void showSettings();
 	void connectToBluetoothCube();
 	void disconnectFromBluetoothCube();
+	void bluetoothCubeError(QString name, QString msg);
 };

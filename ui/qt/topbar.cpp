@@ -85,9 +85,7 @@ void TopBar::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 		m_bluetoothCubeClient = make_shared<BluetoothCubeClient>();
 		string name = m_bluetoothCube->GetDevice()->GetName();
 		m_bluetoothCubeClient->SetErrorCallback([=](const string& msg) {
-			QMessageBox::critical(this, QString::fromStdString(name),
-				QString::fromStdString(msg));
-			emit disconnectFromBluetoothCube();
+			emit bluetoothCubeError(QString::fromStdString(name), QString::fromStdString(msg));
 		});
 		m_bluetoothCube->AddClient(m_bluetoothCubeClient);
 
@@ -113,6 +111,14 @@ void TopBar::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 		m_bluetoothName->hide();
 		m_bluetoothUpdateTimer->stop();
 	}
+}
+
+
+bool TopBar::isConnectedToBluetoothCube() const
+{
+	if (m_bluetoothCube)
+		return true;
+	return false;
 }
 
 

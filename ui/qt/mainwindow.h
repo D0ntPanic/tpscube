@@ -34,6 +34,7 @@ private slots:
 	void showSettings();
 	void connectToBluetoothCube();
 	void disconnectFromBluetoothCube();
+	void bluetoothCubeError(QString name, QString msg);
 	void paste();
 
 protected:

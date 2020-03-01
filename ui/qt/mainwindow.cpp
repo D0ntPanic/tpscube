@@ -1,5 +1,6 @@
 #include <QtWidgets/QVBoxLayout>
 #include <QtWidgets/QAction>
+#include <QtWidgets/QMessageBox>
 #include <QtGui/QKeyEvent>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
@@ -40,6 +41,7 @@ MainWindow::MainWindow()
 	connect(m_topBar, &TopBar::showSettings, this, &MainWindow::showSettings);
 	connect(m_topBar, &TopBar::connectToBluetoothCube, this, &MainWindow::connectToBluetoothCube);
 	connect(m_topBar, &TopBar::disconnectFromBluetoothCube, this, &MainWindow::disconnectFromBluetoothCube);
+	connect(m_topBar, &TopBar::bluetoothCubeError, this, &MainWindow::bluetoothCubeError, Qt::QueuedConnection);
 
 	m_stackedWidget = new QStackedWidget();
 	containerLayout->addWidget(m_stackedWidget, 1);
@@ -171,6 +173,15 @@ void MainWindow::disconnectFromBluetoothCube()
 {
 	m_timerMode->setBluetoothCube(shared_ptr<BluetoothCube>());
 	m_topBar->setBluetoothCube(shared_ptr<BluetoothCube>());
+}
+
+
+void MainWindow::bluetoothCubeError(QString name, QString msg)
+{
+	if (!m_topBar->isConnectedToBluetoothCube())
+		return;
+	disconnectFromBluetoothCube();
+	QMessageBox::critical(this, name, msg);
 }
 
 

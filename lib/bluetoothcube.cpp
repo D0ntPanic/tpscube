@@ -400,8 +400,6 @@ void GANCube::Update()
 
 	ReadLastMoveData([this](const GANCubeLastMoveData& lastMove) {
 			m_dev->ReadEncodedCharacteristic(m_timingCharacteristic, [=](const std::vector<uint8_t>& data) {
-					m_updateInProgress = false;
-
 					if (m_hasOrientation)
 					{
 						// Orientation data, if the cube has one, is a quaternion without the
@@ -419,7 +417,10 @@ void GANCube::Update()
 					}
 
 					if (lastMove.moveCount == m_lastMoveCount)
+					{
+						m_updateInProgress = false;
 						return;
+					}
 
 					if (data.size() < 19)
 					{
@@ -515,6 +516,8 @@ void GANCube::Update()
 
 					m_lastMoveCount = lastMove.moveCount;
 					m_lastMoveTime = curTime;
+
+					m_updateInProgress = false;
 				});
 		});
 }
