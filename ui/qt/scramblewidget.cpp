@@ -13,6 +13,77 @@ int QtRandomSource::Next(int range)
 }
 
 
+RescrambleThread::RescrambleThread(QObject* owner): QThread(owner)
+{
+}
+
+
+void RescrambleThread::run()
+{
+	while (m_running)
+	{
+		m_mutex.lock();
+		if (m_running && !m_requestPending)
+			m_cond.wait(&m_mutex);
+
+		if (!m_running)
+		{
+			m_mutex.unlock();
+			break;
+		}
+		if (!m_requestPending)
+		{
+			m_mutex.unlock();
+			continue;
+		}
+
+		CubeMoveSequence scramble = m_inScramble;
+		Cube3x3 state = m_initialState;
+		m_requestPending = false;
+
+		m_mutex.unlock();
+
+		CubeMoveSequence inverted = state.Solve();
+		state = Cube3x3();
+		state.Apply(inverted);
+		state.Apply(scramble);
+		CubeMoveSequence result = state.Solve().Inverted();
+
+		m_mutex.lock();
+		if (!m_requestPending)
+		{
+			m_outScramble = result;
+			emit rescrambleGenerated();
+		}
+		m_mutex.unlock();
+	}
+}
+
+
+void RescrambleThread::stop()
+{
+	m_running = false;
+	m_cond.notify_all();
+}
+
+
+void RescrambleThread::requestRescramble(const Cube3x3& state, const CubeMoveSequence& scramble)
+{
+	QMutexLocker lock(&m_mutex);
+	m_requestPending = true;
+	m_inScramble = scramble;
+	m_initialState = state;
+	m_cond.notify_one();
+}
+
+
+CubeMoveSequence RescrambleThread::rescramble()
+{
+	QMutexLocker lock(&m_mutex);
+	return m_outScramble;
+}
+
+
 ScrambleWidget::ScrambleWidget(QWidget* parent): QLabel(parent)
 {
 	setFont(QFont("Open Sans", 26, QFont::Light));
@@ -26,6 +97,10 @@ ScrambleWidget::ScrambleWidget(QWidget* parent): QLabel(parent)
 	m_bluetoothUpdateTimer->setSingleShot(false);
 	m_bluetoothUpdateTimer->setInterval(100);
 	connect(m_bluetoothUpdateTimer, &QTimer::timeout, this, &ScrambleWidget::updateBluetoothScramble);
+
+	m_thread = new RescrambleThread(this);
+	connect(m_thread, &RescrambleThread::rescrambleGenerated, this, &ScrambleWidget::rescrambleGenerated);
+	m_thread->start();
 }
 
 
@@ -33,6 +108,8 @@ ScrambleWidget::~ScrambleWidget()
 {
 	if (m_bluetoothCube && m_bluetoothCubeClient)
 		m_bluetoothCube->RemoveClient(m_bluetoothCubeClient);
+	m_thread->stop();
+	m_thread->wait();
 }
 
 
@@ -106,6 +183,7 @@ void ScrambleWidget::updateText()
 void ScrambleWidget::setScramble(const CubeMoveSequence& scramble)
 {
 	m_scramble = scramble;
+	m_originalScramble = scramble;
 	updateText();
 
 	if (m_bluetoothCubeClient)
@@ -127,6 +205,7 @@ void ScrambleWidget::setScramble(const CubeMoveSequence& scramble)
 void ScrambleWidget::invalidateScramble()
 {
 	m_scramble.moves.clear();
+	m_originalScramble.moves.clear();
 	updateText();
 }
 
@@ -174,6 +253,8 @@ void ScrambleWidget::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 		else
 		{
 			m_currentScrambleMove = -1;
+			if (m_originalScramble.moves.size() != 0)
+				m_thread->requestRescramble(m_bluetoothCube->GetCubeState(), m_originalScramble);
 		}
 		updateText();
 
@@ -181,6 +262,7 @@ void ScrambleWidget::setBluetoothCube(const shared_ptr<BluetoothCube>& cube)
 	}
 	else
 	{
+		m_scramble = m_originalScramble;
 		m_currentScrambleMove = -1;
 		updateText();
 
@@ -271,10 +353,15 @@ void ScrambleWidget::updateBluetoothScramble()
 		{
 			if (m_bluetoothCube->GetCubeState().IsSolved())
 			{
+				m_scramble = m_originalScramble;
 				m_currentScrambleMove = 0;
 				m_currentScrambleSubMove = 0;
 				m_fixMoves.moves.clear();
 				updateText();
+			}
+			else if ((m_originalScramble.moves.size() != 0) && (moves.moves.size() != 0))
+			{
+				m_thread->requestRescramble(m_bluetoothCube->GetCubeState(), m_originalScramble);
 			}
 			return;
 		}
@@ -304,7 +391,25 @@ void ScrambleWidget::updateBluetoothScramble()
 
 		if (m_currentScrambleMove >= (int)m_scramble.moves.size())
 			emit scrambleComplete();
+		else if (m_fixMoves.moves.size() > 4)
+		{
+			m_currentScrambleMove = -1;
+			m_thread->requestRescramble(m_bluetoothCube->GetCubeState(), m_originalScramble);
+		}
 
 		updateText();
 	}
+}
+
+
+void ScrambleWidget::rescrambleGenerated()
+{
+	if (m_originalScramble.moves.size() == 0)
+		return;
+
+	m_scramble = m_thread->rescramble();
+	m_currentScrambleMove = 0;
+	m_currentScrambleSubMove = 0;
+	m_fixMoves.moves.clear();
+	updateText();
 }
