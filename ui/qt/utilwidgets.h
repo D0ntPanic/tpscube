@@ -40,10 +40,10 @@ class ClickableLabel: public QLabel
 	QTimer* m_hoverTimer;
 
 protected:
-	virtual void mousePressEvent(QMouseEvent* event);
-	virtual void mouseMoveEvent(QMouseEvent* event);
-	virtual void enterEvent(QEvent* event);
-	virtual void leaveEvent(QEvent* event);
+	virtual void mousePressEvent(QMouseEvent* event) override;
+	virtual void mouseMoveEvent(QMouseEvent* event) override;
+	virtual void enterEvent(QEvent* event) override;
+	virtual void leaveEvent(QEvent* event) override;
 
 private slots:
 	void hoverTooltip();
@@ -63,9 +63,9 @@ class ModeLabel: public QLabel
 	std::function<void()> m_onClick;
 
 protected:
-	virtual void mousePressEvent(QMouseEvent* event);
-	virtual void enterEvent(QEvent* event);
-	virtual void leaveEvent(QEvent* event);
+	virtual void mousePressEvent(QMouseEvent* event) override;
+	virtual void enterEvent(QEvent* event) override;
+	virtual void leaveEvent(QEvent* event) override;
 
 public:
 	ModeLabel(const QString& text, const std::function<void()>& func);
