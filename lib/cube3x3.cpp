@@ -863,10 +863,13 @@ void Cube3x3::SearchPhase1(const Cube3x3& initialState, const Phase1IndexCube& c
 		{
 			// If the last move is not R, R', L, L', F, F', B, or B', the search will be repeated in a
 			// different phase 2 search. Ignore sequences that fail this check.
-			CubeMove lastMove = moves.moves[moves.count - 1];
-			if ((lastMove != MOVE_R) && (lastMove != MOVE_Rp) && (lastMove != MOVE_L) && (lastMove != MOVE_Lp) &&
-				(lastMove != MOVE_F) && (lastMove != MOVE_Fp) && (lastMove != MOVE_B) && (lastMove != MOVE_Bp))
-				return;
+			if (moves.count > 0)
+			{
+				CubeMove lastMove = moves.moves[moves.count - 1];
+				if ((lastMove != MOVE_R) && (lastMove != MOVE_Rp) && (lastMove != MOVE_L) && (lastMove != MOVE_Lp) &&
+					(lastMove != MOVE_F) && (lastMove != MOVE_Fp) && (lastMove != MOVE_B) && (lastMove != MOVE_Bp))
+					return;
+			}
 
 			// Translate cube state into phase 2 index form
 			Cube3x3 cubeState = initialState;
@@ -1000,7 +1003,7 @@ CubeMoveSequence Cube3x3::Solve(bool optimal)
 	SearchMoveSequence moves;
 	moves.count = 0;
 
-	for (int depth = 1; (depth <= MAX_3x3_PHASE_1_MOVES) && (depth <= maxMoves); depth++)
+	for (int depth = 0; (depth <= MAX_3x3_PHASE_1_MOVES) && (depth <= maxMoves); depth++)
 		SearchPhase1(*this, cube, depth, moves, bestSolution, maxMoves, optimal);
 	return bestSolution;
 }

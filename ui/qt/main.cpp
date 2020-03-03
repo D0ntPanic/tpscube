@@ -192,6 +192,37 @@ int Cube3x3SolveTest()
 }
 
 
+int Cube3x3IntermediateSolveTest()
+{
+	SimpleSeededRandomSource rng;
+	Cube3x3 cube;
+	cube.GenerateRandomState(rng);
+	CubeMoveSequence moves = cube.Solve();
+
+	for (auto i : moves.moves)
+	{
+		std::chrono::time_point<std::chrono::steady_clock> start = std::chrono::steady_clock::now();
+		cube.Move(i);
+		CubeMoveSequence solution = cube.Solve();
+		std::chrono::time_point<std::chrono::steady_clock> end = std::chrono::steady_clock::now();
+		int ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+		fprintf(stderr, "3x3 solve: %d ms for solution in %d moves (%s)\n", ms, (int)solution.moves.size(), solution.ToString().c_str());
+
+		Cube3x3 initial = cube;
+		Cube3x3 solved = cube;
+		for (auto j : solution.moves)
+			solved.Move(j);
+		if (!solved.IsSolved())
+		{
+			fprintf(stderr, "NOT SOLVED\n");
+			Cube3x3Faces(initial).PrintDebugState();
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
 int RunTest()
 {
 	if (Cube3x3BasicMoveTest<Cube3x3Faces>("3x3"))
@@ -203,6 +234,8 @@ int RunTest()
 	if (Cube3x3IndexTest())
 		return 1;
 	if (Cube3x3SolveTest())
+		return 1;
+	if (Cube3x3IntermediateSolveTest())
 		return 1;
 	return 0;
 }

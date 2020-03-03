@@ -43,7 +43,7 @@ void RescrambleThread::run()
 
 		m_mutex.unlock();
 
-		CubeMoveSequence inverted = state.Solve();
+		CubeMoveSequence inverted = state.Solve(false);
 		state = Cube3x3();
 		state.Apply(inverted);
 		state.Apply(scramble);
