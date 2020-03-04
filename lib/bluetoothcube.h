@@ -79,8 +79,6 @@ public:
 
 	virtual Cube3x3 GetCubeState() = 0;
 	virtual void ResetToSolved() = 0;
-	virtual bool HasOrientation() = 0;
-	virtual Quaternion GetOrientation() = 0;
 	virtual BatteryState GetBatteryState() = 0;
 
 	virtual void Update() = 0;
@@ -98,8 +96,6 @@ class GANCube: public BluetoothCube
 {
 	Cube3x3 m_cube;
 	BatteryState m_battery;
-	bool m_hasOrientation = false;
-	Quaternion m_orientation = {0, 0, 0, 1};
 
 	uint8_t m_lastMoveCount;
 	bool m_firstMove = true;
@@ -142,8 +138,6 @@ public:
 
 	virtual Cube3x3 GetCubeState() override;
 	virtual void ResetToSolved() override;
-	virtual bool HasOrientation() override;
-	virtual Quaternion GetOrientation() override;
 	virtual BatteryState GetBatteryState() override;
 
 	virtual void Update() override;

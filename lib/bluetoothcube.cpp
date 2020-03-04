@@ -322,15 +322,9 @@ void GANCube::Connected()
 									// Get the initial cube state
 									ReadCubeState([this](Cube3x3 cube) {
 										m_cube = cube;
-										// Read one move data poll to get the initial move count and
-										// see if the cube has orientation data or not
+										// Read one move data poll to get the initial move count
 										ReadLastMoveData([this](const GANCubeLastMoveData& data) {
-											if ((data.orientation[0] != 0) ||
-												(data.orientation[1] != 0) ||
-												(data.orientation[2] != 0))
-												m_hasOrientation = true;
 											m_lastMoveCount = data.moveCount;
-
 											Ready();
 										});
 									});
@@ -352,18 +346,6 @@ void GANCube::ResetToSolved()
 {
 	m_resetRequested = true;
 	m_cube = Cube3x3();
-}
-
-
-bool GANCube::HasOrientation()
-{
-	return m_hasOrientation;
-}
-
-
-Quaternion GANCube::GetOrientation()
-{
-	return m_orientation;
 }
 
 
@@ -400,22 +382,6 @@ void GANCube::Update()
 
 	ReadLastMoveData([this](const GANCubeLastMoveData& lastMove) {
 			m_dev->ReadEncodedCharacteristic(m_timingCharacteristic, [=](const std::vector<uint8_t>& data) {
-					if (m_hasOrientation)
-					{
-						// Orientation data, if the cube has one, is a quaternion without the
-						// w component encoded (calculate this from the others).
-						m_orientation.x = (float)lastMove.orientation[0] / 16384.0f;
-						m_orientation.y = (float)lastMove.orientation[1] / 16384.0f;
-						m_orientation.z = (float)lastMove.orientation[2] / 16384.0f;
-						m_orientation.w = 1.0f - (m_orientation.x * m_orientation.x +
-							m_orientation.y * m_orientation.y +
-							m_orientation.z * m_orientation.z);
-						if (m_orientation.w > 0)
-							m_orientation.w = sqrt(m_orientation.w);
-						else
-							m_orientation.w = 0;
-					}
-
 					if (lastMove.moveCount == m_lastMoveCount)
 					{
 						m_updateInProgress = false;
