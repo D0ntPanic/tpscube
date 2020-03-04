@@ -15,6 +15,8 @@
 #define MAX_3x3_PHASE_2_MOVES 18
 #define MAX_3X3_SOLUTION_MOVES (MAX_3x3_PHASE_1_MOVES + MAX_3x3_PHASE_2_MOVES)
 
+#define MIN_3X3_EFFICIENT_MOVES 18
+
 // A CubePiece is an identification of a piece (CubeCorner or CubeEdge)
 // and an orientation (flip or twist from solved state). A full cube state
 // can be represented as the pieces and orientations making up the cube
@@ -30,6 +32,13 @@ struct CubePiece
 };
 
 class Cube3x3Faces;
+
+enum SolutionSearchType
+{
+	SOLUTION_SEARCH_FAST = 0, // Stop at first solution, does not try to find minimum moves
+	SOLUTION_SEARCH_EFFICIENT = 1, // Stops when solution is 18 moves or less
+	SOLUTION_SEARCH_FULL = 2 // Finds the solution with the fewest moves
+};
 
 // Representation of a 3x3x3 cube using piece format
 class Cube3x3
@@ -94,9 +103,9 @@ class Cube3x3
 	};
 
 	static void SearchPhase1(const Cube3x3& initialState, const Phase1IndexCube& cube, int depth,
-		SearchMoveSequence& moves, CubeMoveSequence& bestSolution, int& maxMoves, bool optimal);
+		SearchMoveSequence& moves, CubeMoveSequence& bestSolution, int& maxMoves, SolutionSearchType searchType);
 	static void SearchPhase2(const Phase2IndexCube& cube, int depth, SearchMoveSequence& moves,
-		CubeMoveSequence& bestSolution, int& maxMoves, bool optimal);
+		CubeMoveSequence& bestSolution, int& maxMoves, SolutionSearchType searchType);
 
 public:
 	Cube3x3();
@@ -128,7 +137,7 @@ public:
 
 	// Generates moves sequence that will solve the current cube state. If optimal is false, return
 	// the first found valid solution, which will be at most 30 moves, for a quicker result.
-	CubeMoveSequence Solve(bool optimal = true);
+	CubeMoveSequence Solve(SolutionSearchType searchType = SOLUTION_SEARCH_EFFICIENT);
 };
 
 // Representation of a 3x3x3 cube using face color format
@@ -162,7 +171,7 @@ public:
 	bool operator==(const Cube3x3Faces& cube) const;
 	bool operator!=(const Cube3x3Faces& cube) const;
 
-	CubeMoveSequence Solve(bool optimal = true);
+	CubeMoveSequence Solve(SolutionSearchType = SOLUTION_SEARCH_EFFICIENT);
 
 	void PrintDebugState() const;
 };
