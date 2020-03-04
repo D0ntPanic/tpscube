@@ -51,7 +51,7 @@ BluetoothDeviceWidget::~BluetoothDeviceWidget()
 
 void BluetoothDeviceWidget::discoveredDevice(const QBluetoothDeviceInfo& device)
 {
-	if (m_devices.count(device.deviceUuid()) != 0)
+	if (m_devices.count(device.name()) != 0)
 		return;
 
 	if (device.coreConfigurations() & QBluetoothDeviceInfo::LowEnergyCoreConfiguration)
@@ -59,7 +59,7 @@ void BluetoothDeviceWidget::discoveredDevice(const QBluetoothDeviceInfo& device)
 		BluetoothCubeType* cubeType = BluetoothCubeType::GetTypeForName(device.name().toStdString());
 		if (cubeType)
 		{
-			m_devices.insert(device.deviceUuid());
+			m_devices.insert(device.name());
 			ClickableLabel* label = new ClickableLabel(device.name(), Theme::content, Theme::blue,
 				[=]() {
 					m_selectedDevice = device;

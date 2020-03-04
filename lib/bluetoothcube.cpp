@@ -364,6 +364,7 @@ void GANCube::Update()
 
 	if (m_resetRequested)
 	{
+		m_resetRequested = false;
 		ResetCubeState([this]() {
 			m_cube = Cube3x3();
 			m_updateInProgress = false;
@@ -381,13 +382,13 @@ void GANCube::Update()
 	}
 
 	ReadLastMoveData([this](const GANCubeLastMoveData& lastMove) {
-			m_dev->ReadEncodedCharacteristic(m_timingCharacteristic, [=](const std::vector<uint8_t>& data) {
-					if (lastMove.moveCount == m_lastMoveCount)
-					{
-						m_updateInProgress = false;
-						return;
-					}
+			if (lastMove.moveCount == m_lastMoveCount)
+			{
+				m_updateInProgress = false;
+				return;
+			}
 
+			m_dev->ReadEncodedCharacteristic(m_timingCharacteristic, [=](const std::vector<uint8_t>& data) {
 					if (data.size() < 19)
 					{
 						m_dev->Error("Invalid timestamp data");

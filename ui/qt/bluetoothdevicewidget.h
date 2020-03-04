@@ -15,7 +15,7 @@ class BluetoothDeviceWidget: public QWidget
 	Q_OBJECT
 
 	QBluetoothDeviceDiscoveryAgent* m_discovery;
-	std::set<QBluetoothUuid> m_devices;
+	std::set<QString> m_devices;
 	QBluetoothDeviceInfo m_selectedDevice;
 	BluetoothCubeType* m_selectedCubeType;
 
