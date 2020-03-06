@@ -3,6 +3,19 @@
 
 using namespace std;
 
+int Cube3x3::m_cornerOrientationMoveTable[CORNER_ORIENTATION_INDEX_COUNT][MOVE_D2 + 1];
+int Cube3x3::m_cornerPermutationMoveTable[CORNER_PERMUTATION_INDEX_COUNT][MOVE_D2 + 1];
+int Cube3x3::m_edgeOrientationMoveTable[EDGE_ORIENTATION_INDEX_COUNT][MOVE_D2 + 1];
+int Cube3x3::m_equatorialEdgeSliceMoveTable[EDGE_SLICE_INDEX_COUNT][MOVE_D2 + 1];
+int Cube3x3::m_phase2EdgePermutationMoveTable[PHASE_2_EDGE_PERMUTATION_INDEX_COUNT][MOVE_D2 + 1];
+int Cube3x3::m_phase2EquatorialEdgePermutationMoveTable[PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT][MOVE_D2 + 1];
+uint8_t Cube3x3::m_cornerOrientationPruneTable[CORNER_ORIENTATION_INDEX_COUNT][EDGE_SLICE_INDEX_COUNT];
+uint8_t Cube3x3::m_edgeOrientationPruneTable[EDGE_ORIENTATION_INDEX_COUNT][EDGE_SLICE_INDEX_COUNT];
+uint32_t Cube3x3::m_combinedOrientationPruneTable[CORNER_ORIENTATION_INDEX_COUNT][EDGE_ORIENTATION_INDEX_COUNT / 8];
+uint8_t Cube3x3::m_cornerPermutationPruneTable[CORNER_PERMUTATION_INDEX_COUNT][PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
+uint8_t Cube3x3::m_phase2EdgePermutationPruneTable[PHASE_2_EDGE_PERMUTATION_INDEX_COUNT][PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
+uint8_t Cube3x3::m_phase1CornerPermutationPruneTable[CORNER_PERMUTATION_INDEX_COUNT];
+
 int g_cornerOrientationMoveTable[CORNER_ORIENTATION_INDEX_COUNT][MOVE_D2 + 1];
 int g_cornerPermutationMoveTable[CORNER_PERMUTATION_INDEX_COUNT][MOVE_D2 + 1];
 int g_edgeOrientationMoveTable[EDGE_ORIENTATION_INDEX_COUNT][MOVE_D2 + 1];
@@ -12,6 +25,7 @@ int g_phase2EquatorialEdgePermutationMoveTable[PHASE_2_EQUATORIAL_EDGE_PERMUTATI
 
 int g_cornerOrientationPruneTable[CORNER_ORIENTATION_INDEX_COUNT][EDGE_SLICE_INDEX_COUNT];
 int g_edgeOrientationPruneTable[EDGE_ORIENTATION_INDEX_COUNT][EDGE_SLICE_INDEX_COUNT];
+int g_combinedOrientationPruneTable[CORNER_ORIENTATION_INDEX_COUNT][EDGE_ORIENTATION_INDEX_COUNT];
 int g_cornerPermutationPruneTable[CORNER_PERMUTATION_INDEX_COUNT][PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
 int g_phase2EdgePermutationPruneTable[PHASE_2_EDGE_PERMUTATION_INDEX_COUNT][PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
 
@@ -40,6 +54,9 @@ void InitTables()
 	for (int i = 0; i < EDGE_ORIENTATION_INDEX_COUNT; i++)
 		for (int j = 0; j < EDGE_SLICE_INDEX_COUNT; j++)
 			g_edgeOrientationPruneTable[i][j] = -1;
+	for (int i = 0; i < CORNER_ORIENTATION_INDEX_COUNT; i++)
+		for (int j = 0; j < EDGE_ORIENTATION_INDEX_COUNT; j++)
+			g_combinedOrientationPruneTable[i][j] = -1;
 	for (int i = 0; i < CORNER_PERMUTATION_INDEX_COUNT; i++)
 		for (int j = 0; j < PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT; j++)
 			g_cornerPermutationPruneTable[i][j] = -1;
@@ -48,6 +65,7 @@ void InitTables()
 			g_phase2EdgePermutationPruneTable[i][j] = -1;
 	g_cornerOrientationPruneTable[0][0] = 0;
 	g_edgeOrientationPruneTable[0][0] = 0;
+	g_combinedOrientationPruneTable[0][0] = 0;
 	g_cornerPermutationPruneTable[0][0] = 0;
 	g_phase2EdgePermutationPruneTable[0][0] = 0;
 }
@@ -173,6 +191,21 @@ int GetEdgeOrientationPruneTableFillCount()
 }
 
 
+int GetCombinedOrientationPruneTableFillCount()
+{
+	int filled = 0;
+	for (int i = 0; i < CORNER_ORIENTATION_INDEX_COUNT; i++)
+	{
+		for (int j = 0; j < EDGE_ORIENTATION_INDEX_COUNT; j++)
+		{
+			if (g_combinedOrientationPruneTable[i][j] != -1)
+				filled++;
+		}
+	}
+	return filled;
+}
+
+
 int GetCornerPermutationPruneTableFillCount()
 {
 	int filled = 0;
@@ -231,8 +264,15 @@ vector<Cube3x3> Phase1Move(vector<Cube3x3> cubes)
 				Cube3x3Faces(i).PrintDebugState();
 				exit(1);
 			}
+			if (g_combinedOrientationPruneTable[oldCornerOrientation][oldEdgeOrientation] == -1)
+			{
+				printf("Cube state has no combined orientation move count:\n");
+				Cube3x3Faces(i).PrintDebugState();
+				exit(1);
+			}
 			int cornerOrientMoveCount = g_cornerOrientationPruneTable[oldCornerOrientation][oldEquatorialSlice] + 1;
 			int edgeOrientMoveCount = g_edgeOrientationPruneTable[oldEdgeOrientation][oldEquatorialSlice] + 1;
+			int combinedOrientMoveCount = g_combinedOrientationPruneTable[oldCornerOrientation][oldEdgeOrientation] + 1;
 
 			// Perform the move
 			cube.Move((CubeMove)move);
@@ -332,6 +372,12 @@ vector<Cube3x3> Phase1Move(vector<Cube3x3> cubes)
 				(edgeOrientMoveCount < g_edgeOrientationPruneTable[newEdgeOrientation][newEquatorialSlice]))
 			{
 				g_edgeOrientationPruneTable[newEdgeOrientation][newEquatorialSlice] = edgeOrientMoveCount;
+				hasNewInfo = true;
+			}
+			if ((g_combinedOrientationPruneTable[newCornerOrientation][newEdgeOrientation] == -1) ||
+				(combinedOrientMoveCount < g_combinedOrientationPruneTable[newCornerOrientation][newEdgeOrientation]))
+			{
+				g_combinedOrientationPruneTable[newCornerOrientation][newEdgeOrientation] = combinedOrientMoveCount;
 				hasNewInfo = true;
 			}
 
@@ -478,6 +524,8 @@ int main()
 			CORNER_ORIENTATION_INDEX_COUNT * EDGE_SLICE_INDEX_COUNT);
 		printf("        %d / %d edge orientation prune table\n", GetEdgeOrientationPruneTableFillCount(),
 			EDGE_ORIENTATION_INDEX_COUNT * EDGE_SLICE_INDEX_COUNT);
+		printf("        %d / %d combined orientation prune table\n", GetCombinedOrientationPruneTableFillCount(),
+			CORNER_ORIENTATION_INDEX_COUNT * EDGE_ORIENTATION_INDEX_COUNT);
 	}
 
 	// Generate phase 2 move tables and prune tables
@@ -641,6 +689,32 @@ int main()
 		fprintf(fp, "\n");
 	}
 	fprintf(fp, "};\n\n");
+	fprintf(fp, "uint32_t Cube3x3::m_combinedOrientationPruneTable[CORNER_ORIENTATION_INDEX_COUNT][EDGE_ORIENTATION_INDEX_COUNT / 8] = {\n");
+	for (int i = 0; i < CORNER_ORIENTATION_INDEX_COUNT; i++)
+	{
+		fprintf(fp, "\t{\n\t\t");
+		for (int j = 0; j < EDGE_ORIENTATION_INDEX_COUNT; j += 8)
+		{
+			if ((j != 0) && ((j % 64) == 0))
+				fprintf(fp, "\n\t\t");
+			uint32_t value = (uint32_t)g_combinedOrientationPruneTable[i][j] |
+				((uint32_t)g_combinedOrientationPruneTable[i][j + 1] << 4) |
+				((uint32_t)g_combinedOrientationPruneTable[i][j + 2] << 8) |
+				((uint32_t)g_combinedOrientationPruneTable[i][j + 3] << 12) |
+				((uint32_t)g_combinedOrientationPruneTable[i][j + 4] << 16) |
+				((uint32_t)g_combinedOrientationPruneTable[i][j + 5] << 20) |
+				((uint32_t)g_combinedOrientationPruneTable[i][j + 6] << 24) |
+				((uint32_t)g_combinedOrientationPruneTable[i][j + 7] << 28);
+			fprintf(fp, "0x%x", value);
+			if ((j + 8) < EDGE_ORIENTATION_INDEX_COUNT)
+				fprintf(fp, ",");
+		}
+		fprintf(fp, "}");
+		if ((i + 1) < CORNER_ORIENTATION_INDEX_COUNT)
+			fprintf(fp, ",");
+		fprintf(fp, "\n");
+	}
+	fprintf(fp, "};\n\n");
 	fprintf(fp, "uint8_t Cube3x3::m_cornerPermutationPruneTable[CORNER_PERMUTATION_INDEX_COUNT][PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT] = {\n");
 	for (int i = 0; i < CORNER_PERMUTATION_INDEX_COUNT; i++)
 	{
@@ -671,6 +745,22 @@ int main()
 		if ((i + 1) < PHASE_2_EDGE_PERMUTATION_INDEX_COUNT)
 			fprintf(fp, ",");
 		fprintf(fp, "\n");
+	}
+	fprintf(fp, "};\n\n");
+	fprintf(fp, "uint8_t Cube3x3::m_phase1CornerPermutationPruneTable[CORNER_PERMUTATION_INDEX_COUNT] = {\n\t");
+	for (int i = 0; i < CORNER_PERMUTATION_INDEX_COUNT; i++)
+	{
+		if ((i != 0) && ((i % 50) == 0))
+			fprintf(fp, "\n\t");
+		int minValue = g_cornerPermutationPruneTable[i][0];
+		for (int j = 0; j < PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT; j++)
+		{
+			if (g_cornerPermutationPruneTable[i][j] < minValue)
+				minValue = g_cornerPermutationPruneTable[i][j];
+		}
+		fprintf(fp, "%d", minValue);
+		if ((i + 1) < CORNER_PERMUTATION_INDEX_COUNT)
+			fprintf(fp, ",");
 	}
 	fprintf(fp, "};\n\n");
 	fclose(fp);
