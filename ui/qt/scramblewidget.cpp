@@ -43,6 +43,9 @@ void RescrambleThread::run()
 
 		m_mutex.unlock();
 
+		if (scramble.moves.size() == 0)
+			continue;
+
 		CubeMoveSequence inverted = state.Solve(false);
 		state = Cube3x3();
 		state.Apply(inverted);
@@ -73,6 +76,15 @@ void RescrambleThread::requestRescramble(const Cube3x3& state, const CubeMoveSeq
 	m_requestPending = true;
 	m_inScramble = scramble;
 	m_initialState = state;
+	m_cond.notify_one();
+}
+
+
+void RescrambleThread::cancel()
+{
+	QMutexLocker lock(&m_mutex);
+	m_requestPending = true;
+	m_inScramble.moves.clear();
 	m_cond.notify_one();
 }
 
@@ -349,20 +361,22 @@ void ScrambleWidget::updateBluetoothScramble()
 	if (m_bluetoothCubeClient)
 	{
 		TimedCubeMoveSequence moves = m_bluetoothCubeClient->GetLatestMoves();
+
+		if (m_bluetoothCube->GetCubeState().IsSolved())
+		{
+			m_thread->cancel();
+			m_scramble = m_originalScramble;
+			m_currentScrambleMove = 0;
+			m_currentScrambleSubMove = 0;
+			m_fixMoves.moves.clear();
+			updateText();
+			return;
+		}
+
 		if (m_currentScrambleMove == -1)
 		{
-			if (m_bluetoothCube->GetCubeState().IsSolved())
-			{
-				m_scramble = m_originalScramble;
-				m_currentScrambleMove = 0;
-				m_currentScrambleSubMove = 0;
-				m_fixMoves.moves.clear();
-				updateText();
-			}
-			else if ((m_originalScramble.moves.size() != 0) && (moves.moves.size() != 0))
-			{
+			if ((m_originalScramble.moves.size() != 0) && (moves.moves.size() != 0))
 				m_thread->requestRescramble(m_bluetoothCube->GetCubeState(), m_originalScramble);
-			}
 			return;
 		}
 		else if (m_currentScrambleMove >= (int)m_scramble.moves.size())
@@ -378,9 +392,20 @@ void ScrambleWidget::updateBluetoothScramble()
 			if (m_fixMoves.moves.size() != 0)
 			{
 				if (i.move == m_fixMoves.moves[m_fixMoves.moves.size() - 1])
+				{
 					m_fixMoves.moves.erase(m_fixMoves.moves.end() - 1);
+					continue;
+				}
+
+				CubeMove inverted = CubeMoveSequence::InvertedMove(i.move);
+				CubeFace face = CubeMoveSequence::GetMoveFace(i.move);
+				CubeMove doubleTurn = CubeMoveSequence::GetMoveForFaceAndDirection(face, 2);
+				if (inverted == m_fixMoves.moves[m_fixMoves.moves.size() - 1])
+					m_fixMoves.moves[m_fixMoves.moves.size() - 1] = doubleTurn;
+				else if (m_fixMoves.moves[m_fixMoves.moves.size() - 1] == doubleTurn)
+					m_fixMoves.moves[m_fixMoves.moves.size() - 1] = i.move;
 				else
-					m_fixMoves.moves.push_back(CubeMoveSequence::InvertedMove(i.move));
+					m_fixMoves.moves.push_back(inverted);
 				continue;
 			}
 

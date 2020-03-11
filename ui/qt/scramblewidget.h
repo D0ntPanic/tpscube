@@ -36,6 +36,7 @@ public:
 	void stop();
 
 	void requestRescramble(const Cube3x3& state, const CubeMoveSequence& scramble);
+	void cancel();
 	CubeMoveSequence rescramble();
 
 signals:

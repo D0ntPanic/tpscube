@@ -193,6 +193,7 @@ void SolveStatsWidget::updateStats()
 	else
 	{
 		m_splitLayout->setColumnMinimumWidth(4, 0);
+		m_solveBar->hide();
 		m_crossLabel->hide();
 		m_crossTime->hide();
 		m_f2lLabel->hide();
