@@ -879,51 +879,8 @@ int Cube3x3::GetPhase2EquatorialEdgePermutationIndex()
 }
 
 
-void Cube3x3::SearchPhase1(const Cube3x3& initialState, const Phase1IndexCube& cube,
-	int depth, SearchMoveSequence& moves, CubeMoveSequence& bestSolution, int& maxMoves, bool optimal)
+void Cube3x3::SearchPhase1(Cube3x3SearchState& moves, const Phase1IndexCube& cube, int depth)
 {
-	// Check for solutions
-	if ((cube.cornerOrientation == 0) && (cube.edgeOrientation == 0) &&
-		(cube.equatorialEdgeSlice == 0))
-	{
-		// Only proceed at the requested depth, we don't want to repeat earlier searches
-		if (depth == 0)
-		{
-			// Translate cube state into phase 2 index form
-			Cube3x3 cubeState = initialState;
-			for (int i = 0; i < moves.count; i++)
-				cubeState.Move(moves.moves[i]);
-			Phase2IndexCube phase2Cube;
-			phase2Cube.cornerPermutation = cube.cornerPermutation;
-			phase2Cube.edgePermutation = cubeState.GetPhase2EdgePermutationIndex();
-			phase2Cube.equatorialEdgePermutation = cubeState.GetPhase2EquatorialEdgePermutationIndex();
-
-			// Search for phase 2 solution using iterative deepening. Do not go beyond the maximum
-			// number of moves for the whole solve.
-			for (int i = 0; i < (maxMoves - moves.count); i++)
-			{
-				if (SearchPhase2(phase2Cube, i, moves, bestSolution, maxMoves, optimal))
-					break;
-			}
-			if (!optimal && (bestSolution.moves.size() != 0))
-				return;
-		}
-		return;
-	}
-
-	if (moves.count >= maxMoves)
-		return;
-
-	if ((int)((m_combinedOrientationPruneTable[cube.cornerOrientation][cube.edgeOrientation / 8] >>
-		(4 * (cube.edgeOrientation & 7))) & 0xf) > depth)
-		return;
-	if (m_cornerOrientationPruneTable[cube.cornerOrientation][cube.equatorialEdgeSlice] > depth)
-		return;
-	if (m_edgeOrientationPruneTable[cube.edgeOrientation][cube.equatorialEdgeSlice] > depth)
-		return;
-	if ((int)(moves.count + m_phase1CornerPermutationPruneTable[cube.cornerPermutation]) > maxMoves)
-		return;
-
 	// Need to go deeper. Iterate through the possible moves.
 	int moveIdx = moves.count++;
 	const PossibleSearchMoves* possibleMoves;
@@ -953,27 +910,68 @@ void Cube3x3::SearchPhase1(const Cube3x3& initialState, const Phase1IndexCube& c
 		newCube.edgeOrientation = m_edgeOrientationMoveTable[cube.edgeOrientation][move];
 		newCube.equatorialEdgeSlice = m_equatorialEdgeSliceMoveTable[cube.equatorialEdgeSlice][move];
 
-		// Proceed further into phase 1
-		SearchPhase1(initialState, newCube, depth - 1, moves, bestSolution, maxMoves, optimal);
+		// Check for solutions
+		if ((newCube.cornerOrientation == 0) && (newCube.edgeOrientation == 0) &&
+			(newCube.equatorialEdgeSlice == 0))
+		{
+			// Only proceed at the requested depth, we don't want to repeat earlier searches
+			if (depth == 1)
+			{
+				// Translate cube state into phase 2 index form
+				Cube3x3 cubeState = moves.initialState;
+				for (int i = 0; i < moves.count; i++)
+					cubeState.Move(moves.moves[i]);
+				Phase2IndexCube phase2Cube;
+				phase2Cube.cornerPermutation = newCube.cornerPermutation;
+				phase2Cube.edgePermutation = cubeState.GetPhase2EdgePermutationIndex();
+				phase2Cube.equatorialEdgePermutation = cubeState.GetPhase2EquatorialEdgePermutationIndex();
 
-		if (!optimal && (bestSolution.moves.size() != 0))
+				// Search for phase 2 solution using iterative deepening. Do not go beyond the maximum
+				// number of moves for the whole solve.
+				for (int i = 0; i < (moves.maxMoves - moves.count); i++)
+				{
+					if (SearchPhase2(moves, phase2Cube, i))
+						break;
+				}
+				if (!moves.optimal && (moves.bestSolution.moves.size() != 0))
+					return;
+			}
+			continue;
+		}
+
+		if (depth == 1)
+			continue;
+
+		if ((int)((m_combinedOrientationPruneTable[newCube.cornerOrientation][newCube.edgeOrientation / 8] >>
+			(4 * (newCube.edgeOrientation & 7))) & 0xf) >= depth)
+			continue;
+		if (m_cornerOrientationPruneTable[newCube.cornerOrientation][newCube.equatorialEdgeSlice] >= depth)
+			continue;
+		if (m_edgeOrientationPruneTable[newCube.edgeOrientation][newCube.equatorialEdgeSlice] >= depth)
+			continue;
+		if ((int)(moves.count + m_phase1CornerPermutationPruneTable[newCube.cornerPermutation]) > moves.maxMoves)
+			continue;
+
+		// Proceed further into phase 1
+		SearchPhase1(moves, newCube, depth - 1);
+
+		if (!moves.optimal && (moves.bestSolution.moves.size() != 0))
 			break;
-		if (moves.count > maxMoves)
+		if (moves.count > moves.maxMoves)
 			break;
 	}
 	moves.count--;
 }
 
 
-bool Cube3x3::SearchPhase2(const Phase2IndexCube& cube, int depth, SearchMoveSequence& moves,
-	CubeMoveSequence& bestSolution, int& maxMoves, bool optimal)
+bool Cube3x3::SearchPhase2(Cube3x3SearchState& moves, const Phase2IndexCube& cube, int depth)
 {
 	if ((cube.cornerPermutation == 0) && (cube.edgePermutation == 0) && (cube.equatorialEdgePermutation == 0))
 	{
-		if ((bestSolution.moves.size() == 0) || (moves.count < (int)bestSolution.moves.size()))
+		if ((moves.bestSolution.moves.size() == 0) || (moves.count < (int)moves.bestSolution.moves.size()))
 		{
-			bestSolution.moves = vector<CubeMove>(&moves.moves[0], &moves.moves[moves.count]);
-			maxMoves = moves.count - 1;
+			moves.bestSolution.moves = vector<CubeMove>(&moves.moves[0], &moves.moves[moves.count]);
+			moves.maxMoves = moves.count - 1;
 		}
 		return true;
 	}
@@ -1004,7 +1002,7 @@ bool Cube3x3::SearchPhase2(const Phase2IndexCube& cube, int depth, SearchMoveSeq
 			newCube.equatorialEdgePermutation = m_phase2EquatorialEdgePermutationMoveTable[cube.equatorialEdgePermutation][move];
 
 			// Proceed further into phase 2
-			if (SearchPhase2(newCube, depth - 1, moves, bestSolution, maxMoves, optimal))
+			if (SearchPhase2(moves, newCube, depth - 1))
 			{
 				moves.count--;
 				return true;
@@ -1018,12 +1016,9 @@ bool Cube3x3::SearchPhase2(const Phase2IndexCube& cube, int depth, SearchMoveSeq
 
 CubeMoveSequence Cube3x3::Solve(bool optimal)
 {
-	int maxMoves = MAX_3X3_SOLUTION_MOVES;
-	CubeMoveSequence bestSolution;
-
 	// If already solved, solution is zero moves
 	if (IsSolved())
-		return bestSolution;
+		return CubeMoveSequence();
 
 	Phase1IndexCube cube;
 	cube.cornerOrientation = GetCornerOrientationIndex();
@@ -1031,12 +1026,35 @@ CubeMoveSequence Cube3x3::Solve(bool optimal)
 	cube.edgeOrientation = GetEdgeOrientationIndex();
 	cube.equatorialEdgeSlice = GetEquatorialEdgeSliceIndex();
 
-	SearchMoveSequence moves;
+	Cube3x3SearchState moves;
+	moves.initialState = *this;
 	moves.count = 0;
+	moves.optimal = optimal;
+	moves.maxMoves = MAX_3X3_SOLUTION_MOVES;
 
-	for (int depth = 0; (depth <= MAX_3x3_PHASE_1_MOVES) && (depth <= maxMoves); depth++)
-		SearchPhase1(*this, cube, depth, moves, bestSolution, maxMoves, optimal);
-	return bestSolution;
+	if ((cube.cornerOrientation == 0) && (cube.edgeOrientation == 0) &&
+		(cube.equatorialEdgeSlice == 0))
+	{
+		// Phase 1 is already solved, translate cube state into phase 2 index form
+		Phase2IndexCube phase2Cube;
+		phase2Cube.cornerPermutation = cube.cornerPermutation;
+		phase2Cube.edgePermutation = GetPhase2EdgePermutationIndex();
+		phase2Cube.equatorialEdgePermutation = GetPhase2EquatorialEdgePermutationIndex();
+
+		// Search for phase 2 solution using iterative deepening. Do not go beyond the maximum
+		// number of moves for the whole solve.
+		for (int i = 0; i < (moves.maxMoves - moves.count); i++)
+		{
+			if (SearchPhase2(moves, phase2Cube, i))
+				break;
+		}
+	}
+	else
+	{
+		for (int depth = 0; (depth <= MAX_3x3_PHASE_1_MOVES) && (depth <= moves.maxMoves); depth++)
+			SearchPhase1(moves, cube, depth);
+	}
+	return moves.bestSolution;
 }
 
 

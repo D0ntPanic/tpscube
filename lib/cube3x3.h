@@ -32,6 +32,7 @@ struct CubePiece
 };
 
 class Cube3x3Faces;
+struct Cube3x3SearchState;
 
 // Representation of a 3x3x3 cube using piece format
 class Cube3x3
@@ -94,16 +95,8 @@ class Cube3x3
 		int equatorialEdgePermutation;
 	};
 
-	struct SearchMoveSequence
-	{
-		CubeMove moves[MAX_3X3_SOLUTION_MOVES];
-		int count;
-	};
-
-	static void SearchPhase1(const Cube3x3& initialState, const Phase1IndexCube& cube, int depth,
-		SearchMoveSequence& moves, CubeMoveSequence& bestSolution, int& maxMoves, bool optimal);
-	static bool SearchPhase2(const Phase2IndexCube& cube, int depth, SearchMoveSequence& moves,
-		CubeMoveSequence& bestSolution, int& maxMoves, bool optimal);
+	static void SearchPhase1(Cube3x3SearchState& moves, const Phase1IndexCube& cube, int depth);
+	static bool SearchPhase2(Cube3x3SearchState& moves, const Phase2IndexCube& cube, int depth);
 
 public:
 	Cube3x3();
@@ -136,6 +129,16 @@ public:
 	// Generates moves sequence that will solve the current cube state. If optimal is false, return
 	// the first found valid solution, which will be at most 30 moves, for a quicker result.
 	CubeMoveSequence Solve(bool optimal = true);
+};
+
+struct Cube3x3SearchState
+{
+	Cube3x3 initialState;
+	CubeMove moves[MAX_3X3_SOLUTION_MOVES];
+	int count;
+	CubeMoveSequence bestSolution;
+	bool optimal;
+	int maxMoves;
 };
 
 // Representation of a 3x3x3 cube using face color format
