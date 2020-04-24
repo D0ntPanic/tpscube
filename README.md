@@ -5,15 +5,13 @@ This is an open source application for tracking cube solves.
 * Automatic scramble generation
 * Streamlined session tracking optimized for quick practice sessions
 * Solve history that isn't lost when quick resetting sessions
-* (Planned) Bluetooth cube support with split timing and advanced stats
-* (Planned) Graphical reports for tracking progress
+* Bluetooth cube support with split timing and advanced stats
+* Graphical reports for tracking progress
 * (Planned) Algorithm library and practice mode
 
 # Supported platforms
 
 * Windows / MacOS / Linux with a native Qt frontend
-* (Planned) iOS
-* (Planned) Android
 
 # Scrambling algortihms
 
