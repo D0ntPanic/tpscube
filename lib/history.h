@@ -5,8 +5,8 @@
 #include <functional>
 #include <map>
 #include <time.h>
+#include <leveldb/db.h>
 #include "cube3x3.h"
-#include "leveldb/db.h"
 
 enum SolveType
 {

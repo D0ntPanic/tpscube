@@ -1,8 +1,10 @@
-obj/
+build/
 .vscode/
 tools/gentables3x3
-.qmake.stash
-qrc_*.cpp
 tpscube
 tpscube.app/
+CMakeCache.txt
+CMakeFiles/
 Makefile
+cmake_install.cmake
+tpscube_autogen/
