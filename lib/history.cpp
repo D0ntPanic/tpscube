@@ -389,8 +389,9 @@ int Session::avgOf(const vector<int>& times)
 	});
 	if (sorted.size() <= 2)
 		return -1;
-	sorted.erase(sorted.begin());
-	sorted.erase(sorted.end() - 1);
+	size_t toRemove = (sorted.size() + 39) / 40;
+	sorted.erase(sorted.begin(), sorted.begin() + toRemove);
+	sorted.erase(sorted.end() - toRemove, sorted.end());
 	int sum = 0;
 	for (auto i : sorted)
 	{
