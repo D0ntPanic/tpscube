@@ -1,0 +1,8 @@
+[package]
+name = "solvebench"
+version = "0.1.0"
+authors = ["Rusty Wagner <rusty.wagner@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+tpscube_core = { path = "../../lib" }

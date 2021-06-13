@@ -1,0 +1,71 @@
+table TimePenalty {
+    time: uint32;
+}
+
+table DNFPenalty {}
+
+union Penalty {
+    TimePenalty,
+    DNFPenalty
+}
+
+struct TimedMove {
+    move: uint8;
+    time: uint32;
+}
+
+table NewSolveAction {
+    id: string;
+    solve_type: uint8;
+    session: string;
+    scramble: [uint8];
+    created: int64;
+    time: uint32;
+    penalty: Penalty;
+    device: string;
+    moves: [TimedMove];
+}
+
+table PenaltyAction {
+    solve: string;
+    penalty: Penalty;
+}
+
+table ChangeSessionAction {
+    solve: string;
+    session: string;
+}
+
+table MergeSessionsAction {
+    first: string;
+    second: string;
+}
+
+table RenameSessionAction {
+    session: string;
+    name: string;
+}
+
+table DeleteSolveAction {
+    solve: string;
+}
+
+union ActionContents {
+    NewSolveAction,
+    PenaltyAction,
+    ChangeSessionAction,
+    MergeSessionsAction,
+    RenameSessionAction,
+    DeleteSolveAction
+}
+
+table Action {
+    id: string;
+    contents: ActionContents;
+}
+
+table ActionList {
+    actions: [Action];
+}
+
+root_type ActionList;

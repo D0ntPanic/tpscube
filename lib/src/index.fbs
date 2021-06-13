@@ -1,0 +1,5 @@
+table ActionListIndex {
+    lists: [string];
+}
+
+root_type ActionListIndex;

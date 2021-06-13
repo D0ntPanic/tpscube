@@ -1,0 +1,9 @@
+[package]
+name = "synctest"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+tpscube_core = { path="../../lib", features=["native-storage"] }
+tempdir = "0.3"
+chrono = "0.4"
