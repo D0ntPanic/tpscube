@@ -114,6 +114,102 @@ impl Ord for Solve {
     }
 }
 
+pub trait SolveList {
+    fn average(&self) -> Option<u32>;
+    fn last_average(&self, count: usize) -> Option<u32>;
+    fn best(&self) -> Option<u32>;
+    fn best_average(&self, count: usize) -> Option<u32>;
+}
+
+impl SolveList for &[Solve] {
+    fn average(&self) -> Option<u32> {
+        if self.len() <= 2 {
+            return None;
+        }
+
+        // Sort solves by time, ensuring that DNF is considered the
+        // maximum time.
+        let mut sorted = self.to_vec();
+        sorted.sort_unstable_by(|a, b| {
+            let a = a.final_time();
+            let b = b.final_time();
+            if a.is_none() && b.is_none() {
+                Ordering::Equal
+            } else if a.is_none() {
+                Ordering::Greater
+            } else if b.is_none() {
+                Ordering::Less
+            } else {
+                let a = a.unwrap();
+                let b = b.unwrap();
+                a.cmp(&b)
+            }
+        });
+
+        // Remove the best and worst time(s) as appropriate for the size of the set
+        let to_remove = (sorted.len() + 39) / 40;
+        let solves = &sorted[to_remove..sorted.len() - to_remove];
+
+        // Sum the solves that are not removed. If there is a DNF in this set, the
+        // entire average is invalid.
+        let sum = solves.iter().fold(Some(0), |sum, solve| {
+            if let Some(sum) = sum {
+                let time = solve.final_time();
+                if let Some(time) = time {
+                    Some(sum + time as u64)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
+        // Compute final average
+        if let Some(sum) = sum {
+            Some(((sum + (solves.len() as u64 / 2)) / (solves.len() as u64)) as u32)
+        } else {
+            None
+        }
+    }
+
+    fn last_average(&self, count: usize) -> Option<u32> {
+        if self.len() >= count {
+            (&self[self.len() - count..]).average()
+        } else {
+            None
+        }
+    }
+
+    fn best(&self) -> Option<u32> {
+        self.iter().fold(None, |best, solve| {
+            if let Some(time) = solve.final_time() {
+                if let Some(best) = best {
+                    Some(best.min(time))
+                } else {
+                    Some(time)
+                }
+            } else {
+                best
+            }
+        })
+    }
+
+    fn best_average(&self, count: usize) -> Option<u32> {
+        self.windows(count).fold(None, |best, solves| {
+            if let Some(time) = solves.average() {
+                if let Some(best) = best {
+                    Some(best.min(time))
+                } else {
+                    Some(time)
+                }
+            } else {
+                best
+            }
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Penalty {
     None,

@@ -20,7 +20,8 @@ mod index_generated;
 pub use crate::rand::{RandomSource, SimpleSeededRandomSource, StandardRandomSource};
 pub use action::{Action, StoredAction};
 pub use common::{
-    Color, Cube, Face, Move, MoveSequence, Penalty, RotationDirection, Solve, SolveType, TimedMove,
+    Color, Cube, Face, Move, MoveSequence, Penalty, RotationDirection, Solve, SolveList, SolveType,
+    TimedMove,
 };
 pub use cube3x3x3::{
     Corner3x3x3, CornerPiece3x3x3, Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3,

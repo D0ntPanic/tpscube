@@ -64,28 +64,31 @@ impl epi::App for Application {
 
                 ui.horizontal(|ui| {
                     ui.add_space(5.0);
-                    ui.style_mut().spacing.item_spacing.x = 16.0;
+                    ui.style_mut().spacing.item_spacing.x = 20.0;
 
-                    if ui.header_label("Timer", self.mode == Mode::Timer).clicked() {
+                    if ui
+                        .header_label("⏱  Timer", self.mode == Mode::Timer)
+                        .clicked()
+                    {
                         self.mode = Mode::Timer;
                     }
 
                     if ui
-                        .header_label("History", self.mode == Mode::History)
+                        .header_label("📖  History", self.mode == Mode::History)
                         .clicked()
                     {
                         self.mode = Mode::History;
                     }
 
                     if ui
-                        .header_label("Graphs", self.mode == Mode::Graphs)
+                        .header_label("📉  Graphs", self.mode == Mode::Graphs)
                         .clicked()
                     {
                         self.mode = Mode::Graphs;
                     }
 
                     if ui
-                        .header_label("Settings", self.mode == Mode::Settings)
+                        .header_label("⚙  Settings", self.mode == Mode::Settings)
                         .clicked()
                     {
                         self.mode = Mode::Settings;

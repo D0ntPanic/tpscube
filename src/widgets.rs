@@ -78,7 +78,7 @@ impl CustomWidgets for Ui {
             ui.add(Label::new(format!("{}.", idx + 1)).text_color(idx_color));
             ui.with_layout(Layout::right_to_left(), |ui| {
                 let popup_id = ui.make_persistent_id(format!("{}-{}", src, solve.id));
-                let response = ui.add(Label::new("≡").sense(Sense::click()));
+                let response = ui.add(Label::new("  ☰").small().sense(Sense::click()));
                 if response.clicked() {
                     ui.memory().toggle_popup(popup_id);
                 }

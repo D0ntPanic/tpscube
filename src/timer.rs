@@ -6,14 +6,14 @@ use crate::widgets::{solve_time_short_string, solve_time_string, CustomWidgets};
 use chrono::Local;
 use eframe::{
     egui::{
-        widgets::Label, CentralPanel, Color32, CtxRef, Key, Layout, Pos2, Rect, Sense, SidePanel,
-        Ui, Vec2,
+        containers::ScrollArea, widgets::Label, CentralPanel, Color32, CtxRef, Key, Layout, Pos2,
+        Rect, Sense, SidePanel, Stroke, Ui, Vec2,
     },
     epi,
 };
 use instant::Instant;
 use std::cmp::Ord;
-use tpscube_core::{scramble_3x3x3, History, Move, Penalty, Solve, SolveType};
+use tpscube_core::{scramble_3x3x3, History, Move, Penalty, Solve, SolveList, SolveType};
 
 const MIN_SCRAMBLE_LINES: usize = 2;
 const MAX_SCRAMBLE_LINES: usize = 5;
@@ -26,8 +26,14 @@ pub enum TimerState {
 }
 
 pub struct CachedSessionSolves {
-    update_id: u64,
+    update_id: Option<u64>,
     solves: Vec<Solve>,
+    last_ao5: Option<u32>,
+    last_ao12: Option<u32>,
+    session_avg: Option<u32>,
+    best_solve: Option<u32>,
+    best_ao5: Option<u32>,
+    best_ao12: Option<u32>,
 }
 
 pub struct Timer {
@@ -35,7 +41,29 @@ pub struct Timer {
     current_scramble: Vec<Move>,
     current_scramble_displayed: bool,
     next_scramble: Option<Vec<Move>>,
-    cached_solves: Option<CachedSessionSolves>,
+    session_solves: CachedSessionSolves,
+}
+
+impl CachedSessionSolves {
+    fn new(update_id: Option<u64>, solves: Vec<Solve>) -> Self {
+        let last_ao5 = solves.as_slice().last_average(5);
+        let last_ao12 = solves.as_slice().last_average(12);
+        let session_avg = solves.as_slice().average();
+        let best_solve = solves.as_slice().best();
+        let best_ao5 = solves.as_slice().best_average(5);
+        let best_ao12 = solves.as_slice().best_average(12);
+
+        Self {
+            update_id,
+            solves,
+            last_ao5,
+            last_ao12,
+            session_avg,
+            best_solve,
+            best_ao5,
+            best_ao12,
+        }
+    }
 }
 
 impl Timer {
@@ -45,7 +73,7 @@ impl Timer {
             current_scramble: scramble_3x3x3(),
             current_scramble_displayed: false,
             next_scramble: Some(scramble_3x3x3()),
-            cached_solves: None,
+            session_solves: CachedSessionSolves::new(None, Vec::new()),
         }
     }
 
@@ -137,13 +165,13 @@ impl Timer {
         self.next_scramble = None;
     }
 
-    fn get_current_session_solves(&mut self, history: &History) -> &Option<CachedSessionSolves> {
+    fn update_solve_cache(&mut self, history: &History) {
         if let Some(session) = history.sessions().get(history.current_session()) {
             // Check for updates
-            if let Some(cache) = &self.cached_solves {
-                if cache.update_id == session.update_id {
-                    // Already cached
-                    return &self.cached_solves;
+            if let Some(update_id) = self.session_solves.update_id {
+                if update_id == session.update_id {
+                    // Already cached and up to date
+                    return;
                 }
             }
 
@@ -155,15 +183,11 @@ impl Timer {
                 }
             }
             solves.sort_unstable_by(|a, b| a.cmp(&b));
-            self.cached_solves = Some(CachedSessionSolves {
-                update_id: session.update_id,
-                solves,
-            });
+            self.session_solves = CachedSessionSolves::new(Some(session.update_id), solves);
         } else {
             // New session, invalidate cache
-            self.cached_solves = None;
+            self.session_solves = CachedSessionSolves::new(None, Vec::new());
         }
-        &self.cached_solves
     }
 
     pub fn update(
@@ -183,29 +207,56 @@ impl Timer {
         SidePanel::left("timer", 160.0).show(ctxt, |ui| {
             ui.section("Session");
 
+            self.update_solve_cache(history);
+
             ui.vertical(|ui| {
-                Self::session_time(ui, "Last ao5", Some(43874));
-                Self::session_time(ui, "Last ao12", Some(48235));
-                Self::session_time(ui, "Session avg", Some(47126));
-                Self::session_time(ui, "Best solve", Some(38742));
-                Self::session_time(ui, "Best ao5", Some(42983));
-                Self::session_time(ui, "Best ao12", Some(48239));
+                Self::session_time(ui, "Last ao5", self.session_solves.last_ao5);
+                Self::session_time(ui, "Last ao12", self.session_solves.last_ao12);
+                Self::session_time(ui, "Session avg", self.session_solves.session_avg);
+                Self::session_time(ui, "Best solve", self.session_solves.best_solve);
+                Self::session_time(ui, "Best ao5", self.session_solves.best_ao5);
+                Self::session_time(ui, "Best ao12", self.session_solves.best_ao12);
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
+                        width: 1.0,
+                        color: Theme::Red.into(),
+                    };
+                    ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
+                        width: 1.0,
+                        color: Theme::Red.into(),
+                    };
+                    ui.with_layout(Layout::right_to_left(), |ui| {
+                        if ui
+                            .add(Label::new("↺  New session").sense(Sense::click()))
+                            .clicked()
+                        {
+                            let _ = history.new_session();
+                        }
+                    })
+                });
             });
 
             ui.add_space(8.0);
             ui.section("Solves");
 
-            let mut has_solves = false;
-            if let Some(cache) = self.get_current_session_solves(history) {
-                for (idx, solve) in cache.solves.iter().enumerate().rev() {
-                    ui.solve("timer", idx, solve, history);
-                    has_solves = true;
-                }
-            }
-            if !has_solves {
-                let color: Color32 = Theme::Disabled.into();
-                ui.add(Label::new("No solves in this session").text_color(color));
-            }
+            ui.visuals_mut().widgets.inactive.bg_fill = Theme::BackgroundHighlight.into();
+            ui.visuals_mut().widgets.hovered.bg_fill = Theme::Disabled.into();
+            ui.visuals_mut().widgets.active.bg_fill = Theme::Disabled.into();
+            ScrollArea::auto_sized()
+                .id_source("timer_solve_list")
+                .show(ui, |ui| {
+                    let mut has_solves = false;
+                    for (idx, solve) in self.session_solves.solves.iter().enumerate().rev() {
+                        ui.solve("timer", idx, solve, history);
+                        has_solves = true;
+                    }
+                    if !has_solves {
+                        let color: Color32 = Theme::Disabled.into();
+                        ui.add(Label::new("No solves in this session").text_color(color));
+                    }
+                });
         });
 
         ctxt.set_visuals(content_visuals());

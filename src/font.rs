@@ -53,12 +53,18 @@ pub fn font_definitions() -> FontDefinitions {
         "OpenSans Light".into(),
         Cow::Borrowed(include_bytes!("../fonts/OpenSans-Light.ttf")),
     );
-    fonts
-        .fonts_for_family
-        .insert(FontFamily::Proportional, vec!["OpenSans".into()]);
-    fonts
-        .fonts_for_family
-        .insert(FontFamily::Monospace, vec!["OpenSans Light".into()]);
+    fonts.font_data.insert(
+        "emoji-icon-font".into(),
+        Cow::Borrowed(include_bytes!("../fonts/emoji-icon-font.ttf")),
+    );
+    fonts.fonts_for_family.insert(
+        FontFamily::Proportional,
+        vec!["OpenSans".into(), "emoji-icon-font".into()],
+    );
+    fonts.fonts_for_family.insert(
+        FontFamily::Monospace,
+        vec!["OpenSans Light".into(), "emoji-icon-font".into()],
+    );
 
     fonts
         .family_and_size

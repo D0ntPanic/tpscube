@@ -68,7 +68,7 @@ pub fn base_visuals() -> Visuals {
                 color: Theme::Content.into(),
             },
         },
-        extreme_bg_color: Theme::BackgroundHighlight.into(),
+        extreme_bg_color: Theme::BackgroundDark.into(),
         hyperlink_color: Theme::Blue.into(),
         code_bg_color: Theme::BackgroundDark.into(),
         window_corner_radius: 0.0,
