@@ -1,7 +1,8 @@
-use eframe::epi::RepaintSignal;
+use epi::RepaintSignal;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 

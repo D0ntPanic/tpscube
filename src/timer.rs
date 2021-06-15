@@ -1,15 +1,14 @@
 use crate::font::FontSize;
 use crate::framerate::Framerate;
+use crate::gl::{GlContext, GlRenderer, Vertex};
 use crate::style::{content_visuals, side_visuals};
 use crate::theme::Theme;
 use crate::widgets::{solve_time_short_string, solve_time_string, CustomWidgets};
+use anyhow::Result;
 use chrono::Local;
-use eframe::{
-    egui::{
-        containers::ScrollArea, widgets::Label, CentralPanel, Color32, CtxRef, Key, Layout, Pos2,
-        Rect, Sense, SidePanel, Stroke, Ui, Vec2,
-    },
-    epi,
+use egui::{
+    containers::ScrollArea, widgets::Label, CentralPanel, Color32, CtxRef, Key, Layout, Pos2, Rect,
+    Sense, SidePanel, Stroke, Ui, Vec2,
 };
 use instant::Instant;
 use std::cmp::Ord;
@@ -42,6 +41,7 @@ pub struct Timer {
     current_scramble_displayed: bool,
     next_scramble: Option<Vec<Move>>,
     session_solves: CachedSessionSolves,
+    gl: Option<GlRenderer>,
 }
 
 impl CachedSessionSolves {
@@ -74,6 +74,7 @@ impl Timer {
             current_scramble_displayed: false,
             next_scramble: Some(scramble_3x3x3()),
             session_solves: CachedSessionSolves::new(None, Vec::new()),
+            gl: None,
         }
     }
 
@@ -182,6 +183,9 @@ impl Timer {
                     solves.push(solve.clone());
                 }
             }
+
+            // Sort solves by time, then by ID. There cannot be any equal solves so it
+            // is fine to use the faster unstable sort here.
             solves.sort_unstable_by(|a, b| a.cmp(&b));
             self.session_solves = CachedSessionSolves::new(Some(session.update_id), solves);
         } else {
@@ -196,6 +200,7 @@ impl Timer {
         _frame: &mut epi::Frame<'_>,
         history: &mut History,
         framerate: &Framerate,
+        cube_rect: &mut Option<Rect>,
     ) {
         // Generate a scramble when the current one is onscreen. The slight delay will
         // not be noticed as much when performing a new scramble.
@@ -340,23 +345,15 @@ impl Timer {
                 }
                 self.current_scramble_displayed = true;
 
-                // Allocate space for the cube rendering
-                let cube_rect = Rect::from_min_size(
+                // Allocate space for the cube rendering. This is 3D so it will be rendered
+                // with OpenGL after egui is done painting.
+                let computed_cube_rect = Rect::from_min_size(
                     Pos2::new(center.x - cube_height / 2.0, y),
                     Vec2::new(cube_height, cube_height),
                 );
-                let galley = ui.fonts().layout_single_line(
-                    FontSize::Small.into(),
-                    "[Cube rendering goes here]".into(),
-                );
-                ui.painter().galley(
-                    Pos2::new(
-                        cube_rect.center().x - galley.size.x / 2.0,
-                        cube_rect.center().y - galley.size.y / 2.0,
-                    ),
-                    galley,
-                    Theme::Disabled.into(),
-                );
+                if computed_cube_rect.width() > 0.0 && computed_cube_rect.height() > 0.0 {
+                    *cube_rect = Some(computed_cube_rect);
+                }
 
                 // Render timer
                 let galley = ui
@@ -377,8 +374,61 @@ impl Timer {
         // Run at 10 FPS when solving (to update counting timer), or only when
         // updates occur otherwise
         framerate.set_target(match self.state {
-            TimerState::Solving(_) => Some(10),
+            TimerState::Preparing(_, _) | TimerState::Solving(_) => Some(10),
             _ => None,
         });
+        ctxt.request_repaint();
+    }
+
+    pub fn paint_cube(
+        &mut self,
+        ctxt: &CtxRef,
+        gl: &mut GlContext<'_, '_>,
+        rect: &Rect,
+    ) -> Result<()> {
+        if self.gl.is_none() {
+            self.gl = Some(GlRenderer::new(gl)?);
+        }
+
+        let verts = vec![
+            Vertex {
+                pos: [-1.0, -1.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0],
+                roughness: 0.0,
+            },
+            Vertex {
+                pos: [1.0, -1.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0],
+                roughness: 0.0,
+            },
+            Vertex {
+                pos: [1.0, 1.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0],
+                roughness: 0.0,
+            },
+            Vertex {
+                pos: [-1.0, 1.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+                color: [1.0, 1.0, 1.0],
+                roughness: 0.0,
+            },
+        ];
+
+        let renderer = self.gl.as_mut().unwrap();
+        renderer.set_camera_pos([0.0, 0.0, 5.0]);
+        renderer.set_light([0.0, 2.0, 4.0], [40.0, 40.0, 40.0]);
+
+        let mut model = [0.0; 16];
+        gl_matrix::mat4::from_y_rotation(&mut model, gl_matrix::common::to_radian(0.0));
+        renderer.set_model_matrix(model);
+
+        renderer.begin(ctxt, gl, rect);
+        renderer.draw(gl, &verts, &[0, 1, 2, 0, 2, 3])?;
+        renderer.end(gl);
+
+        Ok(())
     }
 }

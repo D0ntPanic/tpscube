@@ -1,6 +1,6 @@
 use crate::font::{FontSize, LabelFontSize};
 use crate::theme::Theme;
-use eframe::egui::{
+use egui::{
     popup::popup_below_widget, widgets::Label, Color32, Layout, Response, Sense, Stroke, Ui,
 };
 use tpscube_core::{History, Penalty, Solve};

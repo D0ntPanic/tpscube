@@ -8,15 +8,14 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-eframe = { version="0.12", default-features=false }
+egui = { version="0.12", default-features=false }
+epi = { version="0.12" }
 tpscube_core = { path="lib", default-features=false }
 getrandom = "0.2"
 instant = "0.1"
 anyhow = "1.0"
 chrono = "0.4"
-
-[target.'cfg(target_arch="wasm32")'.dependencies]
-wasm-bindgen = "0.2"
+gl_matrix = "0.0"
 
 [features]
 default = ["tpscube_core/native-storage"]
@@ -25,3 +24,53 @@ wasm = ["getrandom/js", "tpscube_core/web-storage", "instant/wasm-bindgen", "chr
 [profile.release]
 panic = "abort"
 lto = true
+
+[target.'cfg(target_arch="wasm32")'.dependencies]
+egui_web = { version="0.12", default-features=false }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[target.'cfg(target_arch="wasm32")'.dependencies.web-sys]
+version = "0.3"
+features = [
+  "Clipboard",
+  "ClipboardEvent",
+  "CompositionEvent",
+  "console",
+  "CssStyleDeclaration",
+  "DataTransfer",
+  "Document",
+  "DomRect",
+  "Element",
+  "Event",
+  "EventListener",
+  "EventTarget",
+  "FocusEvent",
+  "HtmlCanvasElement",
+  "HtmlElement",
+  "HtmlInputElement",
+  "InputEvent",
+  "KeyboardEvent",
+  "Location",
+  "MediaQueryList",
+  "MouseEvent",
+  "Navigator",
+  "Performance",
+  "Storage",
+  "Touch",
+  "TouchEvent",
+  "TouchList",
+  "WebGl2RenderingContext",
+  "WebGlBuffer",
+  "WebGlProgram",
+  "WebGlRenderingContext",
+  "WebGlShader",
+  "WebGlTexture",
+  "WebGlUniformLocation",
+  "WheelEvent",
+  "Window",
+]
+
+[target.'cfg(not(target_arch="wasm32"))'.dependencies]
+egui_glium = { version="0.12", default-features=false }
+glium = "0.29"

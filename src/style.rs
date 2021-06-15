@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use eframe::egui::{
+use egui::{
     style::{Selection, Visuals, WidgetVisuals, Widgets},
     Color32, Stroke,
 };

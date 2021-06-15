@@ -1,4 +1,4 @@
-use eframe::egui::Color32;
+use egui::Color32;
 
 pub enum Theme {
     Background,

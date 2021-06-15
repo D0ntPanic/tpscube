@@ -1,4 +1,4 @@
-use eframe::egui::{widgets::Label, FontDefinitions, FontFamily, TextStyle};
+use egui::{widgets::Label, FontDefinitions, FontFamily, TextStyle};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
