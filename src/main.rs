@@ -1,4 +1,8 @@
 mod app;
+mod center_generated;
+mod corner_generated;
+mod cube;
+mod edge_generated;
 mod font;
 mod framerate;
 mod gl;

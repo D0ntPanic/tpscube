@@ -1,6 +1,7 @@
+use crate::cube::CubeRenderer;
 use crate::font::FontSize;
 use crate::framerate::Framerate;
-use crate::gl::{GlContext, GlRenderer, Vertex};
+use crate::gl::GlContext;
 use crate::style::{content_visuals, side_visuals};
 use crate::theme::Theme;
 use crate::widgets::{solve_time_short_string, solve_time_string, CustomWidgets};
@@ -41,7 +42,7 @@ pub struct Timer {
     current_scramble_displayed: bool,
     next_scramble: Option<Vec<Move>>,
     session_solves: CachedSessionSolves,
-    gl: Option<GlRenderer>,
+    cube: CubeRenderer,
 }
 
 impl CachedSessionSolves {
@@ -74,7 +75,7 @@ impl Timer {
             current_scramble_displayed: false,
             next_scramble: Some(scramble_3x3x3()),
             session_solves: CachedSessionSolves::new(None, Vec::new()),
-            gl: None,
+            cube: CubeRenderer::new(),
         }
     }
 
@@ -386,49 +387,6 @@ impl Timer {
         gl: &mut GlContext<'_, '_>,
         rect: &Rect,
     ) -> Result<()> {
-        if self.gl.is_none() {
-            self.gl = Some(GlRenderer::new(gl)?);
-        }
-
-        let verts = vec![
-            Vertex {
-                pos: [-1.0, -1.0, 0.0],
-                normal: [0.0, 0.0, 1.0],
-                color: [1.0, 1.0, 1.0],
-                roughness: 0.0,
-            },
-            Vertex {
-                pos: [1.0, -1.0, 0.0],
-                normal: [0.0, 0.0, 1.0],
-                color: [1.0, 1.0, 1.0],
-                roughness: 0.0,
-            },
-            Vertex {
-                pos: [1.0, 1.0, 0.0],
-                normal: [0.0, 0.0, 1.0],
-                color: [1.0, 1.0, 1.0],
-                roughness: 0.0,
-            },
-            Vertex {
-                pos: [-1.0, 1.0, 0.0],
-                normal: [0.0, 0.0, 1.0],
-                color: [1.0, 1.0, 1.0],
-                roughness: 0.0,
-            },
-        ];
-
-        let renderer = self.gl.as_mut().unwrap();
-        renderer.set_camera_pos([0.0, 0.0, 5.0]);
-        renderer.set_light([0.0, 2.0, 4.0], [40.0, 40.0, 40.0]);
-
-        let mut model = [0.0; 16];
-        gl_matrix::mat4::from_y_rotation(&mut model, gl_matrix::common::to_radian(0.0));
-        renderer.set_model_matrix(model);
-
-        renderer.begin(ctxt, gl, rect);
-        renderer.draw(gl, &verts, &[0, 1, 2, 0, 2, 3])?;
-        renderer.end(gl);
-
-        Ok(())
+        self.cube.draw(ctxt, gl, rect)
     }
 }
