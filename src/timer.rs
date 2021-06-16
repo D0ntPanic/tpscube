@@ -397,7 +397,6 @@ impl Timer {
             TimerState::Preparing(_, _) | TimerState::Solving(_) => Some(10),
             _ => None,
         });
-        ctxt.request_repaint();
     }
 
     pub fn paint_cube(
