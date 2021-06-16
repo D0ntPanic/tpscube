@@ -16,8 +16,8 @@ use web_sys::{HtmlCanvasElement, WebGlBuffer, WebGlProgram, WebGlRenderingContex
 
 #[cfg(not(target_arch = "wasm32"))]
 use glium::{
-    implement_vertex, index::PrimitiveType, program, uniform, BackfaceCullingMode, Display,
-    DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer,
+    implement_vertex, index::PrimitiveType, program, uniform, BackfaceCullingMode, Depth,
+    DepthTest, Display, DrawParameters, Frame, IndexBuffer, Program, Surface, VertexBuffer,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -190,6 +190,8 @@ impl GlRenderer {
     }
 
     pub fn set_camera_pos(&mut self, pos: Vec3) {
+        self.camera_pos = pos;
+
         let mut view = [0.0; 16];
         mat4::from_translation(&mut view, &[-pos[0], -pos[1], -pos[2]]);
         self.view = view;
@@ -224,6 +226,8 @@ impl GlRenderer {
     pub fn begin(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>, rect: &Rect) {
         gl.ctxt.disable(WebGlRenderingContext::SCISSOR_TEST);
         gl.ctxt.enable(WebGlRenderingContext::CULL_FACE);
+        gl.ctxt.enable(WebGlRenderingContext::DEPTH_TEST);
+        gl.ctxt.depth_func(WebGlRenderingContext::LESS);
         gl.ctxt.use_program(Some(&self.program));
 
         gl.ctxt.viewport(
@@ -263,6 +267,8 @@ impl GlRenderer {
             .unwrap();
         gl.ctxt
             .uniform3fv_with_f32_array(Some(&light_color_loc), &self.light_color);
+
+        gl.ctxt.clear_depth(1.0);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -277,6 +283,8 @@ impl GlRenderer {
 
         let proj = Self::projection_matrix(rect);
         mat4::multiply(&mut self.view_proj, &proj, &self.view);
+
+        gl.target.clear(None, None, true, Some(1.0), Some(0));
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -522,6 +530,11 @@ impl GlRenderer {
 
         let params = DrawParameters {
             backface_culling: BackfaceCullingMode::CullClockwise,
+            depth: Depth {
+                test: DepthTest::IfLess,
+                write: true,
+                ..Default::default()
+            },
             viewport: Some(self.viewport),
             ..Default::default()
         };
@@ -541,6 +554,7 @@ impl GlRenderer {
     pub fn end(&mut self, gl: &mut GlContext<'_, '_>) {
         gl.ctxt
             .viewport(0, 0, gl.canvas.width() as i32, gl.canvas.height() as i32);
+        gl.ctxt.disable(WebGlRenderingContext::DEPTH_TEST);
     }
 
     #[cfg(not(target_arch = "wasm32"))]

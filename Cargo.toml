@@ -16,6 +16,7 @@ instant = "0.1"
 anyhow = "1.0"
 chrono = "0.4"
 gl_matrix = "0.0"
+num-traits = "0.2"
 
 [features]
 default = ["tpscube_core/native-storage"]

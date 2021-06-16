@@ -2189,6 +2189,7 @@ dependencies = [
  "glium",
  "instant",
  "js-sys",
+ "num-traits",
  "tpscube_core",
  "wasm-bindgen",
  "web-sys",

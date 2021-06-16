@@ -59,6 +59,5 @@ void main()
 
 	vec3 ambient = vec3(0.05) * v_color * ao;
 	vec3 linear_color = ambient + Lo;
-	//vec3 color = pow(linear_color / (linear_color + vec3(1.0)), vec3(1.0 / 2.2));
 	f_color = vec4(linear_color, 1.0);
 }

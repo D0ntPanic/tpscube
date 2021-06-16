@@ -80,9 +80,10 @@ fn create_display(
     }
 
     let context_builder = glutin::ContextBuilder::new()
-        .with_depth_buffer(0)
+        .with_depth_buffer(24)
         .with_srgb(true)
-        .with_stencil_buffer(0)
+        .with_stencil_buffer(8)
+        .with_multisampling(2)
         .with_vsync(true);
 
     let display = glium::Display::new(window_builder, context_builder, &event_loop).unwrap();

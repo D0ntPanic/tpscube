@@ -13,7 +13,9 @@ use egui::{
 };
 use instant::Instant;
 use std::cmp::Ord;
-use tpscube_core::{scramble_3x3x3, History, Move, Penalty, Solve, SolveList, SolveType};
+use tpscube_core::{
+    scramble_3x3x3, Cube, Cube3x3x3, History, Move, Penalty, Solve, SolveList, SolveType,
+};
 
 const MIN_SCRAMBLE_LINES: usize = 2;
 const MAX_SCRAMBLE_LINES: usize = 5;
@@ -69,13 +71,19 @@ impl CachedSessionSolves {
 
 impl Timer {
     pub fn new() -> Self {
+        let current_scramble = scramble_3x3x3();
+        let mut cube_state = Cube3x3x3::new();
+        cube_state.do_moves(&current_scramble);
+        let mut cube = CubeRenderer::new();
+        cube.set_cube_state(cube_state);
+
         Self {
             state: TimerState::Inactive(0),
-            current_scramble: scramble_3x3x3(),
+            current_scramble,
             current_scramble_displayed: false,
             next_scramble: Some(scramble_3x3x3()),
             session_solves: CachedSessionSolves::new(None, Vec::new()),
-            cube: CubeRenderer::new(),
+            cube,
         }
     }
 
@@ -165,6 +173,11 @@ impl Timer {
         }
         self.current_scramble_displayed = false;
         self.next_scramble = None;
+
+        let mut cube_state = Cube3x3x3::new();
+        cube_state.do_moves(&self.current_scramble);
+        self.cube.set_cube_state(cube_state);
+        self.cube.reset_angle();
     }
 
     fn update_solve_cache(&mut self, history: &History) {
@@ -369,6 +382,12 @@ impl Timer {
                     galley,
                     self.current_time_color(),
                 );
+            }
+
+            if cube_rect.is_some() && ui.rect_contains_pointer(cube_rect.unwrap()) {
+                let scroll_delta = ctxt.input().scroll_delta;
+                self.cube
+                    .adjust_angle(scroll_delta.x / 2.0, scroll_delta.y / 2.0);
             }
         });
 
