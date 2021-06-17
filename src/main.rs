@@ -20,6 +20,7 @@ use glium::glutin;
 #[cfg(target_os = "windows")]
 use glium::glutin::platform::windows::WindowBuilderExtWindows;
 use std::time::Instant;
+use tpscube::is_mobile;
 
 struct RequestRepaintEvent;
 

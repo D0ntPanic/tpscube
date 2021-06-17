@@ -25,6 +25,7 @@ pub enum TimerState {
     Preparing(Instant, u32),
     Ready,
     Solving(Instant),
+    SolveComplete(u32),
 }
 
 pub struct CachedSessionSolves {
@@ -102,8 +103,15 @@ impl Timer {
 
     fn current_time_string(&self) -> String {
         match self.state {
-            TimerState::Inactive(time) => solve_time_string(time),
-            TimerState::Preparing(_, _) | TimerState::Ready => solve_time_short_string(0),
+            TimerState::Inactive(time) | TimerState::SolveComplete(time) => solve_time_string(time),
+            TimerState::Preparing(_, time) => {
+                if self.is_solving() {
+                    solve_time_short_string(0)
+                } else {
+                    solve_time_string(time)
+                }
+            }
+            TimerState::Ready => solve_time_short_string(0),
             TimerState::Solving(start) => {
                 solve_time_short_string((Instant::now() - start).as_millis() as u32)
             }
@@ -112,8 +120,16 @@ impl Timer {
 
     fn current_time_color(&self) -> Color32 {
         match self.state {
-            TimerState::Inactive(_) | TimerState::Solving(_) => Theme::Content.into(),
-            TimerState::Preparing(_, _) => Theme::BackgroundHighlight.into(),
+            TimerState::Inactive(_) | TimerState::Solving(_) | TimerState::SolveComplete(_) => {
+                Theme::Content.into()
+            }
+            TimerState::Preparing(_, _) => {
+                if self.is_solving() {
+                    Theme::BackgroundHighlight.into()
+                } else {
+                    Theme::Content.into()
+                }
+            }
             TimerState::Ready => Theme::Green.into(),
         }
     }
@@ -146,7 +162,8 @@ impl Timer {
 
     fn is_solving(&self) -> bool {
         match self.state {
-            TimerState::Inactive(_) => false,
+            TimerState::Inactive(_) | TimerState::SolveComplete(_) => false,
+            TimerState::Preparing(start, _) => (Instant::now() - start).as_millis() > 10,
             _ => true,
         }
     }
@@ -165,7 +182,7 @@ impl Timer {
         });
         let _ = history.local_commit();
 
-        self.state = TimerState::Inactive(time);
+        self.state = TimerState::SolveComplete(time);
         if let Some(scramble) = &self.next_scramble {
             self.current_scramble = scramble.clone();
         } else {
@@ -284,33 +301,38 @@ impl Timer {
             let center = rect.center();
 
             let id = ui.make_persistent_id("timer_input");
-            let interact = ui.interact(rect, id, Sense::click());
+            let interact = ui.interact(rect, id, Sense::click_and_drag());
             ui.memory().request_focus(id);
 
             // Check for user input to interact with the timer
+            let touching = crate::is_mobile() == Some(true)
+                && (interact.is_pointer_button_down_on() || interact.dragged());
             match self.state {
                 TimerState::Inactive(time) => {
-                    if ctxt.input().keys_down.contains(&Key::Space)
-                        || interact.is_pointer_button_down_on()
-                    {
+                    if ctxt.input().keys_down.contains(&Key::Space) || touching {
                         self.state = TimerState::Preparing(Instant::now(), time);
                     }
                 }
                 TimerState::Preparing(start, time) => {
-                    if ctxt.input().keys_down.len() == 0 && !interact.is_pointer_button_down_on() {
+                    if ctxt.input().keys_down.len() == 0 && !touching {
                         self.state = TimerState::Inactive(time);
-                    } else if (Instant::now() - start).as_millis() > 500 {
+                    } else if (Instant::now() - start).as_millis() > 300 {
                         self.state = TimerState::Ready;
                     }
                 }
                 TimerState::Ready => {
-                    if ctxt.input().keys_down.len() == 0 && !interact.is_pointer_button_down_on() {
+                    if ctxt.input().keys_down.len() == 0 && !touching {
                         self.state = TimerState::Solving(Instant::now());
                     }
                 }
                 TimerState::Solving(start) => {
-                    if ctxt.input().keys_down.len() != 0 || interact.is_pointer_button_down_on() {
+                    if ctxt.input().keys_down.len() != 0 || touching {
                         self.finish_solve((Instant::now() - start).as_millis() as u32, history);
+                    }
+                }
+                TimerState::SolveComplete(time) => {
+                    if ctxt.input().keys_down.len() == 0 && !touching {
+                        self.state = TimerState::Inactive(time)
                     }
                 }
             }
@@ -387,7 +409,13 @@ impl Timer {
             if cube_rect.is_some() && ui.rect_contains_pointer(cube_rect.unwrap()) {
                 let scroll_delta = ctxt.input().scroll_delta;
                 self.cube
-                    .adjust_angle(scroll_delta.x / 2.0, scroll_delta.y / 2.0);
+                    .adjust_angle(scroll_delta.x / 3.0, scroll_delta.y / 3.0);
+            }
+            if crate::is_mobile() != Some(true) && interact.dragged() {
+                self.cube.adjust_angle(
+                    ui.input().pointer.delta().x / 3.0,
+                    ui.input().pointer.delta().y / 3.0,
+                );
             }
         });
 

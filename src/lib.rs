@@ -952,10 +952,15 @@ fn manipulate_agent(canvas_id: &str, latest_cursor: Option<egui::Pos2>) -> Optio
 const MOBILE_DEVICE: [&str; 6] = ["Android", "iPhone", "iPad", "iPod", "webOS", "BlackBerry"];
 /// If context is running under mobile device?
 #[cfg(target_arch = "wasm32")]
-fn is_mobile() -> Option<bool> {
+pub fn is_mobile() -> Option<bool> {
     let user_agent = web_sys::window()?.navigator().user_agent().ok()?;
     let is_mobile = MOBILE_DEVICE.iter().any(|&name| user_agent.contains(name));
     Some(is_mobile)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn is_mobile() -> Option<bool> {
+    Some(false)
 }
 
 // Move text agent to text cursor's position, on desktop/laptop,

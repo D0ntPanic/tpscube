@@ -23,6 +23,7 @@ pub struct Application {
     history: History,
     framerate: Option<Framerate>,
     timer_cube_rect: Option<Rect>,
+    first_frame: bool,
 }
 
 pub struct ErrorApplication {
@@ -63,6 +64,7 @@ impl Application {
             history,
             framerate: None,
             timer_cube_rect: None,
+            first_frame: true,
         })
     }
 }
@@ -138,6 +140,13 @@ impl App for Application {
                 &mut self.timer_cube_rect,
             ),
             _ => framerate.set_target(None),
+        }
+
+        if self.first_frame {
+            // On some devices the 3D elements don't render properly on the first frame. Render
+            // a second frame immediately.
+            ctxt.request_repaint();
+            self.first_frame = false;
         }
     }
 
