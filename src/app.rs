@@ -1,4 +1,4 @@
-use crate::font::font_definitions;
+use crate::font::{font_definitions, ScreenSize};
 use crate::framerate::Framerate;
 use crate::gl::GlContext;
 use crate::style::{base_visuals, content_visuals, header_visuals};
@@ -24,6 +24,7 @@ pub struct Application {
     framerate: Option<Framerate>,
     timer_cube_rect: Option<Rect>,
     first_frame: bool,
+    screen_size: ScreenSize,
 }
 
 pub struct ErrorApplication {
@@ -65,13 +66,14 @@ impl Application {
             framerate: None,
             timer_cube_rect: None,
             first_frame: true,
+            screen_size: ScreenSize::Normal,
         })
     }
 }
 
 impl App for Application {
     fn setup(&mut self, ctxt: &CtxRef) {
-        ctxt.set_fonts(font_definitions());
+        ctxt.set_fonts(font_definitions(self.screen_size));
         ctxt.set_visuals(base_visuals());
     }
 
@@ -80,6 +82,21 @@ impl App for Application {
     }
 
     fn update(&mut self, ctxt: &CtxRef, frame: &mut epi::Frame<'_>) {
+        let new_screen_size = if ctxt.available_rect().height() < 540.0 {
+            ScreenSize::Small
+        } else if ctxt.available_rect().height() < 800.0 {
+            ScreenSize::Normal
+        } else if ctxt.available_rect().height() < 1100.0 {
+            ScreenSize::Large
+        } else {
+            ScreenSize::VeryLarge
+        };
+
+        if self.screen_size != new_screen_size {
+            self.screen_size = new_screen_size;
+            ctxt.set_fonts(font_definitions(self.screen_size));
+        }
+
         ctxt.set_visuals(header_visuals());
         TopPanel::top("header").show(ctxt, |ui| {
             ui.vertical(|ui| {
@@ -173,7 +190,7 @@ impl ErrorApplication {
 
 impl App for ErrorApplication {
     fn setup(&mut self, ctxt: &CtxRef) {
-        ctxt.set_fonts(font_definitions());
+        ctxt.set_fonts(font_definitions(ScreenSize::Normal));
         ctxt.set_visuals(base_visuals());
     }
 

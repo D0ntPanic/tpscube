@@ -16,6 +16,14 @@ pub enum FontSize {
     Timer,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ScreenSize {
+    Small,
+    Normal,
+    Large,
+    VeryLarge,
+}
+
 impl Into<TextStyle> for FontSize {
     fn into(self) -> TextStyle {
         match self {
@@ -38,7 +46,7 @@ impl LabelFontSize for Label {
     }
 }
 
-pub fn font_definitions() -> FontDefinitions {
+pub fn font_definitions(screen_size: ScreenSize) -> FontDefinitions {
     let mut fonts = FontDefinitions {
         font_data: BTreeMap::new(),
         fonts_for_family: BTreeMap::new(),
@@ -66,21 +74,52 @@ pub fn font_definitions() -> FontDefinitions {
         vec!["OpenSans Light".into(), "emoji-icon-font".into()],
     );
 
-    fonts
-        .family_and_size
-        .insert(FontSize::Small.into(), (FontFamily::Proportional, 16.0));
-    fonts
-        .family_and_size
-        .insert(FontSize::Normal.into(), (FontFamily::Proportional, 20.0));
-    fonts
-        .family_and_size
-        .insert(FontSize::Section.into(), (FontFamily::Proportional, 24.0));
-    fonts
-        .family_and_size
-        .insert(FontSize::Scramble.into(), (FontFamily::Monospace, 40.0));
-    fonts
-        .family_and_size
-        .insert(FontSize::Timer.into(), (FontFamily::Monospace, 128.0));
+    if crate::is_mobile() == Some(true) {
+        fonts
+            .family_and_size
+            .insert(FontSize::Small.into(), (FontFamily::Proportional, 20.0));
+        fonts
+            .family_and_size
+            .insert(FontSize::Normal.into(), (FontFamily::Proportional, 24.0));
+        fonts
+            .family_and_size
+            .insert(FontSize::Section.into(), (FontFamily::Proportional, 30.0));
+    } else {
+        fonts
+            .family_and_size
+            .insert(FontSize::Small.into(), (FontFamily::Proportional, 16.0));
+        fonts
+            .family_and_size
+            .insert(FontSize::Normal.into(), (FontFamily::Proportional, 20.0));
+        fonts
+            .family_and_size
+            .insert(FontSize::Section.into(), (FontFamily::Proportional, 24.0));
+    }
+
+    fonts.family_and_size.insert(
+        FontSize::Scramble.into(),
+        (
+            FontFamily::Monospace,
+            match screen_size {
+                ScreenSize::Small => 32.0,
+                ScreenSize::Normal => 40.0,
+                ScreenSize::Large => 48.0,
+                ScreenSize::VeryLarge => 64.0,
+            },
+        ),
+    );
+    fonts.family_and_size.insert(
+        FontSize::Timer.into(),
+        (
+            FontFamily::Monospace,
+            match screen_size {
+                ScreenSize::Small => 80.0,
+                ScreenSize::Normal => 128.0,
+                ScreenSize::Large => 144.0,
+                ScreenSize::VeryLarge => 192.0,
+            },
+        ),
+    );
 
     fonts
 }

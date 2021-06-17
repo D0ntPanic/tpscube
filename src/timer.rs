@@ -20,6 +20,9 @@ use tpscube_core::{
 const MIN_SCRAMBLE_LINES: usize = 2;
 const MAX_SCRAMBLE_LINES: usize = 5;
 
+const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
+const TARGET_TIMER_FRACTION: f32 = 0.2;
+
 pub enum TimerState {
     Inactive(u32),
     Preparing(Instant, u32),
@@ -351,22 +354,28 @@ impl Timer {
                 );
             } else {
                 // Compute sizes of components in the main view
+                let target_scramble_height = rect.height() * TARGET_SCRAMBLE_FRACTION;
+                let target_timer_height = rect.height() * TARGET_TIMER_FRACTION;
+
                 let scramble_padding = 8.0;
                 let timer_padding = 40.0;
 
                 let scramble = Self::fit_scramble(ui, &self.current_scramble, rect.width());
                 let scramble_line_height = ui.fonts().row_height(FontSize::Scramble.into());
-                let scramble_height = scramble_line_height * scramble.len() as f32;
+                let min_scramble_height = scramble_line_height * scramble.len() as f32;
+                let scramble_height = min_scramble_height.max(target_scramble_height);
 
-                let timer_height = ui.fonts().row_height(FontSize::Timer.into());
-                let timer_overlap = timer_height * 0.4;
+                let min_timer_height = ui.fonts().row_height(FontSize::Timer.into());
+                let timer_overlap = min_timer_height * 0.4;
+                let timer_height = min_timer_height.max(target_timer_height);
 
                 let cube_height = rect.height()
                     - (scramble_padding + scramble_height + timer_height + timer_padding
                         - timer_overlap);
 
                 // Render scramble
-                let mut y = rect.top() + scramble_padding;
+                let mut y =
+                    rect.top() + scramble_padding + (scramble_height - min_scramble_height) / 2.0;
                 for line in scramble {
                     let galley = ui
                         .fonts()
