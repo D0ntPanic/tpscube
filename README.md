@@ -1,17 +1,21 @@
 # TPS Cube
 
-This is an open source application for tracking cube solves.
+This is an open source application for tracking cube solves. This is the code that runs on [tpscube.xyz](https://tpscube.xyz).
 
-* Automatic scramble generation
-* Streamlined session tracking optimized for quick practice sessions
-* Solve history that isn't lost when quick resetting sessions
-* Bluetooth cube support with split timing and advanced stats
-* Graphical reports for tracking progress
-* (Planned) Algorithm library and practice mode
+It is written in pure Rust using the [egui](https://github.com/emilk/egui) framework.
+
+* Automatic scramble generation.
+* Streamlined session tracking optimized for quick practice sessions.
+* Solve history that isn't lost when quick resetting sessions.
+* Bluetooth cube support with split timing and advanced stats.
+* Graphical reports for tracking progress.
+* Automatic cloud sync across all your devices without any privacy concerns. Your data is completely anonymous, is shared only when you explicitly share solves, and there are no ads of any kind.
+* (Planned) Algorithm library and practice mode.
 
 # Supported platforms
 
-* Windows / MacOS / Linux with a native Qt frontend
+* Anything that runs a web browser with WebGL support
+* Windows / MacOS / Linux with a native binary (and without Electron!)
 
 # Scrambling algortihms
 
