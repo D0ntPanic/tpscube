@@ -1,9 +1,10 @@
 use crate::font::{font_definitions, ScreenSize};
 use crate::framerate::Framerate;
 use crate::gl::GlContext;
+use crate::history::HistoryWidget;
 use crate::style::{base_visuals, content_visuals, header_visuals};
 use crate::theme::Theme;
-use crate::timer::Timer;
+use crate::timer::TimerWidget;
 use crate::widgets::CustomWidgets;
 use anyhow::Result;
 use egui::{widgets::Label, CentralPanel, Color32, CtxRef, Rect, Rgba, TopPanel, Vec2};
@@ -19,7 +20,8 @@ enum Mode {
 
 pub struct Application {
     mode: Mode,
-    timer: Timer,
+    timer_widget: TimerWidget,
+    history_widget: HistoryWidget,
     history: History,
     framerate: Option<Framerate>,
     timer_cube_rect: Option<Rect>,
@@ -61,7 +63,8 @@ impl Application {
         let history = History::open()?;
         Ok(Application {
             mode: Mode::Timer,
-            timer: Timer::new(),
+            timer_widget: TimerWidget::new(),
+            history_widget: HistoryWidget::new(),
             history,
             framerate: None,
             timer_cube_rect: None,
@@ -149,13 +152,17 @@ impl App for Application {
         self.timer_cube_rect = None;
 
         match self.mode {
-            Mode::Timer => self.timer.update(
+            Mode::Timer => self.timer_widget.update(
                 ctxt,
                 frame,
                 &mut self.history,
                 framerate,
                 &mut self.timer_cube_rect,
             ),
+            Mode::History => {
+                self.history_widget.update(ctxt, frame, &mut self.history);
+                framerate.set_target(None);
+            }
             _ => framerate.set_target(None),
         }
 
@@ -170,14 +177,14 @@ impl App for Application {
     #[cfg(target_arch = "wasm32")]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
         if let Some(rect) = &self.timer_cube_rect {
-            self.timer.paint_cube(ctxt, gl, rect).unwrap();
+            self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
         if let Some(rect) = &self.timer_cube_rect {
-            self.timer.paint_cube(ctxt, gl, rect).unwrap();
+            self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
         }
     }
 }
@@ -202,8 +209,7 @@ impl App for ErrorApplication {
         ctxt.set_visuals(content_visuals());
         CentralPanel::default().show(ctxt, |ui| {
             ui.centered_and_justified(|ui| {
-                let red: Color32 = Theme::Red.into();
-                ui.add(Label::new(format!("Error: {}", self.message)).text_color(red));
+                ui.add(Label::new(format!("Error: {}", self.message)).text_color(Theme::Red));
             })
         });
     }

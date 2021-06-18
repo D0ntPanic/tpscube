@@ -12,9 +12,9 @@ use egui::{
     Sense, SidePanel, Stroke, Ui, Vec2,
 };
 use instant::Instant;
-use std::cmp::Ord;
 use tpscube_core::{
-    scramble_3x3x3, Cube, Cube3x3x3, History, Move, Penalty, Solve, SolveList, SolveType,
+    scramble_3x3x3, Average, BestSolve, Cube, Cube3x3x3, History, Move, Penalty, Solve, SolveList,
+    SolveType,
 };
 
 const MIN_SCRAMBLE_LINES: usize = 2;
@@ -23,7 +23,7 @@ const MAX_SCRAMBLE_LINES: usize = 5;
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
 const TARGET_TIMER_FRACTION: f32 = 0.2;
 
-pub enum TimerState {
+enum TimerState {
     Inactive(u32),
     Preparing(Instant, u32),
     Ready,
@@ -31,18 +31,18 @@ pub enum TimerState {
     SolveComplete(u32),
 }
 
-pub struct CachedSessionSolves {
+struct CachedSessionSolves {
     update_id: Option<u64>,
     solves: Vec<Solve>,
     last_ao5: Option<u32>,
     last_ao12: Option<u32>,
     session_avg: Option<u32>,
-    best_solve: Option<u32>,
-    best_ao5: Option<u32>,
-    best_ao12: Option<u32>,
+    best_solve: Option<BestSolve>,
+    best_ao5: Option<Average>,
+    best_ao12: Option<Average>,
 }
 
-pub struct Timer {
+pub struct TimerWidget {
     state: TimerState,
     current_scramble: Vec<Move>,
     current_scramble_displayed: bool,
@@ -73,7 +73,7 @@ impl CachedSessionSolves {
     }
 }
 
-impl Timer {
+impl TimerWidget {
     pub fn new() -> Self {
         let current_scramble = scramble_3x3x3();
         let mut cube_state = Cube3x3x3::new();
@@ -211,17 +211,8 @@ impl Timer {
             }
 
             // Cache solve information
-            let mut solves = Vec::new();
-            for solve in &session.solves {
-                if let Some(solve) = history.solves().get(solve) {
-                    solves.push(solve.clone());
-                }
-            }
-
-            // Sort solves by time, then by ID. There cannot be any equal solves so it
-            // is fine to use the faster unstable sort here.
-            solves.sort_unstable_by(|a, b| a.cmp(&b));
-            self.session_solves = CachedSessionSolves::new(Some(session.update_id), solves);
+            self.session_solves =
+                CachedSessionSolves::new(Some(session.update_id), session.sorted_solves(history));
         } else {
             // New session, invalidate cache
             self.session_solves = CachedSessionSolves::new(None, Vec::new());
@@ -252,9 +243,24 @@ impl Timer {
                 Self::session_time(ui, "Last ao5", self.session_solves.last_ao5);
                 Self::session_time(ui, "Last ao12", self.session_solves.last_ao12);
                 Self::session_time(ui, "Session avg", self.session_solves.session_avg);
-                Self::session_time(ui, "Best solve", self.session_solves.best_solve);
-                Self::session_time(ui, "Best ao5", self.session_solves.best_ao5);
-                Self::session_time(ui, "Best ao12", self.session_solves.best_ao12);
+                Self::session_time(
+                    ui,
+                    "Best solve",
+                    self.session_solves
+                        .best_solve
+                        .as_ref()
+                        .map(|best| best.time),
+                );
+                Self::session_time(
+                    ui,
+                    "Best ao5",
+                    self.session_solves.best_ao5.as_ref().map(|best| best.time),
+                );
+                Self::session_time(
+                    ui,
+                    "Best ao12",
+                    self.session_solves.best_ao12.as_ref().map(|best| best.time),
+                );
 
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
@@ -292,8 +298,7 @@ impl Timer {
                         has_solves = true;
                     }
                     if !has_solves {
-                        let color: Color32 = Theme::Disabled.into();
-                        ui.add(Label::new("No solves in this session").text_color(color));
+                        ui.add(Label::new("No solves in this session").text_color(Theme::Disabled));
                     }
                 });
         });

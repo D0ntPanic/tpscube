@@ -13,6 +13,7 @@ pub enum FontSize {
     Normal,
     Section,
     Scramble,
+    BestTime,
     Timer,
 }
 
@@ -31,6 +32,7 @@ impl Into<TextStyle> for FontSize {
             FontSize::Normal => TextStyle::Body,
             FontSize::Section => TextStyle::Button,
             FontSize::Scramble => TextStyle::Heading,
+            FontSize::BestTime => TextStyle::Heading,
             FontSize::Timer => TextStyle::Monospace,
         }
     }

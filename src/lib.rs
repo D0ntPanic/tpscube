@@ -6,6 +6,7 @@ mod edge_generated;
 mod font;
 mod framerate;
 mod gl;
+mod history;
 mod style;
 mod theme;
 mod timer;

@@ -6,6 +6,7 @@ mod edge_generated;
 mod font;
 mod framerate;
 mod gl;
+mod history;
 mod style;
 mod theme;
 mod timer;
@@ -20,7 +21,6 @@ use glium::glutin;
 #[cfg(target_os = "windows")]
 use glium::glutin::platform::windows::WindowBuilderExtWindows;
 use std::time::Instant;
-use tpscube::is_mobile;
 
 struct RequestRepaintEvent;
 
@@ -110,6 +110,10 @@ fn integration_info(
 
 fn load_icon(icon_data: epi::IconData) -> Option<glutin::window::Icon> {
     glutin::window::Icon::from_rgba(icon_data.rgba, icon_data.width, icon_data.height).ok()
+}
+
+pub fn is_mobile() -> Option<bool> {
+    Some(false)
 }
 
 // ----------------------------------------------------------------------------

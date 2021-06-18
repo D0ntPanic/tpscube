@@ -1,8 +1,7 @@
 use crate::font::{FontSize, LabelFontSize};
 use crate::theme::Theme;
-use egui::{
-    popup::popup_below_widget, widgets::Label, Color32, Layout, Response, Sense, Stroke, Ui,
-};
+use chrono::{DateTime, Local};
+use egui::{popup::popup_below_widget, widgets::Label, Layout, Response, Sense, Stroke, Ui};
 use tpscube_core::{History, Penalty, Solve};
 
 pub trait CustomWidgets {
@@ -35,12 +34,45 @@ pub fn solve_time_short_string(time: u32) -> String {
     }
 }
 
+pub fn date_string(time: &DateTime<Local>) -> String {
+    let now = Local::now();
+    let current_day = now.date();
+    let target_day = time.date();
+    let days = (current_day - target_day).num_days();
+    match days {
+        0 => format!(
+            "Today at {}",
+            time.time().format("%l:%M %P").to_string().trim()
+        ),
+        1 => format!(
+            "Yesterday at {}",
+            time.time().format("%l:%M %P").to_string().trim()
+        ),
+        2..=6 => format!(
+            "{} at {}",
+            target_day.format("%A"),
+            time.time().format("%l:%M %P").to_string().trim()
+        ),
+        7..=364 => format!(
+            "{} {} at {}",
+            target_day.format("%B"),
+            target_day.format("%e").to_string().trim(),
+            time.time().format("%l:%M %P").to_string().trim()
+        ),
+        _ => format!(
+            "{} {} at {}",
+            target_day.format("%B"),
+            target_day.format("%e, %Y").to_string().trim(),
+            time.time().format("%l:%M %P").to_string().trim()
+        ),
+    }
+}
+
 impl CustomWidgets for Ui {
     fn header_label(&mut self, text: &str, active: bool) -> Response {
         self.add(
             if active {
-                let color: Color32 = Theme::Green.into();
-                Label::new(text).text_color(color)
+                Label::new(text).text_color(Theme::Green)
             } else {
                 Label::new(text)
             }
@@ -49,11 +81,10 @@ impl CustomWidgets for Ui {
     }
 
     fn section(&mut self, text: &str) {
-        let blue: Color32 = Theme::Blue.into();
         self.add(
             Label::new(text)
                 .font_size(FontSize::Section)
-                .text_color(blue),
+                .text_color(Theme::Blue),
         );
         self.scope(|ui| {
             ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
@@ -73,9 +104,8 @@ impl CustomWidgets for Ui {
         let old_visuals = self.ctx().style().visuals.clone();
         self.ctx().set_visuals(crate::style::popup_visuals());
 
-        let idx_color: Color32 = Theme::Disabled.into();
         self.horizontal(|ui| {
-            ui.add(Label::new(format!("{}.", idx + 1)).text_color(idx_color));
+            ui.add(Label::new(format!("{}.", idx + 1)).text_color(Theme::Disabled));
             ui.with_layout(Layout::right_to_left(), |ui| {
                 let popup_id = ui.make_persistent_id(format!("{}-{}", src, solve.id));
                 let response = ui.add(Label::new("  ☰").small().sense(Sense::click()));
@@ -137,8 +167,7 @@ impl CustomWidgets for Ui {
                 if let Some(time) = solve.final_time() {
                     ui.solve_time(time);
                 } else {
-                    let red: Color32 = Theme::Red.into();
-                    ui.add(Label::new("DNF").text_color(red));
+                    ui.add(Label::new("DNF").text_color(Theme::Red));
                 }
             });
         });

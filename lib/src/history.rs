@@ -32,6 +32,7 @@ pub struct History {
     current_sync: Option<Arc<Mutex<SyncOperation>>>,
     last_sync_result: SyncStatus,
     current_session: String,
+    update_id: u64,
     next_update_id: u64,
 }
 
@@ -126,7 +127,8 @@ impl History {
             current_sync: None,
             last_sync_result: SyncStatus::NotSynced,
             current_session,
-            next_update_id: 0,
+            update_id: 0,
+            next_update_id: 1,
         };
 
         // Resolve actions to create solve and session lists
@@ -153,12 +155,18 @@ impl History {
         &self.solves.sessions
     }
 
+    pub fn update_id(&self) -> u64 {
+        self.update_id
+    }
+
     fn new_action(&mut self, action: StoredAction) {
         if self
             .solves
             .resolve_action(&action, &mut self.next_update_id)
         {
             self.local_actions.push(action);
+            self.update_id = self.next_update_id;
+            self.next_update_id += 1;
         }
     }
 
@@ -170,6 +178,8 @@ impl History {
         let session = Uuid::new_v4().to_simple().to_string();
         self.current_session = session.clone();
         self.storage.put("session", session.as_bytes())?;
+        self.update_id = self.next_update_id;
+        self.next_update_id += 1;
         Ok(session)
     }
 
@@ -179,6 +189,8 @@ impl History {
 
     pub fn set_current_session(&mut self, session: String) {
         self.current_session = session;
+        self.update_id = self.next_update_id;
+        self.next_update_id += 1;
     }
 
     pub fn penalty(&mut self, solve_id: String, penalty: Penalty) {
@@ -347,6 +359,9 @@ impl History {
                 self.local_actions.delete_bundles(self.storage.as_mut())?;
                 self.local_actions = new_list;
             }
+
+            self.update_id = self.next_update_id;
+            self.next_update_id += 1;
         }
 
         // Update sync ID and commit to local database if changed
@@ -476,5 +491,20 @@ impl SolveDatabase {
                 None => false,
             },
         }
+    }
+}
+
+impl Session {
+    pub fn sorted_solves(&self, history: &History) -> Vec<Solve> {
+        let mut solves: Vec<Solve> = self
+            .solves
+            .iter()
+            .filter_map(|solve_id| history.solves().get(solve_id).map(|solve| solve.clone()))
+            .collect();
+
+        // Sort solves by time, then by ID. There cannot be any equal solves so it
+        // is fine to use the faster unstable sort here.
+        solves.sort_unstable_by(|a, b| a.cmp(&b));
+        solves
     }
 }

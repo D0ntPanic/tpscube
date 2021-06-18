@@ -114,11 +114,23 @@ impl Ord for Solve {
     }
 }
 
+#[derive(Clone)]
+pub struct BestSolve {
+    pub solve: Solve,
+    pub time: u32,
+}
+
+#[derive(Clone)]
+pub struct Average {
+    pub solves: Vec<Solve>,
+    pub time: u32,
+}
+
 pub trait SolveList {
     fn average(&self) -> Option<u32>;
     fn last_average(&self, count: usize) -> Option<u32>;
-    fn best(&self) -> Option<u32>;
-    fn best_average(&self, count: usize) -> Option<u32>;
+    fn best(&self) -> Option<BestSolve>;
+    fn best_average(&self, count: usize) -> Option<Average>;
 }
 
 impl SolveList for &[Solve] {
@@ -181,32 +193,56 @@ impl SolveList for &[Solve] {
         }
     }
 
-    fn best(&self) -> Option<u32> {
-        self.iter().fold(None, |best, solve| {
-            if let Some(time) = solve.final_time() {
-                if let Some(best) = best {
-                    Some(best.min(time))
+    fn best(&self) -> Option<BestSolve> {
+        self.iter()
+            .fold(None, |best, solve| {
+                if let Some(time) = solve.final_time() {
+                    if let Some((best_solve, best_time)) = best {
+                        if time < best_time {
+                            Some((solve, time))
+                        } else {
+                            Some((best_solve, best_time))
+                        }
+                    } else {
+                        Some((solve, time))
+                    }
                 } else {
-                    Some(time)
+                    best
                 }
-            } else {
-                best
-            }
-        })
+            })
+            .map(|best| {
+                let (solve, time) = best;
+                BestSolve {
+                    solve: solve.clone(),
+                    time,
+                }
+            })
     }
 
-    fn best_average(&self, count: usize) -> Option<u32> {
-        self.windows(count).fold(None, |best, solves| {
-            if let Some(time) = solves.average() {
-                if let Some(best) = best {
-                    Some(best.min(time))
+    fn best_average(&self, count: usize) -> Option<Average> {
+        self.windows(count)
+            .fold(None, |best, solves| {
+                if let Some(time) = solves.average() {
+                    if let Some((best_solves, best_time)) = best {
+                        if time < best_time {
+                            Some((solves, time))
+                        } else {
+                            Some((best_solves, best_time))
+                        }
+                    } else {
+                        Some((solves, time))
+                    }
                 } else {
-                    Some(time)
+                    best
                 }
-            } else {
-                best
-            }
-        })
+            })
+            .map(|best| {
+                let (solves, time) = best;
+                Average {
+                    solves: solves.to_vec(),
+                    time,
+                }
+            })
     }
 }
 
