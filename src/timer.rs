@@ -8,8 +8,8 @@ use crate::widgets::{solve_time_short_string, solve_time_string, CustomWidgets};
 use anyhow::Result;
 use chrono::Local;
 use egui::{
-    containers::ScrollArea, widgets::Label, CentralPanel, Color32, CtxRef, Key, Layout, Pos2, Rect,
-    Sense, SidePanel, Stroke, Ui, Vec2,
+    containers::ScrollArea, popup_below_widget, widgets::Label, Align2, CentralPanel, Color32,
+    CtxRef, Key, Layout, Pos2, Rect, Sense, SidePanel, Stroke, Ui, Vec2,
 };
 use instant::Instant;
 use tpscube_core::{
@@ -96,7 +96,7 @@ impl TimerWidget {
             ui.label(format!("{}:", name));
             ui.with_layout(Layout::right_to_left(), |ui| {
                 if let Some(time) = time {
-                    ui.solve_time(time);
+                    ui.label(solve_time_string(time));
                 } else {
                     ui.label("-");
                 }
@@ -219,6 +219,99 @@ impl TimerWidget {
         }
     }
 
+    fn add_solve(ui: &mut Ui, idx: usize, solve: &Solve, history: &mut History) {
+        // Change window theme so that popup menu stands out
+        let old_visuals = ui.ctx().style().visuals.clone();
+        ui.ctx().set_visuals(crate::style::popup_visuals());
+
+        ui.style_mut().spacing.item_spacing.x = 0.0;
+        ui.horizontal(|ui| {
+            ui.add(Label::new(format!("{}.", idx + 1)).text_color(Theme::Disabled));
+            ui.with_layout(Layout::right_to_left(), |ui| {
+                let popup_id = ui.make_persistent_id(format!("timer-{}", solve.id));
+                let response = ui.add(Label::new("  ☰").small().sense(Sense::click()));
+                if response.clicked() {
+                    ui.memory().toggle_popup(popup_id);
+                }
+                popup_below_widget(ui, popup_id, &response, |ui| {
+                    ui.set_min_width(180.0);
+                    if ui
+                        .selectable_label(
+                            match solve.penalty {
+                                Penalty::None => true,
+                                _ => false,
+                            },
+                            "No penalty",
+                        )
+                        .clicked()
+                    {
+                        history.penalty(solve.id.clone(), Penalty::None);
+                        let _ = history.local_commit();
+                    }
+
+                    if ui
+                        .selectable_label(
+                            match solve.penalty {
+                                Penalty::Time(2000) => true,
+                                _ => false,
+                            },
+                            "2 second penalty",
+                        )
+                        .clicked()
+                    {
+                        history.penalty(solve.id.clone(), Penalty::Time(2000));
+                        let _ = history.local_commit();
+                    }
+
+                    if ui
+                        .selectable_label(
+                            match solve.penalty {
+                                Penalty::DNF => true,
+                                _ => false,
+                            },
+                            "DNF",
+                        )
+                        .clicked()
+                    {
+                        history.penalty(solve.id.clone(), Penalty::DNF);
+                        let _ = history.local_commit();
+                    }
+
+                    ui.separator();
+
+                    if ui.selectable_label(false, "Delete solve").clicked() {
+                        history.delete_solve(solve.id.clone());
+                        let _ = history.local_commit();
+                    }
+                });
+
+                // Draw penalty if there is one, but always reserve space for it
+                let penalty_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Small.into(), " (+2) ".into());
+                let (response, painter) = ui.allocate_painter(penalty_galley.size, Sense::hover());
+                if let Penalty::Time(penalty) = solve.penalty {
+                    painter.text(
+                        response.rect.left_bottom(),
+                        Align2::LEFT_BOTTOM,
+                        format!(" (+{})", penalty / 1000),
+                        FontSize::Small.into(),
+                        Theme::Red.into(),
+                    );
+                }
+
+                if let Some(time) = solve.final_time() {
+                    ui.label(solve_time_string(time));
+                } else {
+                    ui.add(Label::new("DNF").text_color(Theme::Red));
+                }
+            });
+        });
+
+        // Restore old theme
+        ui.ctx().set_visuals(old_visuals);
+    }
+
     pub fn update(
         &mut self,
         ctxt: &CtxRef,
@@ -294,7 +387,7 @@ impl TimerWidget {
                 .show(ui, |ui| {
                     let mut has_solves = false;
                     for (idx, solve) in self.session_solves.solves.iter().enumerate().rev() {
-                        ui.solve("timer", idx, solve, history);
+                        Self::add_solve(ui, idx, solve, history);
                         has_solves = true;
                     }
                     if !has_solves {
