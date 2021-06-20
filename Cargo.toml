@@ -22,6 +22,9 @@ num-traits = "0.2"
 default = ["tpscube_core/native-storage"]
 wasm = ["getrandom/js", "tpscube_core/web-storage", "instant/wasm-bindgen", "chrono/wasmbind"]
 
+[profile.dev]
+opt-level = 2
+
 [profile.release]
 panic = "abort"
 lto = true
