@@ -26,6 +26,8 @@ trait HistoryRegion {
     );
 }
 
+struct NoSolvesRegion;
+
 struct AllTimeBestRegion {
     best_solve: Option<BestSolve>,
     best_ao5: Option<Average>,
@@ -68,6 +70,36 @@ struct SolveLayoutMetrics {
     best_columns: usize,
     solve_columns: usize,
     solve_content_width: f32,
+}
+
+impl HistoryRegion for NoSolvesRegion {
+    fn height(&self, ui: &Ui, _layout_metrics: &SolveLayoutMetrics) -> f32 {
+        ui.max_rect().height() - 32.0
+    }
+
+    fn paint(
+        &self,
+        ui: &mut Ui,
+        rect: Rect,
+        _layout_metrics: &SolveLayoutMetrics,
+        _history: &mut History,
+    ) {
+        let galley = ui.fonts().layout_multiline(
+            FontSize::Section.into(),
+            "There are no solves available. If you have other devices to sync with, \
+            set your sync key in Settings."
+                .into(),
+            rect.width(),
+        );
+        ui.painter().galley(
+            Pos2::new(
+                rect.center().x - galley.size.x / 2.0,
+                rect.center().y - galley.size.y / 2.0,
+            ),
+            galley,
+            Theme::Disabled.into(),
+        );
+    }
 }
 
 impl AllTimeBestRegion {
@@ -774,15 +806,20 @@ impl HistoryWidget {
             })
             .collect();
 
-        // Add an all-time best region at the top
-        regions.insert(
-            0,
-            Box::new(AllTimeBestRegion {
-                best_solve: all_time_best_solve,
-                best_ao5: all_time_best_ao5,
-                best_ao12: all_time_best_ao12,
-            }),
-        );
+        if regions.len() == 0 {
+            // There are no sessions
+            regions.push(Box::new(NoSolvesRegion));
+        } else {
+            // Add an all-time best region at the top
+            regions.insert(
+                0,
+                Box::new(AllTimeBestRegion {
+                    best_solve: all_time_best_solve,
+                    best_ao5: all_time_best_ao5,
+                    best_ao12: all_time_best_ao12,
+                }),
+            );
+        }
 
         // Lay out regions
         let mut y = 0.0;

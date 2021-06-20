@@ -79,7 +79,7 @@ pub fn font_definitions(screen_size: ScreenSize) -> FontDefinitions {
     if crate::is_mobile() == Some(true) {
         fonts
             .family_and_size
-            .insert(FontSize::Small.into(), (FontFamily::Proportional, 20.0));
+            .insert(FontSize::Small.into(), (FontFamily::Proportional, 16.0));
         fonts
             .family_and_size
             .insert(FontSize::Normal.into(), (FontFamily::Proportional, 24.0));

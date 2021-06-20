@@ -1,11 +1,12 @@
 use crate::font::{FontSize, LabelFontSize};
 use crate::theme::Theme;
 use chrono::{DateTime, Local};
-use egui::{widgets::Label, Response, Sense, Stroke, Ui};
+use egui::{widgets::Label, Pos2, Response, Sense, Stroke, Ui, Vec2};
 
 pub trait CustomWidgets {
-    fn header_label(&mut self, text: &str, active: bool) -> Response;
+    fn header_label(&mut self, icon: &str, text: &str, landscape: bool, active: bool) -> Response;
     fn section(&mut self, text: &str);
+    fn section_separator(&mut self);
 }
 
 pub fn solve_time_string(time: u32) -> String {
@@ -66,15 +67,55 @@ pub fn date_string(time: &DateTime<Local>) -> String {
 }
 
 impl CustomWidgets for Ui {
-    fn header_label(&mut self, text: &str, active: bool) -> Response {
-        self.add(
-            if active {
-                Label::new(text).text_color(Theme::Green)
+    fn header_label(&mut self, icon: &str, text: &str, landscape: bool, active: bool) -> Response {
+        if landscape {
+            self.add(
+                if active {
+                    Label::new(format!("{}  {}", icon, text)).text_color(Theme::Green)
+                } else {
+                    Label::new(format!("{}  {}", icon, text))
+                }
+                .sense(Sense::click()),
+            )
+        } else {
+            // In portrait mode, display icon with small text below
+            let icon_galley = self
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), icon.into());
+            let text_galley = self
+                .fonts()
+                .layout_single_line(FontSize::Small.into(), text.into());
+
+            let (response, painter) = self.allocate_painter(
+                Vec2::new(text_galley.size.x, icon_galley.size.y + text_galley.size.y),
+                Sense::click(),
+            );
+
+            let icon_height = icon_galley.size.y;
+            let color = if active {
+                Theme::Green.into()
+            } else if response.hovered() {
+                Theme::Content.into()
             } else {
-                Label::new(text)
-            }
-            .sense(Sense::click()),
-        )
+                Theme::Disabled.into()
+            };
+            painter.galley(
+                Pos2::new(
+                    response.rect.center().x - icon_galley.size.x / 2.0,
+                    response.rect.top(),
+                ),
+                icon_galley,
+                color,
+            );
+
+            painter.galley(
+                Pos2::new(response.rect.left(), response.rect.top() + icon_height),
+                text_galley,
+                color,
+            );
+
+            response
+        }
     }
 
     fn section(&mut self, text: &str) {
@@ -83,6 +124,10 @@ impl CustomWidgets for Ui {
                 .font_size(FontSize::Section)
                 .text_color(Theme::Blue),
         );
+        self.section_separator();
+    }
+
+    fn section_separator(&mut self) {
         self.scope(|ui| {
             ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
                 width: 1.0,

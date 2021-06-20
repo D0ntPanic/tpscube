@@ -85,11 +85,18 @@ impl App for Application {
     }
 
     fn update(&mut self, ctxt: &CtxRef, frame: &mut epi::Frame<'_>) {
-        let new_screen_size = if ctxt.available_rect().height() < 540.0 {
+        let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
+        let landscape = aspect > 1.0;
+        let effective_height = if landscape {
+            ctxt.available_rect().height()
+        } else {
+            ctxt.available_rect().height() * 0.75
+        };
+        let new_screen_size = if effective_height < 540.0 {
             ScreenSize::Small
-        } else if ctxt.available_rect().height() < 800.0 {
+        } else if effective_height < 800.0 {
             ScreenSize::Normal
-        } else if ctxt.available_rect().height() < 1100.0 {
+        } else if effective_height < 1100.0 {
             ScreenSize::Large
         } else {
             ScreenSize::VeryLarge
@@ -110,28 +117,28 @@ impl App for Application {
                     ui.style_mut().spacing.item_spacing.x = 20.0;
 
                     if ui
-                        .header_label("⏱  Timer", self.mode == Mode::Timer)
+                        .header_label("⏱", "Timer", landscape, self.mode == Mode::Timer)
                         .clicked()
                     {
                         self.mode = Mode::Timer;
                     }
 
                     if ui
-                        .header_label("📖  History", self.mode == Mode::History)
+                        .header_label("📖", "History", landscape, self.mode == Mode::History)
                         .clicked()
                     {
                         self.mode = Mode::History;
                     }
 
                     if ui
-                        .header_label("📉  Graphs", self.mode == Mode::Graphs)
+                        .header_label("📉", "Graphs", landscape, self.mode == Mode::Graphs)
                         .clicked()
                     {
                         self.mode = Mode::Graphs;
                     }
 
                     if ui
-                        .header_label("⚙  Settings", self.mode == Mode::Settings)
+                        .header_label("⚙", "Settings", landscape, self.mode == Mode::Settings)
                         .clicked()
                     {
                         self.mode = Mode::Settings;

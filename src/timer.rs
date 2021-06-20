@@ -1,5 +1,5 @@
 use crate::cube::CubeRenderer;
-use crate::font::FontSize;
+use crate::font::{FontSize, LabelFontSize};
 use crate::framerate::Framerate;
 use crate::gl::GlContext;
 use crate::style::{content_visuals, side_visuals};
@@ -8,8 +8,8 @@ use crate::widgets::{solve_time_short_string, solve_time_string, CustomWidgets};
 use anyhow::Result;
 use chrono::Local;
 use egui::{
-    containers::ScrollArea, popup_below_widget, widgets::Label, Align2, CentralPanel, Color32,
-    CtxRef, Key, Layout, Pos2, Rect, Sense, SidePanel, Stroke, Ui, Vec2,
+    containers::ScrollArea, popup_below_widget, widgets::Label, Align, Align2, CentralPanel,
+    Color32, CtxRef, Key, Layout, Pos2, Rect, Sense, SidePanel, Stroke, TopPanel, Ui, Vec2,
 };
 use instant::Instant;
 use tpscube_core::{
@@ -22,6 +22,8 @@ const MAX_SCRAMBLE_LINES: usize = 5;
 
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
 const TARGET_TIMER_FRACTION: f32 = 0.2;
+
+const NEW_SCRAMBLE_PADDING: f32 = 4.0;
 
 enum TimerState {
     Inactive(u32),
@@ -91,9 +93,13 @@ impl TimerWidget {
         }
     }
 
-    fn session_time(ui: &mut Ui, name: &str, time: Option<u32>) {
+    fn session_time(ui: &mut Ui, name: &str, small: bool, time: Option<u32>) {
         ui.horizontal(|ui| {
-            ui.label(format!("{}:", name));
+            if small {
+                ui.add(Label::new(format!("{}:", name)).small());
+            } else {
+                ui.label(format!("{}:", name));
+            }
             ui.with_layout(Layout::right_to_left(), |ui| {
                 if let Some(time) = time {
                     ui.label(solve_time_string(time));
@@ -171,6 +177,21 @@ impl TimerWidget {
         }
     }
 
+    fn new_scramble(&mut self) {
+        if let Some(scramble) = &self.next_scramble {
+            self.current_scramble = scramble.clone();
+        } else {
+            self.current_scramble = scramble_3x3x3();
+        }
+        self.current_scramble_displayed = false;
+        self.next_scramble = None;
+
+        let mut cube_state = Cube3x3x3::new();
+        cube_state.do_moves(&self.current_scramble);
+        self.cube.set_cube_state(cube_state);
+        self.cube.reset_angle();
+    }
+
     fn finish_solve(&mut self, time: u32, history: &mut History) {
         history.new_solve(Solve {
             id: Solve::new_id(),
@@ -184,20 +205,8 @@ impl TimerWidget {
             moves: None,
         });
         let _ = history.local_commit();
-
         self.state = TimerState::SolveComplete(time);
-        if let Some(scramble) = &self.next_scramble {
-            self.current_scramble = scramble.clone();
-        } else {
-            self.current_scramble = scramble_3x3x3();
-        }
-        self.current_scramble_displayed = false;
-        self.next_scramble = None;
-
-        let mut cube_state = Cube3x3x3::new();
-        cube_state.do_moves(&self.current_scramble);
-        self.cube.set_cube_state(cube_state);
-        self.cube.reset_angle();
+        self.new_scramble();
     }
 
     fn update_solve_cache(&mut self, history: &History) {
@@ -327,44 +336,92 @@ impl TimerWidget {
         }
 
         ctxt.set_visuals(side_visuals());
-        SidePanel::left("timer", 160.0).show(ctxt, |ui| {
-            ui.section("Session");
+        let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
+        if aspect >= 1.0 {
+            // Landscape mode. Session details to the left.
+            SidePanel::left("left_timer", 175.0).show(ctxt, |ui| {
+                ui.section("Session");
 
-            self.update_solve_cache(history);
+                self.update_solve_cache(history);
 
-            ui.vertical(|ui| {
-                Self::session_time(ui, "Last ao5", self.session_solves.last_ao5);
-                Self::session_time(ui, "Last ao12", self.session_solves.last_ao12);
-                Self::session_time(ui, "Session avg", self.session_solves.session_avg);
-                Self::session_time(
-                    ui,
-                    "Best solve",
-                    self.session_solves
-                        .best_solve
-                        .as_ref()
-                        .map(|best| best.time),
-                );
-                Self::session_time(
-                    ui,
-                    "Best ao5",
-                    self.session_solves.best_ao5.as_ref().map(|best| best.time),
-                );
-                Self::session_time(
-                    ui,
-                    "Best ao12",
-                    self.session_solves.best_ao12.as_ref().map(|best| best.time),
-                );
+                ui.vertical(|ui| {
+                    Self::session_time(ui, "Last ao5", false, self.session_solves.last_ao5);
+                    Self::session_time(ui, "Last ao12", false, self.session_solves.last_ao12);
+                    Self::session_time(ui, "Session avg", false, self.session_solves.session_avg);
+                    Self::session_time(
+                        ui,
+                        "Best solve",
+                        false,
+                        self.session_solves
+                            .best_solve
+                            .as_ref()
+                            .map(|best| best.time),
+                    );
+                    Self::session_time(
+                        ui,
+                        "Best ao5",
+                        false,
+                        self.session_solves.best_ao5.as_ref().map(|best| best.time),
+                    );
+                    Self::session_time(
+                        ui,
+                        "Best ao12",
+                        false,
+                        self.session_solves.best_ao12.as_ref().map(|best| best.time),
+                    );
+
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
+                            width: 1.0,
+                            color: Theme::Red.into(),
+                        };
+                        ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
+                            width: 1.0,
+                            color: Theme::Red.into(),
+                        };
+                        ui.with_layout(Layout::right_to_left(), |ui| {
+                            if ui
+                                .add(Label::new("↺  New session").sense(Sense::click()))
+                                .clicked()
+                            {
+                                let _ = history.new_session();
+                            }
+                        })
+                    });
+                });
 
                 ui.add_space(8.0);
+                ui.section("Solves");
+
+                ui.visuals_mut().widgets.inactive.bg_fill = Theme::BackgroundHighlight.into();
+                ui.visuals_mut().widgets.hovered.bg_fill = Theme::Disabled.into();
+                ui.visuals_mut().widgets.active.bg_fill = Theme::Disabled.into();
+                ScrollArea::auto_sized()
+                    .id_source("timer_solve_list")
+                    .show(ui, |ui| {
+                        let mut has_solves = false;
+                        for (idx, solve) in self.session_solves.solves.iter().enumerate().rev() {
+                            Self::add_solve(ui, idx, solve, history);
+                            has_solves = true;
+                        }
+                        if !has_solves {
+                            ui.add(
+                                Label::new("No solves in this session").text_color(Theme::Disabled),
+                            );
+                        }
+                    });
+            });
+        } else {
+            // Portrait mode. Session details at the top.
+            TopPanel::top("top_timer").show(ctxt, |ui| {
+                // Session header with embedded new session button.
                 ui.horizontal(|ui| {
-                    ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
-                        width: 1.0,
-                        color: Theme::Red.into(),
-                    };
-                    ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
-                        width: 1.0,
-                        color: Theme::Red.into(),
-                    };
+                    ui.add(
+                        Label::new("Session")
+                            .font_size(FontSize::Section)
+                            .text_color(Theme::Blue),
+                    );
                     ui.with_layout(Layout::right_to_left(), |ui| {
                         if ui
                             .add(Label::new("↺  New session").sense(Sense::click()))
@@ -374,156 +431,288 @@ impl TimerWidget {
                         }
                     })
                 });
-            });
+                ui.section_separator();
 
-            ui.add_space(8.0);
-            ui.section("Solves");
+                self.update_solve_cache(history);
 
-            ui.visuals_mut().widgets.inactive.bg_fill = Theme::BackgroundHighlight.into();
-            ui.visuals_mut().widgets.hovered.bg_fill = Theme::Disabled.into();
-            ui.visuals_mut().widgets.active.bg_fill = Theme::Disabled.into();
-            ScrollArea::auto_sized()
-                .id_source("timer_solve_list")
-                .show(ui, |ui| {
-                    let mut has_solves = false;
-                    for (idx, solve) in self.session_solves.solves.iter().enumerate().rev() {
-                        Self::add_solve(ui, idx, solve, history);
-                        has_solves = true;
-                    }
-                    if !has_solves {
-                        ui.add(Label::new("No solves in this session").text_color(Theme::Disabled));
+                // If the screen is too small, can only show last averages
+                let best_cutoff = if crate::is_mobile() == Some(true) {
+                    320.0
+                } else {
+                    290.0
+                };
+                let show_best = ui.max_rect().width() > best_cutoff;
+
+                ui.horizontal(|ui| {
+                    // Show last averages
+                    ui.allocate_ui(
+                        Vec2::new(
+                            if show_best {
+                                (ui.max_rect().width() - 24.0) / 2.0
+                            } else {
+                                ui.max_rect().width()
+                            },
+                            ui.max_rect().height(),
+                        ),
+                        |ui| {
+                            ui.vertical(|ui| {
+                                Self::session_time(
+                                    ui,
+                                    "Last ao5",
+                                    true,
+                                    self.session_solves.last_ao5,
+                                );
+                                Self::session_time(
+                                    ui,
+                                    "Last ao12",
+                                    true,
+                                    self.session_solves.last_ao12,
+                                );
+                                Self::session_time(
+                                    ui,
+                                    "Session avg",
+                                    true,
+                                    self.session_solves.session_avg,
+                                );
+                            });
+                        },
+                    );
+
+                    if show_best {
+                        // Show separator between last averages and best averages
+                        ui.scope(|ui| {
+                            ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Disabled.into(),
+                            };
+                            ui.separator();
+                        });
+
+                        // Show best averages
+                        ui.allocate_ui(
+                            Vec2::new((ui.max_rect().width() - 24.0) / 2.0, ui.max_rect().height()),
+                            |ui| {
+                                ui.vertical(|ui| {
+                                    Self::session_time(
+                                        ui,
+                                        "Best solve",
+                                        true,
+                                        self.session_solves
+                                            .best_solve
+                                            .as_ref()
+                                            .map(|best| best.time),
+                                    );
+                                    Self::session_time(
+                                        ui,
+                                        "Best ao5",
+                                        true,
+                                        self.session_solves.best_ao5.as_ref().map(|best| best.time),
+                                    );
+                                    Self::session_time(
+                                        ui,
+                                        "Best ao12",
+                                        true,
+                                        self.session_solves
+                                            .best_ao12
+                                            .as_ref()
+                                            .map(|best| best.time),
+                                    );
+                                });
+                            },
+                        );
                     }
                 });
-        });
+
+                ui.add_space(4.0);
+            });
+        }
 
         ctxt.set_visuals(content_visuals());
         CentralPanel::default().show(ctxt, |ui| {
-            let rect = ui.max_rect();
-            let center = rect.center();
+            ui.vertical(|ui| {
+                // The rest of the central area is the timer
+                ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                    let mut rect = ui.max_rect();
+                    let mut center = rect.center();
+                    let is_solving = self.is_solving();
 
-            let id = ui.make_persistent_id("timer_input");
-            let interact = ui.interact(rect, id, Sense::click_and_drag());
-            ui.memory().request_focus(id);
+                    if !is_solving {
+                        // Draw new scramble button at top
+                        let scramble_galley = ui
+                            .fonts()
+                            .layout_single_line(FontSize::Small.into(), "↺  New scramble".into());
+                        let new_scramble_rect = Rect::from_center_size(
+                            Pos2::new(
+                                rect.center().x,
+                                rect.top() + NEW_SCRAMBLE_PADDING + scramble_galley.size.y / 2.0,
+                            ),
+                            scramble_galley.size,
+                        );
+                        let interact = ui.allocate_rect(new_scramble_rect, Sense::click());
+                        ui.painter().galley(
+                            new_scramble_rect.left_top(),
+                            scramble_galley,
+                            if interact.hovered() {
+                                Theme::Red.into()
+                            } else {
+                                Theme::Disabled.into()
+                            },
+                        );
 
-            // Check for user input to interact with the timer
-            let touching = crate::is_mobile() == Some(true)
-                && (interact.is_pointer_button_down_on() || interact.dragged());
-            match self.state {
-                TimerState::Inactive(time) => {
-                    if ctxt.input().keys_down.contains(&Key::Space) || touching {
-                        self.state = TimerState::Preparing(Instant::now(), time);
+                        // Check for new scramble clicks
+                        if interact.clicked() {
+                            if let TimerState::Inactive(_) = &self.state {
+                                self.new_scramble();
+                            }
+                        }
+
+                        // Adjust remaining rectangle to remove new scramble button area
+                        let top_left = Pos2::new(
+                            rect.left(),
+                            new_scramble_rect.bottom() + NEW_SCRAMBLE_PADDING,
+                        );
+                        rect = Rect::from_min_size(
+                            top_left,
+                            Vec2::new(rect.width(), rect.bottom() - top_left.y),
+                        );
+                        center = rect.center();
                     }
-                }
-                TimerState::Preparing(start, time) => {
-                    if ctxt.input().keys_down.len() == 0 && !touching {
-                        self.state = TimerState::Inactive(time);
-                    } else if (Instant::now() - start).as_millis() > 300 {
-                        self.state = TimerState::Ready;
+
+                    // The entire timer area is interactable, touch events should start/stop the
+                    // timer anywhere in the timer area.
+                    let id = ui.make_persistent_id("timer_input");
+                    let interact = ui.interact(rect, id, Sense::click_and_drag());
+                    ui.memory().request_focus(id);
+
+                    // Check for user input to interact with the timer
+                    let touching = crate::is_mobile() == Some(true)
+                        && (interact.is_pointer_button_down_on() || interact.dragged());
+                    match self.state {
+                        TimerState::Inactive(time) => {
+                            if ctxt.input().keys_down.contains(&Key::Space) || touching {
+                                self.state = TimerState::Preparing(Instant::now(), time);
+                            }
+                        }
+                        TimerState::Preparing(start, time) => {
+                            if ctxt.input().keys_down.len() == 0 && !touching {
+                                self.state = TimerState::Inactive(time);
+                            } else if (Instant::now() - start).as_millis() > 300 {
+                                self.state = TimerState::Ready;
+                            }
+                        }
+                        TimerState::Ready => {
+                            if ctxt.input().keys_down.len() == 0 && !touching {
+                                self.state = TimerState::Solving(Instant::now());
+                            }
+                        }
+                        TimerState::Solving(start) => {
+                            if ctxt.input().keys_down.len() != 0 || touching {
+                                self.finish_solve(
+                                    (Instant::now() - start).as_millis() as u32,
+                                    history,
+                                );
+                            }
+                        }
+                        TimerState::SolveComplete(time) => {
+                            if ctxt.input().keys_down.len() == 0 && !touching {
+                                self.state = TimerState::Inactive(time)
+                            }
+                        }
                     }
-                }
-                TimerState::Ready => {
-                    if ctxt.input().keys_down.len() == 0 && !touching {
-                        self.state = TimerState::Solving(Instant::now());
+
+                    if is_solving {
+                        // Render timer only in center of screen
+                        let timer_height = ui.fonts().row_height(FontSize::Timer.into());
+                        let galley = ui
+                            .fonts()
+                            .layout_single_line(FontSize::Timer.into(), self.current_time_string());
+                        let timer_width = galley.size.x;
+                        ui.painter().galley(
+                            Pos2::new(center.x - timer_width / 2.0, center.y - timer_height / 2.0),
+                            galley,
+                            self.current_time_color(),
+                        );
+                    } else {
+                        // Compute sizes of components in the main view
+                        let target_scramble_height = rect.height() * TARGET_SCRAMBLE_FRACTION;
+                        let target_timer_height = rect.height() * TARGET_TIMER_FRACTION;
+
+                        let scramble_padding = 8.0;
+
+                        let scramble = Self::fit_scramble(ui, &self.current_scramble, rect.width());
+                        let scramble_line_height = ui.fonts().row_height(FontSize::Scramble.into());
+                        let min_scramble_height = scramble_line_height * scramble.len() as f32;
+                        let scramble_height = min_scramble_height.max(target_scramble_height);
+
+                        let min_timer_height = ui.fonts().row_height(FontSize::Timer.into());
+                        let timer_overlap = min_timer_height * 0.4;
+                        let timer_height = min_timer_height.max(target_timer_height);
+                        let timer_padding = if aspect >= 1.0 {
+                            16.0 + min_timer_height * 0.2
+                        } else {
+                            16.0
+                        };
+
+                        let cube_height = rect.height()
+                            - (scramble_padding + scramble_height + timer_height + timer_padding
+                                - timer_overlap);
+
+                        // Render scramble
+                        let mut y = rect.top()
+                            + scramble_padding
+                            + (scramble_height - min_scramble_height) / 2.0;
+                        for line in scramble {
+                            let galley = ui
+                                .fonts()
+                                .layout_single_line(FontSize::Scramble.into(), line);
+                            let line_width = galley.size.x;
+                            ui.painter().galley(
+                                Pos2::new(center.x - line_width / 2.0, y),
+                                galley,
+                                Theme::Blue.into(),
+                            );
+                            y += scramble_line_height;
+                        }
+                        self.current_scramble_displayed = true;
+
+                        // Allocate space for the cube rendering. This is 3D so it will be rendered
+                        // with OpenGL after egui is done painting.
+                        let computed_cube_rect = Rect::from_min_size(
+                            Pos2::new(center.x - cube_height / 2.0, y),
+                            Vec2::new(cube_height, cube_height),
+                        );
+                        if computed_cube_rect.width() > 0.0 && computed_cube_rect.height() > 0.0 {
+                            *cube_rect = Some(computed_cube_rect);
+                        }
+
+                        // Render timer
+                        let galley = ui
+                            .fonts()
+                            .layout_single_line(FontSize::Timer.into(), self.current_time_string());
+                        let timer_width = galley.size.x;
+                        ui.painter().galley(
+                            Pos2::new(
+                                center.x - timer_width / 2.0,
+                                rect.bottom() - timer_height - timer_padding,
+                            ),
+                            galley,
+                            self.current_time_color(),
+                        );
                     }
-                }
-                TimerState::Solving(start) => {
-                    if ctxt.input().keys_down.len() != 0 || touching {
-                        self.finish_solve((Instant::now() - start).as_millis() as u32, history);
+
+                    if cube_rect.is_some() && ui.rect_contains_pointer(cube_rect.unwrap()) {
+                        let scroll_delta = ctxt.input().scroll_delta;
+                        self.cube
+                            .adjust_angle(scroll_delta.x / 3.0, scroll_delta.y / 3.0);
                     }
-                }
-                TimerState::SolveComplete(time) => {
-                    if ctxt.input().keys_down.len() == 0 && !touching {
-                        self.state = TimerState::Inactive(time)
+                    if crate::is_mobile() != Some(true) && interact.dragged() {
+                        self.cube.adjust_angle(
+                            ui.input().pointer.delta().x / 3.0,
+                            ui.input().pointer.delta().y / 3.0,
+                        );
                     }
-                }
-            }
-
-            if self.is_solving() {
-                // Render timer only in center of screen
-                let timer_height = ui.fonts().row_height(FontSize::Timer.into());
-                let galley = ui
-                    .fonts()
-                    .layout_single_line(FontSize::Timer.into(), self.current_time_string());
-                let timer_width = galley.size.x;
-                ui.painter().galley(
-                    Pos2::new(center.x - timer_width / 2.0, center.y - timer_height / 2.0),
-                    galley,
-                    self.current_time_color(),
-                );
-            } else {
-                // Compute sizes of components in the main view
-                let target_scramble_height = rect.height() * TARGET_SCRAMBLE_FRACTION;
-                let target_timer_height = rect.height() * TARGET_TIMER_FRACTION;
-
-                let scramble_padding = 8.0;
-                let timer_padding = 40.0;
-
-                let scramble = Self::fit_scramble(ui, &self.current_scramble, rect.width());
-                let scramble_line_height = ui.fonts().row_height(FontSize::Scramble.into());
-                let min_scramble_height = scramble_line_height * scramble.len() as f32;
-                let scramble_height = min_scramble_height.max(target_scramble_height);
-
-                let min_timer_height = ui.fonts().row_height(FontSize::Timer.into());
-                let timer_overlap = min_timer_height * 0.4;
-                let timer_height = min_timer_height.max(target_timer_height);
-
-                let cube_height = rect.height()
-                    - (scramble_padding + scramble_height + timer_height + timer_padding
-                        - timer_overlap);
-
-                // Render scramble
-                let mut y =
-                    rect.top() + scramble_padding + (scramble_height - min_scramble_height) / 2.0;
-                for line in scramble {
-                    let galley = ui
-                        .fonts()
-                        .layout_single_line(FontSize::Scramble.into(), line);
-                    let line_width = galley.size.x;
-                    ui.painter().galley(
-                        Pos2::new(center.x - line_width / 2.0, y),
-                        galley,
-                        Theme::Blue.into(),
-                    );
-                    y += scramble_line_height;
-                }
-                self.current_scramble_displayed = true;
-
-                // Allocate space for the cube rendering. This is 3D so it will be rendered
-                // with OpenGL after egui is done painting.
-                let computed_cube_rect = Rect::from_min_size(
-                    Pos2::new(center.x - cube_height / 2.0, y),
-                    Vec2::new(cube_height, cube_height),
-                );
-                if computed_cube_rect.width() > 0.0 && computed_cube_rect.height() > 0.0 {
-                    *cube_rect = Some(computed_cube_rect);
-                }
-
-                // Render timer
-                let galley = ui
-                    .fonts()
-                    .layout_single_line(FontSize::Timer.into(), self.current_time_string());
-                let timer_width = galley.size.x;
-                ui.painter().galley(
-                    Pos2::new(
-                        center.x - timer_width / 2.0,
-                        rect.bottom() - timer_height - timer_padding,
-                    ),
-                    galley,
-                    self.current_time_color(),
-                );
-            }
-
-            if cube_rect.is_some() && ui.rect_contains_pointer(cube_rect.unwrap()) {
-                let scroll_delta = ctxt.input().scroll_delta;
-                self.cube
-                    .adjust_angle(scroll_delta.x / 3.0, scroll_delta.y / 3.0);
-            }
-            if crate::is_mobile() != Some(true) && interact.dragged() {
-                self.cube.adjust_angle(
-                    ui.input().pointer.delta().x / 3.0,
-                    ui.input().pointer.delta().y / 3.0,
-                );
-            }
+                });
+            });
         });
 
         // Run at 10 FPS when solving (to update counting timer), or only when
