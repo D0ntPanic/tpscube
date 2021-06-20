@@ -409,7 +409,7 @@ impl CubeRenderer {
 
     fn update_colors(&mut self) {
         let face_colors = self.cube.as_faces();
-        for face in [
+        for face in &[
             Face::Top,
             Face::Front,
             Face::Right,
@@ -419,8 +419,8 @@ impl CubeRenderer {
         ] {
             for row in 0..CUBE_SIZE {
                 for col in 0..CUBE_SIZE {
-                    let color = FACE_COLORS[face_colors.color(face, row, col) as u8 as usize];
-                    let range = self.vert_range((face, row as i32, col as i32)).clone();
+                    let color = FACE_COLORS[face_colors.color(*face, row, col) as u8 as usize];
+                    let range = self.vert_range((*face, row as i32, col as i32)).clone();
                     for i in 0..range.model_verts.len() {
                         if range.model_verts[i].color == range.face {
                             self.verts[range.start_index + i].color = color;
