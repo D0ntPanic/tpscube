@@ -1,10 +1,14 @@
 use crate::action::{Action, ActionList, StoredAction};
-use crate::common::{Penalty, Solve};
+use crate::common::{MoveSequence, Penalty, Solve, SolveType, TimedMoveSequence};
+use crate::import::ImportedSession;
 use crate::request::{SyncRequest, SyncResponse};
 use crate::storage::Storage;
 use crate::sync::{SyncOperation, SyncStatus};
 use anyhow::{anyhow, Result};
-use std::collections::{HashMap, HashSet};
+use chrono::{DateTime, Local};
+use serde_json::json;
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -38,17 +42,41 @@ pub struct History {
 
 #[derive(Clone)]
 struct SolveDatabase {
-    solves: HashMap<String, Solve>,
+    solve_map: SolveMap,
     sessions: HashMap<String, Session>,
     actions: HashSet<String>,
 }
 
 #[derive(Clone)]
+struct SolveMap {
+    solves: BTreeMap<SolveTimeAndId, Solve>,
+    solve_times: HashMap<String, DateTime<Local>>,
+}
+
+#[derive(Clone)]
 pub struct Session {
-    pub id: String,
-    pub name: Option<String>,
-    pub solves: HashSet<String>,
-    pub update_id: u64,
+    id: String,
+    name: Option<String>,
+    solve_type: SolveType,
+    solves: BTreeSet<SolveTimeAndId>,
+    update_id: u64,
+}
+
+#[derive(Clone)]
+struct SolveTimeAndId {
+    time: DateTime<Local>,
+    id: String,
+}
+
+#[derive(Clone)]
+pub struct SolveIterator<'a> {
+    solve: std::collections::btree_map::Iter<'a, SolveTimeAndId, Solve>,
+}
+
+#[derive(Clone)]
+pub struct SessionSolveIterator<'a> {
+    history: &'a History,
+    solve: std::collections::btree_set::Iter<'a, SolveTimeAndId>,
 }
 
 impl History {
@@ -78,10 +106,7 @@ impl History {
 
         // Fetch sync information from local database
         let mut sync_key = match storage.get("sync_key")? {
-            Some(key) => Some(
-                SyncRequest::validate_sync_key(&String::from_utf8_lossy(&key))
-                    .ok_or_else(|| anyhow!("Invalid sync key"))?,
-            ),
+            Some(key) => SyncRequest::validate_sync_key(&String::from_utf8_lossy(&key)),
             None => None,
         };
         let mut sync_id = match storage.get("sync_id")? {
@@ -147,8 +172,14 @@ impl History {
         Ok(result)
     }
 
-    pub fn solves(&self) -> &HashMap<String, Solve> {
-        &self.solves.solves
+    pub fn iter(&self) -> SolveIterator {
+        SolveIterator {
+            solve: self.solves.solve_map.solves.iter(),
+        }
+    }
+
+    pub fn solve(&self, id: &str) -> Option<&Solve> {
+        self.solves.solve(id)
     }
 
     pub fn sessions(&self) -> &HashMap<String, Session> {
@@ -157,6 +188,29 @@ impl History {
 
     pub fn update_id(&self) -> u64 {
         self.update_id
+    }
+
+    pub fn sync_key(&self) -> &str {
+        &self.sync_key
+    }
+
+    pub fn set_sync_key(&mut self, key: &str) -> Result<()> {
+        // Set the key and make sure that any in progress syncs do not complete
+        // on the new key.
+        self.sync_key = key.into();
+        self.current_sync = None;
+        self.last_sync_result = SyncStatus::NotSynced;
+
+        // Move any synced actions to local so that they will be uploaded under
+        // the new key.
+        if self.synced_actions.has_actions() {
+            self.local_actions.prepend(&mut self.synced_actions);
+            self.local_actions.save_index(self.storage.as_mut())?;
+            self.synced_actions.save_index(self.storage.as_mut())?;
+            self.synced_solves = SolveDatabase::new();
+        }
+
+        Ok(())
     }
 
     fn new_action(&mut self, action: StoredAction) {
@@ -378,18 +432,236 @@ impl History {
 
         Ok(())
     }
+
+    pub fn export(&self) -> Result<String> {
+        // Sort sessions by solve time
+        let mut sessions: Vec<&Session> = self.solves.sessions.values().collect();
+        sessions.sort_unstable(); // Sessions are always unique
+
+        let mut session_list = Vec::new();
+        for session in sessions {
+            let mut solve_list = Vec::new();
+            for solve in session.iter(self) {
+                let mut value = json!({
+                    "id": solve.id,
+                    "ok": if let Penalty::DNF = solve.penalty { false } else { true },
+                    "penalty": match solve.penalty {
+                        Penalty::None => 0,
+                        Penalty::Time(time) => time,
+                        Penalty::DNF => 0,
+                    },
+                    "scramble": solve.scramble.to_string(),
+                    "time": solve.time,
+                    "timestamp": solve.created.timestamp(),
+                });
+                if let Some(device) = &solve.device {
+                    value
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("device".into(), json!(device));
+                }
+                if let Some(moves) = &solve.moves {
+                    value
+                        .as_object_mut()
+                        .unwrap()
+                        .insert("solve".into(), json!(moves.to_string()));
+                }
+                solve_list.push(value);
+            }
+            if solve_list.len() != 0 {
+                session_list.push(json!({
+                    "id": session.id,
+                    "name": match &session.name {
+                        Some(name) => &name,
+                        None => ""
+                    },
+                    "solves": solve_list,
+                    "type": session.solve_type.to_string(),
+                }));
+            }
+        }
+
+        Ok(serde_json::to_string_pretty(&json!({
+            "sessions": session_list
+        }))?)
+    }
+
+    pub fn import(&mut self, contents: String) -> Result<String> {
+        // Import sessions and solves from the file contents
+        let sessions = ImportedSession::import(contents)?;
+
+        // Keep track of merge statistics
+        let file_sessions = sessions.len();
+        let mut file_solves = 0;
+        let mut changed_session_count = 0;
+        let mut new_session_count = 0;
+        let mut changed_solve_count = 0;
+        let mut new_solve_count = 0;
+
+        for session in sessions {
+            let mut existing = false;
+            let mut changed = false;
+
+            // Check for existing session
+            if let Some(existing_session) = self.solves.sessions.get_mut(&session.id) {
+                existing = true;
+
+                // If name has changed, perform rename
+                if existing_session.name != session.name {
+                    if let Some(name) = &session.name {
+                        self.rename_session(session.id.clone(), name.clone());
+                        changed = true;
+                    } else {
+                        self.default_session_name(session.id.clone());
+                        changed = true;
+                    }
+                }
+            }
+
+            // Merge solves in session
+            file_solves += session.solves.len();
+            for solve in &session.solves {
+                // Check for existing solve
+                if let Some(existing_solve) = self.solves.solve_map.solves.get(&SolveTimeAndId {
+                    time: solve.created,
+                    id: solve.id.clone(),
+                }) {
+                    // Check for modified penalty
+                    if existing_solve.penalty != solve.penalty {
+                        self.penalty(solve.id.clone(), solve.penalty.clone());
+                        changed_solve_count += 1;
+                        changed = true;
+                    }
+                } else {
+                    // New solve
+                    self.new_solve(solve.clone());
+                    new_solve_count += 1;
+                    changed = true;
+                }
+            }
+
+            // If there is a new session and it has a name, give it the name now
+            if !existing && changed {
+                if let Some(name) = &session.name {
+                    self.rename_session(session.id.clone(), name.clone());
+                }
+            }
+
+            // Update session merge statistics
+            if existing {
+                if changed {
+                    changed_session_count += 1;
+                }
+            } else if changed {
+                new_session_count += 1;
+            }
+        }
+
+        self.local_commit()?;
+
+        // Import complete, return statistics about merge
+        Ok(format!(
+            "File contained {} solve(s) in {} session(s).\n\
+            {} session(s) added.\n\
+            {} session(s) modified.\n\
+            {} solve(s) added.\n\
+            {} solve(s) modified.",
+            file_solves,
+            file_sessions,
+            new_session_count,
+            changed_session_count,
+            new_solve_count,
+            changed_solve_count
+        ))
+    }
+}
+
+impl<'a> Iterator for SolveIterator<'a> {
+    type Item = &'a Solve;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.solve.next().map(|kv| kv.1)
+    }
+}
+
+impl<'a> DoubleEndedIterator for SolveIterator<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.solve.next_back().map(|kv| kv.1)
+    }
+}
+
+impl PartialEq for SolveTimeAndId {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for SolveTimeAndId {}
+
+impl PartialOrd for SolveTimeAndId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self.time.cmp(&other.time) {
+            Ordering::Equal => Some(self.id.cmp(&other.id)),
+            ordering => Some(ordering),
+        }
+    }
+}
+
+impl Ord for SolveTimeAndId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl SolveMap {
+    fn solve(&self, id: &str) -> Option<&Solve> {
+        if let Some(time) = self.solve_times.get(id) {
+            let key = SolveTimeAndId {
+                time: time.clone(),
+                id: id.into(),
+            };
+            self.solves.get(&key)
+        } else {
+            None
+        }
+    }
+
+    fn solve_mut(&mut self, id: &str) -> Option<&mut Solve> {
+        if let Some(time) = self.solve_times.get(id) {
+            let key = SolveTimeAndId {
+                time: time.clone(),
+                id: id.into(),
+            };
+            self.solves.get_mut(&key)
+        } else {
+            None
+        }
+    }
 }
 
 impl SolveDatabase {
     fn new() -> Self {
         Self {
-            solves: HashMap::new(),
+            solve_map: SolveMap {
+                solves: BTreeMap::new(),
+                solve_times: HashMap::new(),
+            },
             sessions: HashMap::new(),
             actions: HashSet::new(),
         }
     }
 
-    fn add_solve_to_session(&mut self, solve: &String, session: &String, next_update_id: &mut u64) {
+    fn solve(&self, id: &str) -> Option<&Solve> {
+        self.solve_map.solve(id)
+    }
+
+    fn add_solve_to_session(
+        &mut self,
+        solve: SolveTimeAndId,
+        solve_type: SolveType,
+        session: &String,
+        next_update_id: &mut u64,
+    ) {
         let update_id = *next_update_id;
         *next_update_id += 1;
         let session = self
@@ -398,10 +670,11 @@ impl SolveDatabase {
             .or_insert_with(|| Session {
                 id: session.clone(),
                 name: None,
-                solves: HashSet::new(),
+                solve_type,
+                solves: BTreeSet::new(),
                 update_id,
             });
-        session.solves.insert(solve.clone());
+        session.solves.insert(solve);
         session.update_id = update_id;
     }
 
@@ -414,11 +687,18 @@ impl SolveDatabase {
 
         match &action.action {
             Action::NewSolve(solve) => {
-                self.solves.insert(solve.id.clone(), solve.clone());
-                self.add_solve_to_session(&solve.id, &solve.session, next_update_id);
+                let key = SolveTimeAndId {
+                    time: solve.created.clone(),
+                    id: solve.id.clone(),
+                };
+                self.solve_map
+                    .solve_times
+                    .insert(solve.id.clone(), solve.created);
+                self.solve_map.solves.insert(key.clone(), solve.clone());
+                self.add_solve_to_session(key, solve.solve_type, &solve.session, next_update_id);
                 true
             }
-            Action::Penalty(solve, penalty) => match self.solves.get_mut(solve) {
+            Action::Penalty(solve, penalty) => match self.solve_map.solve_mut(solve) {
                 Some(solve) => {
                     solve.penalty = penalty.clone();
                     if let Some(session) = self.sessions.get_mut(&solve.session) {
@@ -429,18 +709,24 @@ impl SolveDatabase {
                 }
                 None => false,
             },
-            Action::ChangeSession(solve_id, session_id) => match self.solves.get_mut(solve_id) {
+            Action::ChangeSession(solve_id, session_id) => match self.solve_map.solve_mut(solve_id)
+            {
                 Some(solve) => {
+                    let key = SolveTimeAndId {
+                        time: solve.created.clone(),
+                        id: solve.id.clone(),
+                    };
                     match self.sessions.get_mut(&solve.session) {
                         Some(session) => {
-                            session.solves.remove(solve_id);
+                            session.solves.remove(&key);
                             session.update_id = *next_update_id;
                             *next_update_id += 1;
                         }
                         None => (),
                     };
                     solve.session = session_id.clone();
-                    self.add_solve_to_session(solve_id, session_id, next_update_id);
+                    let solve_type = solve.solve_type;
+                    self.add_solve_to_session(key, solve_type, session_id, next_update_id);
                     true
                 }
                 None => false,
@@ -453,9 +739,12 @@ impl SolveDatabase {
                 match self.sessions.get_mut(first) {
                     Some(first) => {
                         for solve in second_solves {
-                            if let Some(solve) = self.solves.get_mut(&solve) {
+                            if let Some(solve) = self.solve_map.solves.get_mut(&solve) {
                                 solve.session = first.id.clone();
-                                first.solves.insert(solve.id.clone());
+                                first.solves.insert(SolveTimeAndId {
+                                    time: solve.created.clone(),
+                                    id: solve.id.clone(),
+                                });
                             }
                         }
                         first.update_id = *next_update_id;
@@ -475,17 +764,22 @@ impl SolveDatabase {
                 }
                 None => false,
             },
-            Action::DeleteSolve(solve_id) => match self.solves.get(solve_id) {
+            Action::DeleteSolve(solve_id) => match self.solve_map.solve(solve_id) {
                 Some(solve) => {
+                    let key = SolveTimeAndId {
+                        time: solve.created.clone(),
+                        id: solve_id.clone(),
+                    };
                     match self.sessions.get_mut(&solve.session) {
                         Some(session) => {
-                            session.solves.remove(solve_id);
+                            session.solves.remove(&key);
                             session.update_id = *next_update_id;
                             *next_update_id += 1;
                         }
                         None => (),
                     };
-                    self.solves.remove(solve_id);
+                    self.solve_map.solve_times.remove(&key.id);
+                    self.solve_map.solves.remove(&key);
                     true
                 }
                 None => false,
@@ -495,16 +789,87 @@ impl SolveDatabase {
 }
 
 impl Session {
-    pub fn sorted_solves(&self, history: &History) -> Vec<Solve> {
-        let mut solves: Vec<Solve> = self
-            .solves
-            .iter()
-            .filter_map(|solve_id| history.solves().get(solve_id).map(|solve| solve.clone()))
-            .collect();
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 
-        // Sort solves by time, then by ID. There cannot be any equal solves so it
-        // is fine to use the faster unstable sort here.
-        solves.sort_unstable_by(|a, b| a.cmp(&b));
-        solves
+    pub fn name(&self) -> &Option<String> {
+        &self.name
+    }
+
+    pub fn update_id(&self) -> u64 {
+        self.update_id
+    }
+
+    pub fn len(&self) -> usize {
+        self.solves.len()
+    }
+
+    pub fn iter<'a>(&'a self, history: &'a History) -> SessionSolveIterator<'a> {
+        SessionSolveIterator {
+            history,
+            solve: self.solves.iter(),
+        }
+    }
+
+    pub fn to_vec(&self, history: &History) -> Vec<Solve> {
+        self.iter(history).cloned().collect()
+    }
+
+    pub fn last_solve_time(&self) -> Option<DateTime<Local>> {
+        self.solves.iter().rev().next().map(|key| key.time)
+    }
+}
+
+impl PartialEq for Session {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Session {}
+
+impl PartialOrd for Session {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self.last_solve_time().cmp(&other.last_solve_time()) {
+            Ordering::Equal => Some(self.id.cmp(&other.id)),
+            ordering => Some(ordering),
+        }
+    }
+}
+
+impl Ord for Session {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl<'a> Iterator for SessionSolveIterator<'a> {
+    type Item = &'a Solve;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(solve) = self.solve.next() {
+                if let Some(solve) = self.history.solve(&solve.id) {
+                    return Some(solve);
+                }
+            } else {
+                return None;
+            }
+        }
+    }
+}
+
+impl<'a> DoubleEndedIterator for SessionSolveIterator<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(solve) = self.solve.next_back() {
+                if let Some(solve) = self.history.solve(&solve.id) {
+                    return Some(solve);
+                }
+            } else {
+                return None;
+            }
+        }
     }
 }

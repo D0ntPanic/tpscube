@@ -1,7 +1,9 @@
 use crate::font::{font_definitions, ScreenSize};
 use crate::framerate::Framerate;
 use crate::gl::GlContext;
+use crate::graph::GraphWidget;
 use crate::history::HistoryWidget;
+use crate::settings::SettingsWidget;
 use crate::style::{base_visuals, content_visuals, header_visuals};
 use crate::theme::Theme;
 use crate::timer::TimerWidget;
@@ -22,6 +24,8 @@ pub struct Application {
     mode: Mode,
     timer_widget: TimerWidget,
     history_widget: HistoryWidget,
+    graph_widget: GraphWidget,
+    settings_widget: SettingsWidget,
     history: History,
     framerate: Option<Framerate>,
     timer_cube_rect: Option<Rect>,
@@ -65,6 +69,8 @@ impl Application {
             mode: Mode::Timer,
             timer_widget: TimerWidget::new(),
             history_widget: HistoryWidget::new(),
+            graph_widget: GraphWidget::new(),
+            settings_widget: SettingsWidget::new(),
             history,
             framerate: None,
             timer_cube_rect: None,
@@ -170,7 +176,14 @@ impl App for Application {
                 self.history_widget.update(ctxt, frame, &mut self.history);
                 framerate.set_target(None);
             }
-            _ => framerate.set_target(None),
+            Mode::Graphs => {
+                self.graph_widget.update(ctxt, frame, &mut self.history);
+                framerate.set_target(None);
+            }
+            Mode::Settings => {
+                self.settings_widget.update(ctxt, frame, &mut self.history);
+                framerate.set_target(None);
+            }
         }
 
         if self.first_frame {

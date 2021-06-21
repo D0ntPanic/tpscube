@@ -723,7 +723,7 @@ impl HistoryWidget {
         // Go through sessions, gather data about them, and create regions for them
         let mut session_regions = Vec::new();
         for session in history.sessions().values() {
-            let solves: Vec<Solve> = session.sorted_solves(history);
+            let solves: Vec<Solve> = session.to_vec(history);
             if solves.len() == 0 {
                 // Skip empty sessions
                 continue;
@@ -775,14 +775,14 @@ impl HistoryWidget {
                 (solves.len() + layout_metrics.solve_columns - 1) / layout_metrics.solve_columns;
 
             // Construct session title
-            let name = match &session.name {
+            let name = match session.name() {
                 Some(name) => format!("{} - {}", &name, date_string(&last_solve.created)),
                 None => date_string(&last_solve.created),
             };
 
             // Add the session to the region list
             session_regions.push(SessionRegion {
-                session_id: session.id.clone(),
+                session_id: session.id().into(),
                 name,
                 solves,
                 last_solve,

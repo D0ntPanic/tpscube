@@ -113,3 +113,25 @@ pub fn popup_visuals() -> Visuals {
     };
     result
 }
+
+pub fn settings_visuals() -> Visuals {
+    let mut result = base_visuals();
+    result.widgets.noninteractive.bg_fill = Theme::BackgroundDark.into();
+    result.widgets.noninteractive.fg_stroke = Stroke {
+        width: 1.0,
+        color: Theme::Disabled.into(),
+    };
+    result.widgets.inactive.fg_stroke = Stroke {
+        width: 1.0,
+        color: Theme::Content.into(),
+    };
+    result.widgets.hovered.fg_stroke = Stroke {
+        width: 1.0,
+        color: Theme::Green.into(),
+    };
+    result.widgets.active.fg_stroke = Stroke {
+        width: 1.0,
+        color: Theme::Green.into(),
+    };
+    result
+}

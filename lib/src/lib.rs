@@ -1,6 +1,7 @@
 mod action;
 mod common;
 mod cube3x3x3;
+mod import;
 mod rand;
 mod request;
 mod tables;
@@ -20,8 +21,8 @@ mod index_generated;
 pub use crate::rand::{RandomSource, SimpleSeededRandomSource, StandardRandomSource};
 pub use action::{Action, StoredAction};
 pub use common::{
-    Average, BestSolve, Color, Cube, Face, Move, MoveSequence, Penalty, RotationDirection, Solve,
-    SolveList, SolveType, TimedMove,
+    parse_move_string, parse_timed_move_string, Average, BestSolve, Color, Cube, Face, Move,
+    MoveSequence, Penalty, RotationDirection, Solve, SolveList, SolveType, TimedMove,
 };
 pub use cube3x3x3::{
     Corner3x3x3, CornerPiece3x3x3, Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3,

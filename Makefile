@@ -4,7 +4,7 @@ native:
 	cargo build --release
 
 web:
-	cargo build --release --lib --target wasm32-unknown-unknown --no-default-features --features wasm
+	RUSTFLAGS=--cfg=web_sys_unstable_apis cargo build --release --lib --target wasm32-unknown-unknown --no-default-features --features wasm
 	wasm-bindgen target/wasm32-unknown-unknown/release/tpscube.wasm --out-dir web --no-modules --no-typescript
 
 server: web

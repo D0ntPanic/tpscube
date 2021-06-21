@@ -213,7 +213,7 @@ impl TimerWidget {
         if let Some(session) = history.sessions().get(history.current_session()) {
             // Check for updates
             if let Some(update_id) = self.session_solves.update_id {
-                if update_id == session.update_id {
+                if update_id == session.update_id() {
                     // Already cached and up to date
                     return;
                 }
@@ -221,7 +221,7 @@ impl TimerWidget {
 
             // Cache solve information
             self.session_solves =
-                CachedSessionSolves::new(Some(session.update_id), session.sorted_solves(history));
+                CachedSessionSolves::new(Some(session.update_id()), session.to_vec(history));
         } else {
             // New session, invalidate cache
             self.session_solves = CachedSessionSolves::new(None, Vec::new());

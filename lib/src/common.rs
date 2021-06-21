@@ -1,8 +1,10 @@
 use crate::rand::{RandomSource, StandardRandomSource};
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
 use num_enum::TryFromPrimitive;
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::convert::TryFrom;
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[repr(u8)]
@@ -246,7 +248,7 @@ impl SolveList for &[Solve] {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Penalty {
     None,
     Time(u32),
@@ -257,6 +259,24 @@ pub enum Penalty {
 #[derive(Copy, Clone, Debug, TryFromPrimitive)]
 pub enum SolveType {
     Standard3x3x3 = 0,
+}
+
+impl SolveType {
+    pub fn from_str(string: &str) -> Option<Self> {
+        if string == "3x3x3" {
+            Some(SolveType::Standard3x3x3)
+        } else {
+            None
+        }
+    }
+}
+
+impl ToString for SolveType {
+    fn to_string(&self) -> String {
+        match self {
+            SolveType::Standard3x3x3 => "3x3x3".into(),
+        }
+    }
 }
 
 impl Move {
@@ -293,6 +313,30 @@ impl Move {
             Move::D => Move::Dp,
             Move::Dp => Move::D,
             Move::D2 => Move::D2,
+        }
+    }
+
+    pub fn from_str(string: &str) -> Option<Self> {
+        match string {
+            "U" => Some(Move::U),
+            "U'" => Some(Move::Up),
+            "U2" => Some(Move::U2),
+            "F" => Some(Move::F),
+            "F'" => Some(Move::Fp),
+            "F2" => Some(Move::F2),
+            "R" => Some(Move::R),
+            "R'" => Some(Move::Rp),
+            "R2" => Some(Move::R2),
+            "B" => Some(Move::B),
+            "B'" => Some(Move::Bp),
+            "B2" => Some(Move::B2),
+            "L" => Some(Move::L),
+            "L'" => Some(Move::Lp),
+            "L2" => Some(Move::L2),
+            "D" => Some(Move::D),
+            "D'" => Some(Move::Dp),
+            "D2" => Some(Move::D2),
+            _ => None,
         }
     }
 }
@@ -337,20 +381,54 @@ impl TimedMove {
 }
 
 /// Operations on sequences of cube moves
-pub trait MoveSequence {
+pub trait MoveSequence: Sized {
     /// Returns the inverse of this move sequence (undoing all moves)
     fn inverse(&self) -> Vec<Move>;
+
+    /// Returns the human-readable string for this move sequence
+    fn to_string(&self) -> String;
 }
 
 impl MoveSequence for Vec<Move> {
     fn inverse(&self) -> Vec<Move> {
-        self.iter().rev().map(|mv| mv.inverse()).collect()
+        self.as_slice().inverse()
+    }
+
+    fn to_string(&self) -> String {
+        self.as_slice().to_string()
     }
 }
 
 impl MoveSequence for &[Move] {
     fn inverse(&self) -> Vec<Move> {
         self.iter().rev().map(|mv| mv.inverse()).collect()
+    }
+
+    fn to_string(&self) -> String {
+        let moves: Vec<String> = self.iter().map(|mv| mv.to_string()).collect();
+        moves.join(" ")
+    }
+}
+
+/// Operations on sequences of cube moves with timing information
+pub trait TimedMoveSequence {
+    /// Returns the human-readable string for this move sequence
+    fn to_string(&self) -> String;
+}
+
+impl TimedMoveSequence for Vec<TimedMove> {
+    fn to_string(&self) -> String {
+        self.as_slice().to_string()
+    }
+}
+
+impl TimedMoveSequence for &[TimedMove] {
+    fn to_string(&self) -> String {
+        let moves: Vec<String> = self
+            .iter()
+            .map(|mv| format!("{}@{}", mv.0.to_string(), mv.1))
+            .collect();
+        moves.join(" ")
     }
 }
 
@@ -387,4 +465,36 @@ pub trait Cube: Sized {
     /// result of `solve`.
     #[cfg(not(feature = "no_solver"))]
     fn solve_fast(&self) -> Option<Vec<Move>>;
+}
+
+pub fn parse_move_string(string: &str) -> Result<Vec<Move>> {
+    let mut moves = Vec::new();
+    for move_str in string.split(' ') {
+        if move_str.len() == 0 {
+            continue;
+        }
+        let mv = Move::from_str(move_str).ok_or_else(|| anyhow!("Invalid move '{}'", move_str))?;
+        moves.push(mv);
+    }
+    Ok(moves)
+}
+
+pub fn parse_timed_move_string(string: &str) -> Result<Vec<TimedMove>> {
+    let mut moves = Vec::new();
+    for move_str in string.split(' ') {
+        if move_str.len() == 0 {
+            continue;
+        }
+        let mut move_iter = move_str.split('@');
+        let mv_str = move_iter
+            .next()
+            .ok_or_else(|| anyhow!("Invalid move '{}'", move_str))?;
+        let time_str = move_iter
+            .next()
+            .ok_or_else(|| anyhow!("Invalid move '{}'", move_str))?;
+        let mv = Move::from_str(mv_str).ok_or_else(|| anyhow!("Invalid move '{}'"))?;
+        let time = u32::from_str(time_str)?;
+        moves.push(TimedMove(mv, time));
+    }
+    Ok(moves)
 }

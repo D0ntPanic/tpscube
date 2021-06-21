@@ -6,7 +6,9 @@ mod edge_generated;
 mod font;
 mod framerate;
 mod gl;
+mod graph;
 mod history;
+mod settings;
 mod style;
 mod theme;
 mod timer;
@@ -257,11 +259,28 @@ fn handle_output(output: &egui::Output, runner: &mut AppRunner) {
         egui_web::open_url(&open.url, open.new_tab);
     }
 
-    let _ = copied_text;
+    if !copied_text.is_empty() {
+        set_clipboard_text(copied_text);
+    }
 
     if &runner.last_text_cursor_pos != text_cursor {
         move_text_cursor(text_cursor, runner.canvas_id());
         runner.last_text_cursor_pos = *text_cursor;
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn set_clipboard_text(s: &str) {
+    if let Some(window) = web_sys::window() {
+        let clipboard = window.navigator().clipboard();
+        let promise = clipboard.write_text(s);
+        let future = wasm_bindgen_futures::JsFuture::from(promise);
+        let future = async move {
+            if let Err(err) = future.await {
+                web_sys::console::error_1(&format!("Copy/cut action denied: {:?}", err).into());
+            }
+        };
+        wasm_bindgen_futures::spawn_local(future);
     }
 }
 

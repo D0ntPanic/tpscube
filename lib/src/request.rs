@@ -7,12 +7,12 @@ use std::convert::TryInto;
 pub const SYNC_API_VERSION: u64 = 1;
 
 const SYNC_KEY_CHARS: [char; 32] = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K',
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L',
     'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
 ];
-const SYNC_KEY_LENGTH: usize = 20;
-const SYNC_KEY_GROUPING: usize = 4;
-const SYNC_KEY_VALIDATION_BITS: usize = 20;
+const SYNC_KEY_LENGTH: usize = 25;
+const SYNC_KEY_GROUPING: usize = 5;
+const SYNC_KEY_VALIDATION_BITS: usize = 15;
 
 #[derive(Clone, Debug)]
 pub struct SyncRequest {
@@ -60,12 +60,7 @@ impl SyncRequest {
     pub fn validate_sync_key(key: &str) -> Option<String> {
         // Unify sync key format by getting rid of whitespace and dashes, replacing commonly
         // mistaken characters, and forcing uppercase
-        let key = key
-            .trim()
-            .to_uppercase()
-            .replace("-", "")
-            .replace("I", "1")
-            .replace("O", "0");
+        let key = key.trim().to_uppercase().replace("-", "").replace("I", "1");
         if key.len() != SYNC_KEY_LENGTH {
             return None;
         }
@@ -88,7 +83,13 @@ impl SyncRequest {
             return None;
         }
 
-        Some(key)
+        let chars: Vec<char> = key.chars().collect();
+        let groups: Vec<String> = chars
+            .as_slice()
+            .chunks(SYNC_KEY_GROUPING)
+            .map(|chunk| chunk.iter().collect())
+            .collect();
+        Some(groups.join("-"))
     }
 
     fn sync_key_checksum(id: u128) -> u128 {
