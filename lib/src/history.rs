@@ -198,6 +198,7 @@ impl History {
         // Set the key and make sure that any in progress syncs do not complete
         // on the new key.
         self.sync_key = key.into();
+        self.sync_id = UNSYNCED;
         self.current_sync = None;
         self.last_sync_result = SyncStatus::NotSynced;
 
@@ -209,6 +210,9 @@ impl History {
             self.synced_actions.save_index(self.storage.as_mut())?;
             self.synced_solves = SolveDatabase::new();
         }
+
+        self.storage.put("sync_key", self.sync_key.as_bytes())?;
+        self.storage.put("sync_id", &self.sync_id.to_le_bytes())?;
 
         Ok(())
     }
@@ -282,6 +286,10 @@ impl History {
         self.local_actions.commit(self.storage.as_mut(), false)
     }
 
+    pub fn local_action_count(&self) -> usize {
+        self.local_actions.len()
+    }
+
     fn sync_request(&self) -> SyncRequest {
         // Gather local actions for syncing
         let actions: Vec<StoredAction> = self
@@ -311,6 +319,10 @@ impl History {
         } else {
             false
         }
+    }
+
+    pub fn sync_in_progress(&self) -> bool {
+        self.current_sync.is_some()
     }
 
     pub fn check_sync_status(&mut self) -> SyncStatus {
@@ -357,7 +369,7 @@ impl History {
     }
 
     fn resolve_sync(&mut self, response: &SyncResponse) -> Result<()> {
-        if response.new_actions.len() != 0 {
+        if response.new_actions.len() != 0 || response.uploaded != 0 {
             // There are new actions, commit them to the synced state
             for action in &response.new_actions {
                 self.synced_solves
@@ -385,7 +397,7 @@ impl History {
                 // Remove completed local actions
                 let pos = local_iter.position();
                 self.local_actions
-                    .remove_starting_at(pos, self.storage.as_mut())?;
+                    .remove_before(pos, self.storage.as_mut())?;
             }
 
             // Resolve local actions on top of the synced state. If there are actions that
@@ -425,7 +437,9 @@ impl History {
 
             // If there are still local solves after receiving a new sync ID, resync to
             // apply the local solves to the new sync point
-            if self.local_actions.has_actions() {
+            if (response.new_actions.len() != 0 || response.uploaded != 0)
+                && self.local_actions.has_actions()
+            {
                 self.current_sync = Some(SyncOperation::new(self.sync_request()));
             }
         }

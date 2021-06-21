@@ -13,6 +13,7 @@ pub fn response(status: StatusCode, value: Value) -> Result<Response<Body>, Erro
     Ok(Response::builder()
         .status(status)
         .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
         .body(Body::from(value.to_string()))?)
 }
 

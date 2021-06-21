@@ -719,7 +719,13 @@ impl TimerWidget {
         // updates occur otherwise
         framerate.set_target(match self.state {
             TimerState::Preparing(_, _) | TimerState::Solving(_) => Some(10),
-            _ => None,
+            _ => {
+                if history.sync_in_progress() {
+                    Some(10)
+                } else {
+                    None
+                }
+            }
         });
     }
 

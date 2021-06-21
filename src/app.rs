@@ -9,8 +9,11 @@ use crate::theme::Theme;
 use crate::timer::TimerWidget;
 use crate::widgets::CustomWidgets;
 use anyhow::Result;
-use egui::{widgets::Label, CentralPanel, Color32, CtxRef, Rect, Rgba, TopPanel, Vec2};
-use tpscube_core::History;
+use egui::{
+    widgets::Label, CentralPanel, Color32, CtxRef, Layout, Rect, Rgba, Sense, Stroke, TopPanel,
+    Vec2,
+};
+use tpscube_core::{History, SyncStatus};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum Mode {
@@ -149,6 +152,66 @@ impl App for Application {
                     {
                         self.mode = Mode::Settings;
                     }
+
+                    // Check status of sync and create tooltip text for sync button
+                    let sync_status = self.history.check_sync_status();
+                    let local_count = self.history.local_action_count();
+                    let local_status = match local_count {
+                        0 => "No new solves to sync.".into(),
+                        count => format!("{} actions to sync.", count),
+                    };
+                    let sync_status = match sync_status {
+                        SyncStatus::NotSynced => local_status,
+                        SyncStatus::SyncPending => {
+                            if local_count != 0 {
+                                format!("{}\nSync in progress...", local_status)
+                            } else {
+                                "Sync in progress...".into()
+                            }
+                        }
+                        SyncStatus::SyncFailed(message) => {
+                            format!("{}\nSync failed: {}", local_status, message)
+                        }
+                        SyncStatus::SyncComplete => {
+                            if local_count != 0 {
+                                local_status
+                            } else {
+                                "Sync complete".into()
+                            }
+                        }
+                    };
+
+                    // Show sync button
+                    ui.with_layout(Layout::right_to_left(), |ui| {
+                        if self.history.sync_in_progress() {
+                            ui.style_mut().visuals.widgets.inactive.fg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Blue.into(),
+                            };
+                            ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Blue.into(),
+                            };
+                            ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Blue.into(),
+                            };
+                        }
+                        if ui
+                            .add(
+                                Label::new(if local_count == 0 {
+                                    "🔃".into()
+                                } else {
+                                    format!("🔃 {}", local_count)
+                                })
+                                .sense(Sense::click()),
+                            )
+                            .on_hover_text(sync_status)
+                            .clicked()
+                        {
+                            self.history.start_sync();
+                        }
+                    });
                 });
 
                 ui.add_space(5.0);
@@ -174,15 +237,27 @@ impl App for Application {
             ),
             Mode::History => {
                 self.history_widget.update(ctxt, frame, &mut self.history);
-                framerate.set_target(None);
+                framerate.set_target(if self.history.sync_in_progress() {
+                    Some(10)
+                } else {
+                    None
+                });
             }
             Mode::Graphs => {
                 self.graph_widget.update(ctxt, frame, &mut self.history);
-                framerate.set_target(None);
+                framerate.set_target(if self.history.sync_in_progress() {
+                    Some(10)
+                } else {
+                    None
+                });
             }
             Mode::Settings => {
                 self.settings_widget.update(ctxt, frame, &mut self.history);
-                framerate.set_target(None);
+                framerate.set_target(if self.history.sync_in_progress() {
+                    Some(10)
+                } else {
+                    None
+                });
             }
         }
 

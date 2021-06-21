@@ -451,7 +451,13 @@ impl ImportedSession {
             };
             let time = if dnf { 0 } else { u32::from_str(time)? };
             let scramble = parse_move_string(&scramble)?;
-            let solution = parse_timed_move_string(&solution.replace("[", "@").replace("]", ""))?;
+            let solution = if dnf {
+                None
+            } else {
+                Some(parse_timed_move_string(
+                    &solution.replace("[", "@").replace("]", ""),
+                )?)
+            };
 
             solves.push(Solve {
                 id: id.into(),
@@ -462,7 +468,7 @@ impl ImportedSession {
                 time,
                 penalty,
                 device: Some(device.into()),
-                moves: Some(solution),
+                moves: solution,
             });
         }
 

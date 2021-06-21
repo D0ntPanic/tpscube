@@ -25,9 +25,6 @@ impl SettingsWidget {
         }
     }
 
-    #[cfg(target_arch = "wasm32")]
-    fn import_solves(&mut self, history: &mut History) {}
-
     #[cfg(not(target_arch = "wasm32"))]
     fn import_solves_from_path(path: &str, history: &mut History) -> Result<String> {
         let contents = String::from_utf8(std::fs::read(path)?)?;
@@ -44,9 +41,6 @@ impl SettingsWidget {
             self.import_result = Some(Self::import_solves_from_path(&path, history));
         }
     }
-
-    #[cfg(target_arch = "wasm32")]
-    fn export_solves(&mut self, history: &mut History) {}
 
     #[cfg(not(target_arch = "wasm32"))]
     fn export_solves_to_path(path: &str, history: &mut History) -> Result<()> {
@@ -188,74 +182,77 @@ impl SettingsWidget {
                         }
                     }
 
-                    ui.add_space(16.0);
-
-                    ui.section("Import / Export");
-
-                    // Import solves option
-                    if ui
-                        .add(
-                            Label::new("🗁  Import solves")
-                                .text_style(FontSize::Section.into())
-                                .sense(Sense::click()),
-                        )
-                        .clicked()
+                    #[cfg(not(target_arch = "wasm32"))]
                     {
-                        self.import_solves(history);
-                    }
-                    if let Some(result) = &self.import_result {
-                        match result {
-                            Ok(message) => {
-                                ui.add(
-                                    Label::new(format!("Import complete.\n{}", message))
-                                        .text_color(Theme::Green),
-                                );
-                            }
-                            Err(error) => {
-                                ui.add(
-                                    Label::new(format!("Error: {}", error))
-                                        .wrap(true)
-                                        .text_color(Theme::Red),
-                                );
+                        ui.add_space(16.0);
+
+                        ui.section("Import / Export");
+
+                        // Import solves option
+                        if ui
+                            .add(
+                                Label::new("🗁  Import solves")
+                                    .text_style(FontSize::Section.into())
+                                    .sense(Sense::click()),
+                            )
+                            .clicked()
+                        {
+                            self.import_solves(history);
+                        }
+                        if let Some(result) = &self.import_result {
+                            match result {
+                                Ok(message) => {
+                                    ui.add(
+                                        Label::new(format!("Import complete.\n{}", message))
+                                            .text_color(Theme::Green),
+                                    );
+                                }
+                                Err(error) => {
+                                    ui.add(
+                                        Label::new(format!("Error: {}", error))
+                                            .wrap(true)
+                                            .text_color(Theme::Red),
+                                    );
+                                }
                             }
                         }
-                    }
-                    ui.add(
-                        Label::new(
-                            "Import solves from a backup. Supports backups from \
+                        ui.add(
+                            Label::new(
+                                "Import solves from a backup. Supports backups from \
                                TPS Cube, csTimer, and Cubeast.",
-                        )
-                        .wrap(true),
-                    );
+                            )
+                            .wrap(true),
+                        );
 
-                    ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                    // Export solves option
-                    if ui
-                        .add(
-                            Label::new("🗐  Export solves")
-                                .text_style(FontSize::Section.into())
-                                .sense(Sense::click()),
-                        )
-                        .clicked()
-                    {
-                        self.export_solves(history);
-                    }
-                    if let Some(result) = &self.export_result {
-                        match result {
-                            Ok(()) => {
-                                ui.add(Label::new("Export complete.").text_color(Theme::Green));
-                            }
-                            Err(error) => {
-                                ui.add(
-                                    Label::new(format!("Error: {}", error))
-                                        .wrap(true)
-                                        .text_color(Theme::Red),
-                                );
+                        // Export solves option
+                        if ui
+                            .add(
+                                Label::new("🗐  Export solves")
+                                    .text_style(FontSize::Section.into())
+                                    .sense(Sense::click()),
+                            )
+                            .clicked()
+                        {
+                            self.export_solves(history);
+                        }
+                        if let Some(result) = &self.export_result {
+                            match result {
+                                Ok(()) => {
+                                    ui.add(Label::new("Export complete.").text_color(Theme::Green));
+                                }
+                                Err(error) => {
+                                    ui.add(
+                                        Label::new(format!("Error: {}", error))
+                                            .wrap(true)
+                                            .text_color(Theme::Red),
+                                    );
+                                }
                             }
                         }
+                        ui.label("Export all solve information to a file for backup.")
                     }
-                    ui.label("Export all solve information to a file for backup.")
                 });
             });
         });

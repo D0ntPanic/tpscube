@@ -492,6 +492,14 @@ impl ActionList {
         Ok(Self::empty(name))
     }
 
+    pub fn len(&self) -> usize {
+        let mut result = self.current.actions.len();
+        for bundle in &self.archive {
+            result += bundle.actions.len();
+        }
+        result
+    }
+
     pub fn push(&mut self, action: StoredAction) {
         self.current.actions.push(action);
     }
@@ -581,7 +589,7 @@ impl ActionList {
         std::mem::swap(&mut new_index, &mut self.archive);
     }
 
-    pub fn remove_starting_at(
+    pub fn remove_before(
         &mut self,
         position: ActionListPosition,
         storage: &mut dyn Storage,
@@ -594,44 +602,62 @@ impl ActionList {
                 // Position is within a valid archive
                 let archive = &mut self.archive[archive_idx];
                 let mut archive_updated = false;
-                if position.action_idx < archive.actions.len() {
+                if position.action_idx > 0 {
                     // There are actions to remove in this archive
-                    let _ = archive.actions.split_off(position.action_idx);
+                    archive.actions = archive.actions.split_off(position.action_idx);
                     archive_updated = true;
                 }
 
                 // Check to see if archive still has actions in it
                 if archive.actions.len() == 0 {
-                    // No more actions, delete this archive and any after it
-                    for removed_archive in self.archive.split_off(archive_idx) {
+                    // No more actions, delete this archive and any before it
+                    let new_archive = self.archive.split_off(archive_idx + 1);
+                    for removed_archive in &self.archive {
                         removed_archive.delete(storage)?;
                     }
                     index_changed = true;
+                    self.archive = new_archive;
                 } else {
                     // This archive still has some actions in it, save the revised archive
                     if archive_updated {
                         archive.save(storage)?;
                     }
 
-                    // Remove any archives after this one
-                    for removed_archive in self.archive.split_off(archive_idx + 1) {
+                    // Remove any archives before this one
+                    let new_archive = self.archive.split_off(archive_idx);
+                    for removed_archive in &self.archive {
                         removed_archive.delete(storage)?;
                         index_changed = true;
                     }
+                    self.archive = new_archive;
                 }
+            } else {
+                // Position is after all archives, delete all archives
+                for archive in &self.archive {
+                    archive.delete(storage)?;
+                    index_changed = true;
+                }
+                self.archive.clear();
             }
 
-            // Remove all actions in the current bundle, as these are after the archives
+            // Remove no actions in the current bundle, as these are after the archives
             0
         } else {
-            // Position is in current bundle, start removing at the position's action
+            // Position is in current bundle, start removing before the position's action.
+            // Delete all archives as these are before the current bundle.
+            for archive in &self.archive {
+                archive.delete(storage)?;
+                index_changed = true;
+            }
+            self.archive.clear();
+
             position.action_idx
         };
 
-        // Check to see if action is past end of action list
-        if local_remove_idx < self.current.actions.len() {
-            // Action is within list, remove the actions after position
-            let _ = self.current.actions.split_off(local_remove_idx);
+        // Check to see if action is past start of action list
+        if local_remove_idx > 0 {
+            // Action is within list, remove the actions before position
+            self.current.actions = self.current.actions.split_off(local_remove_idx);
             if self.current.actions.len() == 0 {
                 // There are no more actions in this bundle, delete it and create a new
                 // empty bundle.
@@ -691,7 +717,7 @@ impl<'a> Iterator for ActionListIterator<'a> {
                 if let Some((idx, action)) = action_iter.next() {
                     self.position = ActionListPosition {
                         archive_idx: self.position.archive_idx,
-                        action_idx: idx,
+                        action_idx: idx + 1,
                     };
                     return Some(action);
                 }
