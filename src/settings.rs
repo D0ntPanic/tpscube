@@ -167,7 +167,7 @@ impl SettingsWidget {
                                 // Sync key is valid and different, allow the user to set it
                                 if ui
                                     .add(
-                                        Label::new("🔃  Sync")
+                                        Label::new("✔  Save")
                                             .text_style(FontSize::Section.into())
                                             .sense(Sense::click()),
                                     )

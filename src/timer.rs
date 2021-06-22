@@ -209,6 +209,27 @@ impl TimerWidget {
         self.new_scramble();
     }
 
+    fn abort_solve(&mut self, time: u32, history: &mut History) {
+        if time > 2000 {
+            // If some solve progress was made, add a DNF. Otherwise,
+            // treat it as an accidental start.
+            history.new_solve(Solve {
+                id: Solve::new_id(),
+                solve_type: SolveType::Standard3x3x3,
+                session: history.current_session().into(),
+                scramble: self.current_scramble.clone(),
+                created: Local::now(),
+                time,
+                penalty: Penalty::DNF,
+                device: None,
+                moves: None,
+            });
+            let _ = history.local_commit();
+            self.new_scramble();
+        }
+        self.state = TimerState::SolveComplete(0);
+    }
+
     fn update_solve_cache(&mut self, history: &History) {
         if let Some(session) = history.sessions().get(history.current_session()) {
             // Check for updates
@@ -606,7 +627,12 @@ impl TimerWidget {
                             }
                         }
                         TimerState::Solving(start) => {
-                            if ctxt.input().keys_down.len() != 0 || touching {
+                            if ctxt.input().keys_down.contains(&Key::Escape) {
+                                self.abort_solve(
+                                    (Instant::now() - start).as_millis() as u32,
+                                    history,
+                                );
+                            } else if ctxt.input().keys_down.len() != 0 || touching {
                                 self.finish_solve(
                                     (Instant::now() - start).as_millis() as u32,
                                     history,
