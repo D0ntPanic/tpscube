@@ -24,6 +24,11 @@ pub(crate) trait BluetoothCubeDevice: Send {
     fn battery_charging(&self) -> Option<bool>;
     fn reset_cube_state(&self);
     fn synced(&self) -> bool;
+
+    fn needs_update(&self) -> bool {
+        false
+    }
+    fn update(&self) {}
 }
 
 #[derive(Clone, Debug)]
@@ -197,7 +202,23 @@ impl BluetoothCube {
             _ => return Err(anyhow!("Cube type not supported")),
         };
 
+        let needs_update = cube.needs_update();
+
         *connected_device.lock().unwrap() = Some(cube);
+
+        if needs_update {
+            // Cube protocol requires active polling
+            loop {
+                std::thread::sleep(Duration::from_millis(10));
+                if let Some(device) = connected_device.lock().unwrap().deref() {
+                    device.update();
+                } else {
+                    // Connection was closed
+                    break;
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -288,5 +309,12 @@ impl BluetoothCube {
 
     pub fn unregister_move_listener(&self, handle: MoveListenerHandle) {
         self.listeners.lock().unwrap().remove(&handle);
+    }
+}
+
+impl Drop for BluetoothCube {
+    fn drop(&mut self) {
+        // Clear connected device to force any polling threads to stop
+        *self.connected_device.lock().unwrap() = None;
     }
 }

@@ -1,6 +1,8 @@
 use crate::bluetooth::BluetoothCubeDevice;
-use crate::common::{Cube, Move, TimedMove};
-use crate::cube3x3x3::{Corner3x3x3, CornerPiece3x3x3, Cube3x3x3, Edge3x3x3, EdgePiece3x3x3};
+use crate::common::{Color, Cube, Face, Move, TimedMove};
+use crate::cube3x3x3::{
+    Corner3x3x3, CornerPiece3x3x3, Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3,
+};
 use aes::{
     cipher::generic_array::GenericArray,
     cipher::{BlockDecrypt, BlockEncrypt},
@@ -17,12 +19,30 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
-const CUBE_MOVES_MESSAGE: u8 = 2;
-const CUBE_STATE_MESSAGE: u8 = 4;
-const BATTERY_STATE_MESSAGE: u8 = 9;
-const RESET_CUBE_STATE_MESSAGE: u8 = 10;
+struct GANCubeVersion1Characteristics {
+    version: Characteristic,
+    hardware: Characteristic,
+    cube_state: Characteristic,
+    last_moves: Characteristic,
+    timing: Characteristic,
+    battery: Characteristic,
+}
 
-const CUBE_STATE_TIMEOUT_MS: usize = 2000;
+struct GANCubeVersion1<P: Peripheral + 'static> {
+    device: P,
+    state: Mutex<Cube3x3x3>,
+    battery_percentage: Mutex<u32>,
+    battery_charging: Mutex<bool>,
+    synced: Mutex<bool>,
+    last_move_count: Mutex<u8>,
+    characteristics: GANCubeVersion1Characteristics,
+    cipher: GANCubeVersion1Cipher,
+    move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+}
+
+struct GANCubeVersion1Cipher {
+    device_key: [u8; 16],
+}
 
 struct GANCubeVersion2<P: Peripheral + 'static> {
     device: P,
@@ -40,7 +60,315 @@ struct GANCubeVersion2Cipher {
     device_iv: [u8; 16],
 }
 
+impl<P: Peripheral> GANCubeVersion1<P> {
+    const LAST_MOVE_COUNT_OFFSET: usize = 12;
+    const LAST_MOVE_LIST_OFFSET: usize = 13;
+
+    pub fn new(
+        device: P,
+        characteristics: GANCubeVersion1Characteristics,
+        move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+    ) -> Result<Self> {
+        // Detect cube version
+        let version = device.read(&characteristics.version)?;
+        if version.len() < 3 {
+            return Err(anyhow!("Device version invalid"));
+        }
+        let major = version[0];
+        let minor = version[1];
+        if major != 1 || minor > 1 {
+            return Err(anyhow!(
+                "GAN cube version {}.{} not supported",
+                major,
+                minor
+            ));
+        }
+
+        // Read device identifier, this is used to derive the key
+        let device_id = device.read(&characteristics.hardware)?;
+        if device_id.len() < 6 {
+            return Err(anyhow!("Device identifier invalid"));
+        }
+
+        // Derive the key
+        const GAN_V1_KEYS: [[u8; 16]; 2] = [
+            [
+                0xc6, 0xca, 0x15, 0xdf, 0x4f, 0x6e, 0x13, 0xb6, 0x77, 0x0d, 0xe6, 0x59, 0x3a, 0xaf,
+                0xba, 0xa2,
+            ],
+            [
+                0x43, 0xe2, 0x5b, 0xd6, 0x7d, 0xdc, 0x78, 0xd8, 0x07, 0x60, 0xa3, 0xda, 0x82, 0x3c,
+                0x01, 0xf1,
+            ],
+        ];
+        let mut key = GAN_V1_KEYS[minor as usize].clone();
+        for i in 0..6 {
+            key[i] = key[i].wrapping_add(device_id[5 - i]);
+        }
+        let cipher = GANCubeVersion1Cipher { device_key: key };
+
+        // Get initial cube state
+        let state = device.read(&characteristics.cube_state)?;
+        if state.len() < 18 {
+            return Err(anyhow!("Cube state is invalid"));
+        }
+        let state = cipher.decrypt(&state)?;
+        let state = Self::decode_cube_state(&state)?;
+        let state = Mutex::new(state);
+
+        // Get the initial move count
+        let moves = device.read(&characteristics.last_moves)?;
+        if moves.len() < 19 {
+            return Err(anyhow!("Invalid last move data"));
+        }
+        let moves = cipher.decrypt(&moves)?;
+        let last_move_count = Mutex::new(moves[Self::LAST_MOVE_COUNT_OFFSET]);
+
+        // Get battery state
+        let battery = device.read(&characteristics.battery)?;
+        if battery.len() < 8 {
+            return Err(anyhow!("Battery state is invalid"));
+        }
+        let battery = cipher.decrypt(&battery)?;
+        let battery_percentage = battery[7];
+        let battery_charging = battery[6] != 0;
+
+        Ok(GANCubeVersion1 {
+            device,
+            state,
+            battery_percentage: Mutex::new(battery_percentage as u32),
+            battery_charging: Mutex::new(battery_charging),
+            synced: Mutex::new(true),
+            last_move_count,
+            characteristics,
+            cipher,
+            move_listener,
+        })
+    }
+
+    fn decode_cube_state(data: &[u8]) -> Result<Cube3x3x3> {
+        const FACES: [Face; 6] = [
+            Face::Top,
+            Face::Right,
+            Face::Front,
+            Face::Bottom,
+            Face::Left,
+            Face::Back,
+        ];
+        const COLORS: [Color; 6] = [
+            Color::White,
+            Color::Red,
+            Color::Green,
+            Color::Yellow,
+            Color::Orange,
+            Color::Blue,
+        ];
+        let mut state: [Color; 6 * 9] = [Color::White; 6 * 9];
+
+        for face in 0..6 {
+            // Find face index in our representation using mapping
+            let target_face_idx = FACES[face] as u8 as usize;
+            state[target_face_idx * 9 + 1 * 3 + 1] = COLORS[face];
+
+            // Decode face's data from buffer
+            let face_data = ((data[(face * 3) ^ 1] as u32) << 16)
+                | ((data[((face * 3) + 1) ^ 1] as u32) << 8)
+                | data[((face * 3) + 2) ^ 1] as u32;
+
+            // Place colors into the cube state array
+            let mut offset = target_face_idx * 9;
+            for i in 0..8 {
+                if i == 4 {
+                    // Skip center, not represented in data
+                    offset += 1;
+                }
+
+                let color_idx = (face_data >> (3 * (7 - i))) & 7;
+                if color_idx >= 6 {
+                    return Err(anyhow!("Invalid cube state"));
+                }
+
+                state[offset] = COLORS[color_idx as usize];
+                offset += 1;
+            }
+        }
+
+        // Create cube state and convert to normal format
+        Ok(Cube3x3x3Faces::from_colors(state).as_pieces())
+    }
+
+    fn move_poll(&self) -> Result<()> {
+        if !*self.synced.lock().unwrap() {
+            // Not synced, do not try to poll moves
+            return Err(anyhow!("Not synced"));
+        }
+
+        // Read move data and move timing data
+        let move_data = self.device.read(&self.characteristics.last_moves)?;
+        if move_data.len() < 19 {
+            return Err(anyhow!("Invalid last move data"));
+        }
+        let move_data = self.cipher.decrypt(&move_data)?;
+
+        let timing = self.device.read(&self.characteristics.timing)?;
+        if timing.len() < 19 {
+            return Err(anyhow!("Invalid timing data"));
+        }
+        let timing = self.cipher.decrypt(&timing)?;
+
+        // Check number of moves since last message.
+        let current_move_count = move_data[Self::LAST_MOVE_COUNT_OFFSET];
+        let timestamp_move_count = timing[0];
+        let mut last_move_count = self.last_move_count.lock().unwrap();
+        let move_count = current_move_count.wrapping_sub(*last_move_count) as usize;
+        if move_count > 6 {
+            // There are too many moves since the last message. Our cube
+            // state is out of sync. Let the client know and reset the
+            // last move count such that we don't parse any more move
+            // messages, since they aren't valid anymore.
+            return Err(anyhow!("Move buffer exceeded"));
+        }
+
+        // Gather the moves
+        let mut moves = Vec::with_capacity(move_count);
+        for j in 0..move_count {
+            let i = (6 - move_count) + j;
+
+            // Decode move data
+            let move_num = move_data[Self::LAST_MOVE_LIST_OFFSET + i] as usize;
+
+            let timestamp_idx = (*last_move_count)
+                .wrapping_add(j as u8)
+                .wrapping_sub(timestamp_move_count.wrapping_sub(9));
+            if timestamp_idx >= 9 {
+                return Err(anyhow!("Timestamp not present for move"));
+            }
+            let move_time = timing[timestamp_idx as usize * 2 + 1] as u32
+                | ((timing[timestamp_idx as usize * 2 + 2] as u32) << 8);
+
+            const MOVES: &[Move] = &[
+                Move::U,
+                Move::U2,
+                Move::Up,
+                Move::R,
+                Move::R2,
+                Move::Rp,
+                Move::F,
+                Move::F2,
+                Move::Fp,
+                Move::D,
+                Move::D2,
+                Move::Dp,
+                Move::L,
+                Move::L2,
+                Move::Lp,
+                Move::B,
+                Move::B2,
+                Move::Bp,
+            ];
+            if move_num >= MOVES.len() {
+                return Err(anyhow!("Invalid move"));
+            }
+            let mv = MOVES[move_num];
+            moves.push(TimedMove::new(mv, move_time));
+
+            // Apply move to the cube state.
+            self.state.lock().unwrap().do_move(mv);
+        }
+
+        *last_move_count = current_move_count;
+
+        if moves.len() != 0 {
+            // Let clients know there is a new move
+            let move_listener = self.move_listener.as_ref();
+            move_listener(&moves, self.state.lock().unwrap().deref());
+        }
+
+        Ok(())
+    }
+}
+
+impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion1<P> {
+    fn cube_state(&self) -> Cube3x3x3 {
+        self.state.lock().unwrap().clone()
+    }
+
+    fn battery_percentage(&self) -> Option<u32> {
+        Some(*self.battery_percentage.lock().unwrap())
+    }
+
+    fn battery_charging(&self) -> Option<bool> {
+        Some(*self.battery_charging.lock().unwrap())
+    }
+
+    fn reset_cube_state(&self) {
+        // These bytes represent the cube state in the solved state.
+        let message: [u8; 18] = [
+            0x00, 0x00, 0x24, 0x00, 0x49, 0x92, 0x24, 0x49, 0x6d, 0x92, 0xdb, 0xb6, 0x49, 0x92,
+            0xb6, 0x24, 0x6d, 0xdb,
+        ];
+        let _ = self.device.write(
+            &self.characteristics.cube_state,
+            &message,
+            WriteType::WithResponse,
+        );
+    }
+
+    fn synced(&self) -> bool {
+        *self.synced.lock().unwrap()
+    }
+
+    fn needs_update(&self) -> bool {
+        true
+    }
+
+    fn update(&self) {
+        if let Err(error) = self.move_poll() {
+            println!("Error: {}", error);
+            *self.synced.lock().unwrap() = false;
+        }
+    }
+}
+
+impl GANCubeVersion1Cipher {
+    fn decrypt(&self, value: &[u8]) -> Result<Vec<u8>> {
+        if value.len() <= 16 {
+            return Err(anyhow!("Packet size less than expected length"));
+        }
+
+        // Packets are larger than block size. First decrypt the last 16 bytes
+        // of the packet in place.
+        let mut value = value.to_vec();
+        let aes = Aes128::new(GenericArray::from_slice(&self.device_key));
+        let offset = value.len() - 16;
+        let end_cipher = &value[offset..];
+        let mut end_plain = Block::clone_from_slice(end_cipher);
+        aes.decrypt_block(&mut end_plain);
+        for i in 0..16 {
+            value[offset + i] = end_plain[i];
+        }
+
+        // Decrypt the first 16 bytes of the packet in place. This will overlap
+        // with the decrypted block above.
+        let start_cipher = &value[0..16];
+        let mut start_plain = Block::clone_from_slice(start_cipher);
+        aes.decrypt_block(&mut start_plain);
+        for i in 0..16 {
+            value[i] = start_plain[i];
+        }
+
+        Ok(value)
+    }
+}
+
 impl<P: Peripheral> GANCubeVersion2<P> {
+    const CUBE_MOVES_MESSAGE: u8 = 2;
+    const CUBE_STATE_MESSAGE: u8 = 4;
+    const BATTERY_STATE_MESSAGE: u8 = 9;
+    const RESET_CUBE_STATE_MESSAGE: u8 = 10;
+
+    const CUBE_STATE_TIMEOUT_MS: usize = 2000;
+
     pub fn new(
         device: P,
         read: Characteristic,
@@ -85,7 +413,7 @@ impl<P: Peripheral> GANCubeVersion2<P> {
         let state_set = Arc::new(Mutex::new(false));
         let battery_percentage = Arc::new(Mutex::new(None));
         let battery_charging = Arc::new(Mutex::new(None));
-        let last_move_count = Arc::new(Mutex::new(None));
+        let last_move_count = Mutex::new(None);
         let synced = Arc::new(Mutex::new(true));
 
         let cipher_copy = cipher.clone();
@@ -99,7 +427,7 @@ impl<P: Peripheral> GANCubeVersion2<P> {
             if let Ok(value) = cipher_copy.decrypt(&value.value) {
                 let message_type = Self::extract_bits(&value, 0, 4) as u8;
                 match message_type {
-                    CUBE_MOVES_MESSAGE => {
+                    Self::CUBE_MOVES_MESSAGE => {
                         let current_move_count = Self::extract_bits(&value, 4, 8) as u8;
 
                         // If we haven't received a cube state message yet, we can't know what
@@ -161,11 +489,13 @@ impl<P: Peripheral> GANCubeVersion2<P> {
 
                             *last_move_count_option = Some(current_move_count);
 
-                            // Let clients know there is a new move
-                            move_listener(&moves, state_copy.lock().unwrap().deref());
+                            if moves.len() != 0 {
+                                // Let clients know there is a new move
+                                move_listener(&moves, state_copy.lock().unwrap().deref());
+                            }
                         }
                     }
-                    CUBE_STATE_MESSAGE => {
+                    Self::CUBE_STATE_MESSAGE => {
                         *last_move_count.lock().unwrap() =
                             Some(Self::extract_bits(&value, 4, 8) as u8);
 
@@ -242,7 +572,7 @@ impl<P: Peripheral> GANCubeVersion2<P> {
                         *state_copy.lock().unwrap() = cube;
                         *state_set_copy.lock().unwrap() = true;
                     }
-                    BATTERY_STATE_MESSAGE => {
+                    Self::BATTERY_STATE_MESSAGE => {
                         *battery_charging_copy.lock().unwrap() =
                             Some(Self::extract_bits(&value, 4, 4) != 0);
                         *battery_percentage_copy.lock().unwrap() =
@@ -258,7 +588,7 @@ impl<P: Peripheral> GANCubeVersion2<P> {
         let mut loop_count = 0;
         loop {
             let mut message: [u8; 20] = [0; 20];
-            message[0] = CUBE_STATE_MESSAGE;
+            message[0] = Self::CUBE_STATE_MESSAGE;
             let message = cipher.encrypt(&message)?;
             device.write(&write, &message, WriteType::WithResponse)?;
 
@@ -269,14 +599,14 @@ impl<P: Peripheral> GANCubeVersion2<P> {
             }
 
             loop_count += 1;
-            if loop_count > CUBE_STATE_TIMEOUT_MS / 200 {
+            if loop_count > Self::CUBE_STATE_TIMEOUT_MS / 200 {
                 return Err(anyhow!("Did not receive initial cube state"));
             }
         }
 
         // Request battery state immediately
         let mut message: [u8; 20] = [0; 20];
-        message[0] = BATTERY_STATE_MESSAGE;
+        message[0] = Self::BATTERY_STATE_MESSAGE;
         let message = cipher.encrypt(&message)?;
         device.write(&write, &message, WriteType::WithResponse)?;
 
@@ -386,7 +716,7 @@ impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion2<P> {
     fn reset_cube_state(&self) {
         // These bytes represent the cube state in the solved state.
         let message: [u8; 20] = [
-            RESET_CUBE_STATE_MESSAGE,
+            Self::RESET_CUBE_STATE_MESSAGE,
             0x05,
             0x39,
             0x77,
@@ -426,10 +756,40 @@ pub(crate) fn gan_cube_connect<P: Peripheral + 'static>(
 
     // Find characteristics for communicating with the cube. There are two different
     // versions of the GAN cubes with different characteristics.
+    let mut v1_version = None;
+    let mut v1_hardware = None;
+    let mut v1_cube_state = None;
+    let mut v1_last_moves = None;
+    let mut v1_timing = None;
+    let mut v1_battery = None;
     let mut v2_write = None;
     let mut v2_read = None;
     for characteristic in characteristics {
-        if characteristic.uuid == Uuid::from_str("28be4a4a-cd67-11e9-a32f-2a2ae2dbcce4").unwrap() {
+        if characteristic.uuid == Uuid::from_str("00002a28-0000-1000-8000-00805f9b34fb").unwrap() {
+            v1_version = Some(characteristic);
+        } else if characteristic.uuid
+            == Uuid::from_str("00002a23-0000-1000-8000-00805f9b34fb").unwrap()
+        {
+            v1_hardware = Some(characteristic);
+        } else if characteristic.uuid
+            == Uuid::from_str("0000fff2-0000-1000-8000-00805f9b34fb").unwrap()
+        {
+            v1_cube_state = Some(characteristic);
+        } else if characteristic.uuid
+            == Uuid::from_str("0000fff5-0000-1000-8000-00805f9b34fb").unwrap()
+        {
+            v1_last_moves = Some(characteristic);
+        } else if characteristic.uuid
+            == Uuid::from_str("0000fff6-0000-1000-8000-00805f9b34fb").unwrap()
+        {
+            v1_timing = Some(characteristic);
+        } else if characteristic.uuid
+            == Uuid::from_str("0000fff7-0000-1000-8000-00805f9b34fb").unwrap()
+        {
+            v1_battery = Some(characteristic);
+        } else if characteristic.uuid
+            == Uuid::from_str("28be4a4a-cd67-11e9-a32f-2a2ae2dbcce4").unwrap()
+        {
             v2_write = Some(characteristic);
         } else if characteristic.uuid
             == Uuid::from_str("28be4cb6-cd67-11e9-a32f-2a2ae2dbcce4").unwrap()
@@ -439,7 +799,27 @@ pub(crate) fn gan_cube_connect<P: Peripheral + 'static>(
     }
 
     // Create cube object based on available characteristics
-    if v2_read.is_some() && v2_write.is_some() {
+    if v1_version.is_some()
+        && v1_hardware.is_some()
+        && v1_cube_state.is_some()
+        && v1_last_moves.is_some()
+        && v1_timing.is_some()
+        && v1_battery.is_some()
+    {
+        let characteristics = GANCubeVersion1Characteristics {
+            version: v1_version.unwrap(),
+            hardware: v1_hardware.unwrap(),
+            cube_state: v1_cube_state.unwrap(),
+            last_moves: v1_last_moves.unwrap(),
+            timing: v1_timing.unwrap(),
+            battery: v1_battery.unwrap(),
+        };
+        Ok(Box::new(GANCubeVersion1::new(
+            device,
+            characteristics,
+            move_listener,
+        )?))
+    } else if v2_read.is_some() && v2_write.is_some() {
         Ok(Box::new(GANCubeVersion2::new(
             device,
             v2_read.unwrap(),

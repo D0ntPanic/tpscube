@@ -877,6 +877,13 @@ impl Cube for Cube3x3x3 {
 }
 
 impl Cube3x3x3Faces {
+    /// Create a cube state from a color array. The ordering of the array is the faces
+    /// in order of the `Face` enumeration, with 9 elements per face. Each face is stored
+    /// from top to bottom in row major order, with columns left to right.
+    pub fn from_colors(state: [Color; 6 * 9]) -> Self {
+        Self { state }
+    }
+
     pub(crate) const fn face_start(face: Face) -> usize {
         face as u8 as usize * 9
     }
