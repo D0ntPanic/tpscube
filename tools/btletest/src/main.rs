@@ -1,7 +1,7 @@
 use std::ops::Deref;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tpscube_core::BluetoothCube;
+use tpscube_core::{BluetoothCube, BluetoothCubeState};
 
 fn main() {
     let cube = BluetoothCube::new();
@@ -25,12 +25,26 @@ fn main() {
                     }
                 } else {
                     *real_time_start = Some(Instant::now());
+                    for mv in moves {
+                        println!("Move {}  (initial)", mv.move_().to_string());
+                    }
                 }
             });
             println!("Connecting to {:?}", device);
             cube.connect(device.address).unwrap();
             loop {
-                std::thread::sleep(Duration::from_millis(1000));
+                if cube.state().unwrap() == BluetoothCubeState::Connected {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            println!("Connected");
+            loop {
+                if !cube.synced().unwrap() {
+                    println!("Lost cube sync");
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(100));
             }
         }
 

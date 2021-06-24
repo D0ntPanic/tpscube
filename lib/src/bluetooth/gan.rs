@@ -49,7 +49,19 @@ impl<P: Peripheral> GANCubeVersion2<P> {
     ) -> Result<Self> {
         // Derive keys. These are based on a 6 byte device identifier found in the
         // manufacturer data.
-        let device_key = &device.properties().manufacturer_data[&1][3..9];
+        let device_key: [u8; 6] = if let Some(data) = device.properties().manufacturer_data.get(&1)
+        {
+            if data.len() >= 9 {
+                let mut result = [0; 6];
+                result.copy_from_slice(&data[3..9]);
+                result
+            } else {
+                return Err(anyhow!("Device identifier data invalid"));
+            }
+        } else {
+            return Err(anyhow!("Manufacturer data missing device identifier"));
+        };
+
         const GAN_V2_KEY: [u8; 16] = [
             0x01, 0x02, 0x42, 0x28, 0x31, 0x91, 0x16, 0x07, 0x20, 0x05, 0x18, 0x54, 0x42, 0x11,
             0x12, 0x53,
