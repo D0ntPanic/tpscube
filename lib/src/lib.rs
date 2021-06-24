@@ -1,7 +1,6 @@
 mod action;
 mod common;
 mod cube3x3x3;
-mod import;
 mod rand;
 mod request;
 mod tables;
@@ -9,9 +8,14 @@ mod tables;
 #[cfg(feature = "storage")]
 mod history;
 #[cfg(feature = "storage")]
+mod import;
+#[cfg(feature = "storage")]
 mod storage;
 #[cfg(feature = "storage")]
 mod sync;
+
+#[cfg(feature = "bluetooth")]
+mod bluetooth;
 
 #[allow(dead_code, unused_imports)]
 mod action_generated;
@@ -34,6 +38,11 @@ pub use request::{SyncRequest, SyncResponse, SYNC_API_VERSION};
 pub use history::{History, Session};
 #[cfg(feature = "storage")]
 pub use sync::SyncStatus;
+
+#[cfg(feature = "bluetooth")]
+pub use bluetooth::{
+    AvailableDevice, BluetoothCube, BluetoothCubeState, BluetoothCubeType, MoveListenerHandle,
+};
 
 #[cfg(not(feature = "no_solver"))]
 pub use cube3x3x3::{scramble_3x3x3, scramble_3x3x3_fast};

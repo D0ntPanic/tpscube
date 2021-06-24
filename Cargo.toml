@@ -19,7 +19,7 @@ gl_matrix = "0.0"
 num-traits = "0.2"
 
 [features]
-default = ["tpscube_core/native-storage"]
+default = ["tpscube_core/native-storage", "tpscube_core/bluetooth"]
 wasm = ["getrandom/js", "tpscube_core/web-storage", "instant/wasm-bindgen", "chrono/wasmbind"]
 
 [profile.dev]

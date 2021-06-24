@@ -1,7 +1,9 @@
 use chrono::Local;
 use std::time::Instant;
 use tempdir::TempDir;
-use tpscube_core::{scramble_3x3x3_fast, History, MoveSequence, Penalty, Solve, SolveType, TimedMove};
+use tpscube_core::{
+    scramble_3x3x3_fast, History, MoveSequence, Penalty, Solve, SolveType, TimedMove,
+};
 
 const SOLVE_COUNT: usize = 100;
 
@@ -48,7 +50,7 @@ fn main() {
         let history = History::open_at(temp_dir.path()).unwrap();
 
         let duration = Instant::now() - begin;
-        println!("After restore, {} solves present", history.solves().len());
+        println!("After restore, {} solves present", history.iter().count());
         println!(
             "Restored {} solves in {:.3} secs",
             SOLVE_COUNT,

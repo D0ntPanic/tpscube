@@ -572,6 +572,13 @@ impl Cube3x3x3 {
     const MAX_PHASE_2_MOVES: usize = 18;
     pub const MAX_SOLUTION_MOVES: usize = Self::MAX_PHASE_1_MOVES + Self::MAX_PHASE_2_MOVES;
 
+    pub fn from_corners_and_edges(
+        corners: [CornerPiece3x3x3; 8],
+        edges: [EdgePiece3x3x3; 12],
+    ) -> Self {
+        Self { corners, edges }
+    }
+
     /// Gets the piece at a given corner
     pub fn corner_piece(&self, corner: Corner3x3x3) -> CornerPiece3x3x3 {
         self.corners[corner as u8 as usize]
