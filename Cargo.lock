@@ -302,8 +302,7 @@ dependencies = [
 [[package]]
 name = "btleplug"
 version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4675dcf310c7aaa31a422a4f2c88e83c519606ef7688b689dd4b5a4e4dce51a3"
+source = "git+https://github.com/D0ntPanic/btleplug.git#1bfb34b514688908aaaf13273dcd23724d10a30a"
 dependencies = [
  "async-std",
  "bitflags",

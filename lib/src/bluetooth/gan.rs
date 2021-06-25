@@ -582,7 +582,7 @@ impl<P: Peripheral> GANCubeVersion2<P> {
                 }
             }
         }));
-        device.subscribe(&read).unwrap();
+        device.subscribe(&read)?;
 
         // Request initial cube state
         let mut loop_count = 0;

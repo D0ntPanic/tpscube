@@ -29,7 +29,7 @@ wasm-bindgen-futures = "0.4"
 rocksdb = { version="0.16", optional=true }
 reqwest = { version="0.11", features=["rustls-tls", "blocking", "json"], optional=true }
 http = { version="0.2", optional=true }
-btleplug = { version="0.7", optional=true }
+btleplug = { git="https://github.com/D0ntPanic/btleplug", optional=true }
 aes = { version="0.7", optional=true }
 
 [features]
