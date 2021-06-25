@@ -5,3 +5,4 @@ target/
 lambda.zip
 web/tpscube.js
 web/tpscube_bg.wasm
+web/tpscube_bg.wasm.gz

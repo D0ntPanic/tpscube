@@ -11,7 +11,8 @@ server: web
 	cd web && python3 -m http.server
 
 deploy: web
+	gzip -9 -k -f web/tpscube_bg.wasm
 	aws s3 cp --profile personal web/index.html s3://tpscube/index.html
 	aws s3 cp --profile personal web/tpscube.js s3://tpscube/tpscube.js
-	aws s3 cp --profile personal web/tpscube_bg.wasm s3://tpscube/tpscube_bg.wasm
+	aws s3 cp --profile personal --content-encoding gzip web/tpscube_bg.wasm.gz s3://tpscube/tpscube_bg.wasm
 	aws cloudfront create-invalidation --profile personal --distribution-id E1CI0QZD6NW0J0 --paths "/*"
