@@ -330,6 +330,15 @@ impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion1<P> {
             *self.synced.lock().unwrap() = false;
         }
     }
+
+    // Older GAN cubes have *very* uncalibrated clocks
+    fn estimated_clock_ratio(&self) -> f64 {
+        0.95
+    }
+
+    fn clock_ratio_range(&self) -> (f64, f64) {
+        (0.9, 1.02)
+    }
 }
 
 impl GANCubeVersion1Cipher {
