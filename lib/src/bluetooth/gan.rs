@@ -312,6 +312,8 @@ impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion1<P> {
             &message,
             WriteType::WithResponse,
         );
+
+        *self.state.lock().unwrap() = Cube3x3x3::new();
     }
 
     fn synced(&self) -> bool {
@@ -741,6 +743,8 @@ impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion2<P> {
         let _ = self
             .device
             .write(&self.write, &message, WriteType::WithResponse);
+
+        *self.state.lock().unwrap() = Cube3x3x3::new();
     }
 
     fn synced(&self) -> bool {

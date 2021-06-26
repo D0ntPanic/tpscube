@@ -1,4 +1,5 @@
 mod gan;
+mod giiker;
 mod gocube;
 
 use crate::common::TimedMove;
@@ -6,6 +7,7 @@ use crate::cube3x3x3::Cube3x3x3;
 use anyhow::{anyhow, Result};
 use btleplug::api::{BDAddr, Central, Peripheral};
 use gan::gan_cube_connect;
+use giiker::giiker_connect;
 use gocube::gocube_connect;
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -202,6 +204,7 @@ impl BluetoothCube {
         let cube = match cube_type {
             BluetoothCubeType::GAN => gan_cube_connect(peripheral, move_listener)?,
             BluetoothCubeType::GoCube => gocube_connect(peripheral, move_listener)?,
+            BluetoothCubeType::Giiker => giiker_connect(peripheral, move_listener)?,
             _ => return Err(anyhow!("Cube type not supported")),
         };
 

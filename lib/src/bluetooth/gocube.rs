@@ -227,6 +227,8 @@ impl<P: Peripheral> BluetoothCubeDevice for GoCube<P> {
             &[Self::RESET_STATE_MESSAGE],
             WriteType::WithResponse,
         );
+
+        *self.state.lock().unwrap() = Cube3x3x3::new();
     }
 
     fn synced(&self) -> bool {
