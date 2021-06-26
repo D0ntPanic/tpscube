@@ -9,7 +9,7 @@ use anyhow::Result;
 use chrono::Local;
 use egui::{
     containers::ScrollArea, popup_below_widget, widgets::Label, Align, Align2, CentralPanel,
-    Color32, CtxRef, Key, Layout, Pos2, Rect, Sense, SidePanel, Stroke, TopPanel, Ui, Vec2,
+    Color32, CtxRef, Key, Layout, Pos2, Rect, Sense, SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
 };
 use instant::Instant;
 use tpscube_core::{
@@ -360,82 +360,91 @@ impl TimerWidget {
         let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
         if aspect >= 1.0 {
             // Landscape mode. Session details to the left.
-            SidePanel::left("left_timer", 175.0).show(ctxt, |ui| {
-                ui.section("Session");
+            SidePanel::left("left_timer")
+                .default_width(175.0)
+                .resizable(false)
+                .show(ctxt, |ui| {
+                    ui.section("Session");
 
-                self.update_solve_cache(history);
+                    self.update_solve_cache(history);
 
-                ui.vertical(|ui| {
-                    Self::session_time(ui, "Last ao5", false, self.session_solves.last_ao5);
-                    Self::session_time(ui, "Last ao12", false, self.session_solves.last_ao12);
-                    Self::session_time(ui, "Session avg", false, self.session_solves.session_avg);
-                    Self::session_time(
-                        ui,
-                        "Best solve",
-                        false,
-                        self.session_solves
-                            .best_solve
-                            .as_ref()
-                            .map(|best| best.time),
-                    );
-                    Self::session_time(
-                        ui,
-                        "Best ao5",
-                        false,
-                        self.session_solves.best_ao5.as_ref().map(|best| best.time),
-                    );
-                    Self::session_time(
-                        ui,
-                        "Best ao12",
-                        false,
-                        self.session_solves.best_ao12.as_ref().map(|best| best.time),
-                    );
+                    ui.vertical(|ui| {
+                        Self::session_time(ui, "Last ao5", false, self.session_solves.last_ao5);
+                        Self::session_time(ui, "Last ao12", false, self.session_solves.last_ao12);
+                        Self::session_time(
+                            ui,
+                            "Session avg",
+                            false,
+                            self.session_solves.session_avg,
+                        );
+                        Self::session_time(
+                            ui,
+                            "Best solve",
+                            false,
+                            self.session_solves
+                                .best_solve
+                                .as_ref()
+                                .map(|best| best.time),
+                        );
+                        Self::session_time(
+                            ui,
+                            "Best ao5",
+                            false,
+                            self.session_solves.best_ao5.as_ref().map(|best| best.time),
+                        );
+                        Self::session_time(
+                            ui,
+                            "Best ao12",
+                            false,
+                            self.session_solves.best_ao12.as_ref().map(|best| best.time),
+                        );
 
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Red.into(),
+                            };
+                            ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Red.into(),
+                            };
+                            ui.with_layout(Layout::right_to_left(), |ui| {
+                                if ui
+                                    .add(Label::new("↺  New session").sense(Sense::click()))
+                                    .clicked()
+                                {
+                                    let _ = history.new_session();
+                                }
+                            })
+                        });
+                    });
                     ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
-                            width: 1.0,
-                            color: Theme::Red.into(),
-                        };
-                        ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
-                            width: 1.0,
-                            color: Theme::Red.into(),
-                        };
-                        ui.with_layout(Layout::right_to_left(), |ui| {
-                            if ui
-                                .add(Label::new("↺  New session").sense(Sense::click()))
-                                .clicked()
+                    ui.section("Solves");
+
+                    ui.visuals_mut().widgets.inactive.bg_fill = Theme::BackgroundHighlight.into();
+                    ui.visuals_mut().widgets.hovered.bg_fill = Theme::Disabled.into();
+                    ui.visuals_mut().widgets.active.bg_fill = Theme::Disabled.into();
+                    ScrollArea::auto_sized()
+                        .id_source("timer_solve_list")
+                        .show(ui, |ui| {
+                            let mut has_solves = false;
+                            for (idx, solve) in self.session_solves.solves.iter().enumerate().rev()
                             {
-                                let _ = history.new_session();
+                                Self::add_solve(ui, idx, solve, history);
+                                has_solves = true;
                             }
-                        })
-                    });
+                            if !has_solves {
+                                ui.add(
+                                    Label::new("No solves in this session")
+                                        .text_color(Theme::Disabled),
+                                );
+                            }
+                        });
                 });
-
-                ui.add_space(8.0);
-                ui.section("Solves");
-
-                ui.visuals_mut().widgets.inactive.bg_fill = Theme::BackgroundHighlight.into();
-                ui.visuals_mut().widgets.hovered.bg_fill = Theme::Disabled.into();
-                ui.visuals_mut().widgets.active.bg_fill = Theme::Disabled.into();
-                ScrollArea::auto_sized()
-                    .id_source("timer_solve_list")
-                    .show(ui, |ui| {
-                        let mut has_solves = false;
-                        for (idx, solve) in self.session_solves.solves.iter().enumerate().rev() {
-                            Self::add_solve(ui, idx, solve, history);
-                            has_solves = true;
-                        }
-                        if !has_solves {
-                            ui.add(
-                                Label::new("No solves in this session").text_color(Theme::Disabled),
-                            );
-                        }
-                    });
-            });
         } else {
             // Portrait mode. Session details at the top.
-            TopPanel::top("top_timer").show(ctxt, |ui| {
+            TopBottomPanel::top("top_timer").show(ctxt, |ui| {
                 // Session header with embedded new session button.
                 ui.horizontal(|ui| {
                     ui.add(

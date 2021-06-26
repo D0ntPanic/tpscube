@@ -104,6 +104,7 @@ fn integration_info(
 ) -> epi::IntegrationInfo {
     epi::IntegrationInfo {
         web_info: None,
+        prefer_dark_mode: Some(true),
         cpu_usage: previous_frame_time,
         seconds_since_midnight: seconds_since_midnight(),
         native_pixels_per_point: Some(native_pixels_per_point(&display)),
@@ -254,11 +255,15 @@ pub fn run(mut app: Box<dyn app::App>, nativve_options: epi::NativeOptions) -> !
             glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
 
             glutin::event::Event::WindowEvent { event, .. } => {
+                if egui.is_quit_event(&event) {
+                    *control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+                }
+
                 if let glutin::event::WindowEvent::Focused(new_focused) = event {
                     is_focused = new_focused;
                 }
 
-                egui.on_event(event, control_flow);
+                egui.on_event(&event);
 
                 display.gl_window().window().request_redraw(); // TODO: ask egui if the events warrants a repaint instead
             }

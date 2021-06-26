@@ -10,8 +10,8 @@ use crate::timer::TimerWidget;
 use crate::widgets::CustomWidgets;
 use anyhow::Result;
 use egui::{
-    widgets::Label, CentralPanel, Color32, CtxRef, Layout, Rect, Rgba, Sense, Stroke, TopPanel,
-    Vec2,
+    widgets::Label, CentralPanel, Color32, CtxRef, Layout, Rect, Rgba, Sense, Stroke,
+    TopBottomPanel, Vec2,
 };
 use tpscube_core::{History, SyncStatus};
 
@@ -117,7 +117,7 @@ impl App for Application {
         }
 
         ctxt.set_visuals(header_visuals());
-        TopPanel::top("header").show(ctxt, |ui| {
+        TopBottomPanel::top("header").show(ctxt, |ui| {
             ui.vertical(|ui| {
                 ui.add_space(5.0);
 

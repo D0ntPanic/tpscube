@@ -186,6 +186,7 @@ impl AppRunner {
             web_info: Some(epi::WebInfo {
                 web_location_hash: egui_web::location_hash().unwrap_or_default(),
             }),
+            prefer_dark_mode: Some(true),
             cpu_usage: self.web_backend.previous_frame_time,
             seconds_since_midnight: Some(egui_web::seconds_since_midnight()),
             native_pixels_per_point: Some(egui_web::native_pixels_per_point()),
@@ -251,7 +252,7 @@ fn handle_output(output: &egui::Output, runner: &mut AppRunner) {
         copied_text,
         needs_repaint: _, // handled elsewhere
         events: _,        // we ignore these (TODO: accessibility screen reader)
-        text_cursor,
+        text_cursor_pos,
     } = output;
 
     egui_web::set_cursor_icon(*cursor_icon);
@@ -263,9 +264,9 @@ fn handle_output(output: &egui::Output, runner: &mut AppRunner) {
         set_clipboard_text(copied_text);
     }
 
-    if &runner.last_text_cursor_pos != text_cursor {
-        move_text_cursor(text_cursor, runner.canvas_id());
-        runner.last_text_cursor_pos = *text_cursor;
+    if &runner.last_text_cursor_pos != text_cursor_pos {
+        move_text_cursor(text_cursor_pos, runner.canvas_id());
+        runner.last_text_cursor_pos = *text_cursor_pos;
     }
 }
 

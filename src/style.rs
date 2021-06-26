@@ -60,6 +60,19 @@ pub fn base_visuals() -> Visuals {
                 },
                 expansion: 0.0,
             },
+            open: WidgetVisuals {
+                bg_fill: Color32::TRANSPARENT,
+                bg_stroke: Stroke {
+                    width: 1.0,
+                    color: Color32::TRANSPARENT,
+                },
+                corner_radius: 0.0,
+                fg_stroke: Stroke {
+                    width: 1.0,
+                    color: Theme::Green.into(),
+                },
+                expansion: 0.0,
+            },
         },
         selection: Selection {
             bg_fill: Theme::Selection.into(),
