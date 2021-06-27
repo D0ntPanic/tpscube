@@ -234,6 +234,10 @@ impl<P: Peripheral> BluetoothCubeDevice for GoCube<P> {
     fn synced(&self) -> bool {
         *self.synced.lock().unwrap()
     }
+
+    fn disconnect(&self) {
+        let _ = self.device.disconnect();
+    }
 }
 
 pub(crate) fn gocube_connect<P: Peripheral + 'static>(

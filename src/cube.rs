@@ -9,7 +9,8 @@ use gl_matrix::{
     mat4, vec3,
 };
 use num_traits::FloatConst;
-use tpscube_core::{Cube, Cube3x3x3, Face};
+use std::time::{Duration, Instant};
+use tpscube_core::{Cube, Cube3x3x3, Face, Move};
 
 const FACE_COLORS: [[f32; 3]; 6] = [
     [1.0, 1.0, 1.0],
@@ -34,10 +35,16 @@ const MODEL_SCALE: f32 = 1.0 / CUBE_SIZE as f32;
 pub struct CubeRenderer {
     renderer: Option<GlRenderer>,
     cube: Cube3x3x3,
+    target_cube: Cube3x3x3,
+    move_queue: Vec<Move>,
+    max_queued_moves: usize,
     pitch: f32,
     yaw: f32,
     verts: Vec<Vertex>,
     index: Vec<u16>,
+    animation: Option<Animation>,
+    anim_fixed_index: [Vec<u16>; 6],
+    anim_moving_index: [Vec<u16>; 6],
     vert_ranges: [VertexRange; 6 * CUBE_SIZE * CUBE_SIZE],
 }
 
@@ -54,15 +61,47 @@ pub struct VertexRange {
     face: i32,
 }
 
+struct Animation {
+    #[cfg(target_arch = "wasm32")]
+    start: f64,
+    #[cfg(not(target_arch = "wasm32"))]
+    start: Instant,
+
+    length: Duration,
+    face: Face,
+    angle: f32,
+    move_: Move,
+}
+
 impl CubeRenderer {
     pub fn new() -> Self {
         let mut result = Self {
             renderer: None,
             cube: Cube3x3x3::new(),
+            target_cube: Cube3x3x3::new(),
+            move_queue: Vec::new(),
+            max_queued_moves: 8,
             pitch: 30.0,
             yaw: -35.0,
             verts: Vec::new(),
             index: Vec::new(),
+            animation: None,
+            anim_fixed_index: [
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ],
+            anim_moving_index: [
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ],
             vert_ranges: [VertexRange {
                 start_index: 0,
                 model_verts: EDGE_SOURCE_VERTS,
@@ -203,9 +242,49 @@ impl CubeRenderer {
         result
     }
 
+    pub fn reset_cube_state(&mut self) {
+        self.set_cube_state(Cube3x3x3::new());
+    }
+
     pub fn set_cube_state(&mut self, cube: Cube3x3x3) {
-        self.cube = cube;
+        self.cube = cube.clone();
+        self.target_cube = cube;
         self.update_colors();
+    }
+
+    pub fn set_max_queued_moves(&mut self, count: usize) {
+        self.max_queued_moves = count;
+    }
+
+    pub fn do_move(&mut self, mv: Move) {
+        self.do_moves(&[mv]);
+    }
+
+    pub fn do_moves(&mut self, moves: &[Move]) {
+        if self.max_queued_moves == 0 {
+            for mv in moves {
+                self.target_cube.do_move(*mv);
+            }
+            self.cube = self.target_cube.clone();
+            self.move_queue.clear();
+            self.animation = None;
+            self.update_colors();
+        } else {
+            for mv in moves {
+                self.target_cube.do_move(*mv);
+                self.move_queue.push(*mv);
+            }
+        }
+    }
+
+    pub fn verify_state(&mut self, cube: Cube3x3x3) {
+        if self.target_cube != cube {
+            self.cube = cube.clone();
+            self.target_cube = cube;
+            self.move_queue.clear();
+            self.animation = None;
+            self.update_colors();
+        }
     }
 
     pub fn reset_angle(&mut self) {
@@ -304,6 +383,14 @@ impl CubeRenderer {
         for src_index in CORNER_INDEX {
             let index = *src_index + start_index as u16;
             self.index.push(index);
+            self.anim_moving_index[first.0 as u8 as usize].push(index);
+            self.anim_moving_index[second.0 as u8 as usize].push(index);
+            self.anim_moving_index[third.0 as u8 as usize].push(index);
+            for i in 0..6 {
+                if first.0 as u8 != i && second.0 as u8 != i && third.0 as u8 != i {
+                    self.anim_fixed_index[i as usize].push(index);
+                }
+            }
         }
 
         // Keep track of vertex information for each face
@@ -353,6 +440,13 @@ impl CubeRenderer {
         for src_index in EDGE_INDEX {
             let index = *src_index + start_index as u16;
             self.index.push(index);
+            self.anim_moving_index[first.0 as u8 as usize].push(index);
+            self.anim_moving_index[second.0 as u8 as usize].push(index);
+            for i in 0..6 {
+                if first.0 as u8 != i && second.0 as u8 != i {
+                    self.anim_fixed_index[i as usize].push(index);
+                }
+            }
         }
 
         // Keep track of vertex information for each face
@@ -397,6 +491,12 @@ impl CubeRenderer {
         for src_index in CENTER_INDEX {
             let index = *src_index + start_index as u16;
             self.index.push(index);
+            self.anim_moving_index[piece.0 as u8 as usize].push(index);
+            for i in 0..6 {
+                if piece.0 as u8 != i {
+                    self.anim_fixed_index[i as usize].push(index);
+                }
+            }
         }
 
         // Keep track of vertex information for each face
@@ -439,8 +539,39 @@ impl CubeRenderer {
             self.renderer = Some(renderer);
         }
 
-        let renderer = self.renderer.as_mut().unwrap();
+        // Start animation if there are new moves and there isn't alreay an animation
+        if self.animation.is_none() && self.move_queue.len() != 0 {
+            while self.move_queue.len() > self.max_queued_moves {
+                let mv = self.move_queue.remove(0);
+                self.cube.do_move(mv);
+            }
 
+            let tps = 4.0 * self.move_queue.len() as f32;
+            let mv = self.move_queue.remove(0);
+            let face = mv.face();
+            let angle = -90.0 * mv.rotation() as f32;
+
+            #[cfg(not(target_arch = "wasm32"))]
+            let start = Instant::now();
+            #[cfg(target_arch = "wasm32")]
+            let start = egui_web::now_sec();
+
+            self.animation = Some(Animation {
+                start,
+                length: Duration::from_secs_f32(1.0 / tps),
+                face,
+                angle,
+                move_: mv,
+            });
+
+            self.update_colors();
+        }
+
+        // Draw cube
+        let renderer = self.renderer.as_mut().unwrap();
+        renderer.begin(ctxt, gl, rect);
+
+        // Set up fixed model matrix
         let mut model = [0.0; 16];
         let model_ref = &mut model;
         mat4::from_x_rotation(model_ref, to_radian(self.pitch));
@@ -453,10 +584,84 @@ impl CubeRenderer {
         mat4::translate(model_ref, &mat4::clone(model_ref), &MODEL_OFFSET);
         renderer.set_model_matrix(model);
 
-        renderer.begin(ctxt, gl, rect);
-        renderer.draw(gl, &self.verts, &self.index)?;
+        let mut anim_done = None;
+        if let Some(animation) = &mut self.animation {
+            // Animation present, calculate fraction complete
+            #[cfg(not(target_arch = "wasm32"))]
+            let now = Instant::now();
+            #[cfg(not(target_arch = "wasm32"))]
+            let elapsed = (now - animation.start).as_secs_f32();
+
+            #[cfg(target_arch = "wasm32")]
+            let now = egui_web::now_sec();
+            #[cfg(target_arch = "wasm32")]
+            let elapsed = (now - animation.start) as f32;
+
+            let frac = elapsed / animation.length.as_secs_f32();
+            let frac = if frac >= 1.0 {
+                anim_done = Some(animation.move_);
+                1.0
+            } else {
+                (frac * f32::PI() / 2.0).sin()
+            };
+
+            // Calculate axis and angle for animation
+            let angle = animation.angle * frac;
+            let axis = match animation.face {
+                Face::Top => [0.0, 1.0, 0.0],
+                Face::Front => [0.0, 0.0, 1.0],
+                Face::Right => [1.0, 0.0, 0.0],
+                Face::Back => [0.0, 0.0, -1.0],
+                Face::Left => [-1.0, 0.0, 0.0],
+                Face::Bottom => [0.0, -1.0, 0.0],
+            };
+
+            // Draw fixed part of the cube
+            renderer.draw(
+                gl,
+                &self.verts,
+                &self.anim_fixed_index[animation.face as u8 as usize],
+            )?;
+
+            // Compute model matrix of the moving part of the cube
+            let mut model = [0.0; 16];
+            let model_ref = &mut model;
+            mat4::from_x_rotation(model_ref, to_radian(self.pitch));
+            mat4::rotate_y(model_ref, &mat4::clone(model_ref), to_radian(self.yaw));
+            mat4::rotate(model_ref, &mat4::clone(model_ref), to_radian(angle), &axis);
+            mat4::scale(
+                model_ref,
+                &mat4::clone(model_ref),
+                &[MODEL_SCALE, MODEL_SCALE, MODEL_SCALE],
+            );
+            mat4::translate(model_ref, &mat4::clone(model_ref), &MODEL_OFFSET);
+            renderer.set_model_matrix(model);
+
+            // Draw the moving part of the cube
+            renderer.draw(
+                gl,
+                &self.verts,
+                &self.anim_moving_index[animation.face as u8 as usize],
+            )?;
+        } else {
+            // No animation, draw fixed model
+            renderer.draw(gl, &self.verts, &self.index)?;
+        }
+
         renderer.end(gl);
 
+        // If there is a finished animation, transition to fixed state and apply the
+        // animated move to the rendered cube state.
+        if let Some(mv) = anim_done {
+            self.cube.do_move(mv);
+            self.animation = None;
+            self.update_colors();
+        }
+
         Ok(())
+    }
+
+    pub fn animating(&self) -> bool {
+        self.animation.is_some() || self.move_queue.len() != 0
     }
 }

@@ -293,6 +293,53 @@ impl Move {
         Move::D2 as u8 as usize + 1
     }
 
+    pub const fn face(&self) -> Face {
+        match self {
+            Move::U => Face::Top,
+            Move::Up => Face::Top,
+            Move::U2 => Face::Top,
+            Move::F => Face::Front,
+            Move::Fp => Face::Front,
+            Move::F2 => Face::Front,
+            Move::R => Face::Right,
+            Move::Rp => Face::Right,
+            Move::R2 => Face::Right,
+            Move::B => Face::Back,
+            Move::Bp => Face::Back,
+            Move::B2 => Face::Back,
+            Move::L => Face::Left,
+            Move::Lp => Face::Left,
+            Move::L2 => Face::Left,
+            Move::D => Face::Bottom,
+            Move::Dp => Face::Bottom,
+            Move::D2 => Face::Bottom,
+        }
+    }
+
+    /// Gets the face rotation amount in number of 90 degree clockwise rotations
+    pub const fn rotation(&self) -> i32 {
+        match self {
+            Move::U => 1,
+            Move::Up => -1,
+            Move::U2 => 2,
+            Move::F => 1,
+            Move::Fp => -1,
+            Move::F2 => 2,
+            Move::R => 1,
+            Move::Rp => -1,
+            Move::R2 => 2,
+            Move::B => 1,
+            Move::Bp => -1,
+            Move::B2 => 2,
+            Move::L => 1,
+            Move::Lp => -1,
+            Move::L2 => 2,
+            Move::D => 1,
+            Move::Dp => -1,
+            Move::D2 => 2,
+        }
+    }
+
     pub const fn inverse(&self) -> Self {
         match self {
             Move::U => Move::Up,

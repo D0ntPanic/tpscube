@@ -10,10 +10,14 @@ use crate::timer::TimerWidget;
 use crate::widgets::CustomWidgets;
 use anyhow::Result;
 use egui::{
-    widgets::Label, CentralPanel, Color32, CtxRef, Layout, Rect, Rgba, Sense, Stroke,
+    widgets::Label, CentralPanel, Color32, CtxRef, Layout, Rect, Rgba, Sense, Stroke, TextureId,
     TopBottomPanel, Vec2,
 };
+use image::GenericImageView;
 use tpscube_core::{History, SyncStatus};
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::bluetooth::BluetoothState;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum Mode {
@@ -32,12 +36,39 @@ pub struct Application {
     history: History,
     framerate: Option<Framerate>,
     timer_cube_rect: Option<Rect>,
+    bluetooth_cube_rect: Option<Rect>,
     first_frame: bool,
     screen_size: ScreenSize,
+
+    #[cfg(not(target_arch = "wasm32"))]
+    bluetooth: BluetoothState,
+
+    bluetooth_icon: Icon,
+    bluetooth_dialog_open: bool,
 }
 
 pub struct ErrorApplication {
     message: String,
+}
+
+struct Image {
+    width: usize,
+    height: usize,
+    pixels: Vec<Color32>,
+    texture_id: Option<TextureId>,
+}
+
+enum IconState {
+    Inactive,
+    Hovered,
+    Active,
+}
+
+struct Icon {
+    inactive: Image,
+    hover: Image,
+    active: Image,
+    state: IconState,
 }
 
 pub trait App {
@@ -68,6 +99,19 @@ pub trait App {
 impl Application {
     pub fn new() -> Result<Self> {
         let history = History::open()?;
+
+        let bluetooth_inactive =
+            Image::new(include_bytes!("../images/bluetooth_deselect.png")).unwrap();
+        let bluetooth_hover = Image::new(include_bytes!("../images/bluetooth_hover.png")).unwrap();
+        let bluetooth_active =
+            Image::new(include_bytes!("../images/bluetooth_active.png")).unwrap();
+        let bluetooth_icon = Icon {
+            inactive: bluetooth_inactive,
+            hover: bluetooth_hover,
+            active: bluetooth_active,
+            state: IconState::Inactive,
+        };
+
         Ok(Application {
             mode: Mode::Timer,
             timer_widget: TimerWidget::new(),
@@ -77,8 +121,15 @@ impl Application {
             history,
             framerate: None,
             timer_cube_rect: None,
+            bluetooth_cube_rect: None,
             first_frame: true,
             screen_size: ScreenSize::Normal,
+
+            #[cfg(not(target_arch = "wasm32"))]
+            bluetooth: BluetoothState::new(),
+
+            bluetooth_icon,
+            bluetooth_dialog_open: false,
         })
     }
 }
@@ -181,8 +232,10 @@ impl App for Application {
                         }
                     };
 
-                    // Show sync button
+                    // Show icons on the right of the header
+                    ui.style_mut().spacing.item_spacing.x = 12.0;
                     ui.with_layout(Layout::right_to_left(), |ui| {
+                        // Show sync button
                         if self.history.sync_in_progress() {
                             ui.style_mut().visuals.widgets.inactive.fg_stroke = Stroke {
                                 width: 1.0,
@@ -211,6 +264,36 @@ impl App for Application {
                         {
                             self.history.start_sync();
                         }
+
+                        // Show bluetooth button
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if let Some(texture_id) = self.bluetooth_icon.texture(frame) {
+                            let response = ui.add(
+                                egui::Image::new(texture_id, Vec2::new(20.0, 20.0))
+                                    .sense(Sense::click()),
+                            );
+                            if response.hovered() {
+                                self.bluetooth_icon.state = IconState::Hovered;
+                            } else if self.bluetooth.active() {
+                                self.bluetooth_icon.state = IconState::Active;
+                            } else {
+                                self.bluetooth_icon.state = IconState::Inactive;
+                            }
+                            if response.clicked() {
+                                if self.bluetooth.active() {
+                                    self.bluetooth.disconnect();
+                                } else {
+                                    self.bluetooth_dialog_open = true;
+                                    self.bluetooth.start_connect_flow(frame);
+                                }
+                            }
+                            response.on_hover_ui(|ui| {
+                                ui.add(
+                                    Label::new(self.bluetooth.status())
+                                        .text_color(self.bluetooth.status_color()),
+                                );
+                            });
+                        }
                     });
                 });
 
@@ -218,14 +301,19 @@ impl App for Application {
             });
         });
 
-        let framerate = if let Some(framerate) = &self.framerate {
+        let framerate = if let Some(framerate) = &mut self.framerate {
             framerate
         } else {
             self.framerate = Some(Framerate::new(frame.repaint_signal().clone()));
-            self.framerate.as_ref().unwrap()
+            self.framerate.as_mut().unwrap()
         };
 
         self.timer_cube_rect = None;
+        self.bluetooth_cube_rect = None;
+
+        if self.history.sync_in_progress() {
+            framerate.request(Some(10));
+        }
 
         match self.mode {
             Mode::Timer => self.timer_widget.update(
@@ -235,31 +323,32 @@ impl App for Application {
                 framerate,
                 &mut self.timer_cube_rect,
             ),
-            Mode::History => {
-                self.history_widget.update(ctxt, frame, &mut self.history);
-                framerate.set_target(if self.history.sync_in_progress() {
-                    Some(10)
-                } else {
-                    None
-                });
+            Mode::History => self.history_widget.update(ctxt, frame, &mut self.history),
+            Mode::Graphs => self.graph_widget.update(ctxt, frame, &mut self.history),
+            Mode::Settings => self.settings_widget.update(ctxt, frame, &mut self.history),
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.bluetooth_dialog_open {
+            let mut open = true;
+            self.bluetooth.update(
+                ctxt,
+                frame,
+                framerate,
+                &mut self.bluetooth_cube_rect,
+                &mut open,
+            );
+            if !open {
+                self.bluetooth_dialog_open = false;
+                self.bluetooth.close();
             }
-            Mode::Graphs => {
-                self.graph_widget.update(ctxt, frame, &mut self.history);
-                framerate.set_target(if self.history.sync_in_progress() {
-                    Some(10)
-                } else {
-                    None
-                });
-            }
-            Mode::Settings => {
-                self.settings_widget.update(ctxt, frame, &mut self.history);
-                framerate.set_target(if self.history.sync_in_progress() {
-                    Some(10)
-                } else {
-                    None
-                });
+
+            if self.bluetooth.finished() {
+                self.bluetooth_dialog_open = false;
             }
         }
+
+        framerate.commit();
 
         if self.first_frame {
             // On some devices the 3D elements don't render properly on the first frame. Render
@@ -271,15 +360,29 @@ impl App for Application {
 
     #[cfg(target_arch = "wasm32")]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
-        if let Some(rect) = &self.timer_cube_rect {
-            self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
+        if !self.bluetooth_dialog_open {
+            if let Some(rect) = &self.timer_cube_rect {
+                self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
+            }
+        } else {
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(rect) = &self.bluetooth_cube_rect {
+                self.bluetooth.paint_cube(ctxt, gl, rect).unwrap();
+            }
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
-        if let Some(rect) = &self.timer_cube_rect {
-            self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
+        if !self.bluetooth_dialog_open {
+            if let Some(rect) = &self.timer_cube_rect {
+                self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
+            }
+        } else {
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(rect) = &self.bluetooth_cube_rect {
+                self.bluetooth.paint_cube(ctxt, gl, rect).unwrap();
+            }
         }
     }
 }
@@ -307,5 +410,48 @@ impl App for ErrorApplication {
                 ui.add(Label::new(format!("Error: {}", self.message)).text_color(Theme::Red));
             })
         });
+    }
+}
+
+impl Image {
+    fn new(png: &[u8]) -> Result<Self> {
+        let image = image::load_from_memory(png)?;
+        let image_rgb = image.to_rgba8();
+        let width = image.width() as usize;
+        let height = image.height() as usize;
+        let pixels = image_rgb
+            .into_vec()
+            .chunks(4)
+            .map(|rgba| Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3]))
+            .collect();
+        Ok(Self {
+            width,
+            height,
+            pixels,
+            texture_id: None,
+        })
+    }
+
+    fn texture(&mut self, frame: &mut epi::Frame<'_>) -> Option<TextureId> {
+        if let Some(texture_id) = self.texture_id {
+            Some(texture_id)
+        } else {
+            self.texture_id = Some(
+                frame
+                    .tex_allocator()
+                    .alloc_srgba_premultiplied((self.width, self.height), &self.pixels),
+            );
+            self.texture_id
+        }
+    }
+}
+
+impl Icon {
+    fn texture(&mut self, frame: &mut epi::Frame<'_>) -> Option<TextureId> {
+        match self.state {
+            IconState::Inactive => self.inactive.texture(frame),
+            IconState::Hovered => self.hover.texture(frame),
+            IconState::Active => self.active.texture(frame),
+        }
     }
 }

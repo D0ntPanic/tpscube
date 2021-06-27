@@ -6,6 +6,8 @@ use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+const DEFAULT_MAX_FRAMERATE: u32 = 60;
+
 struct CurrentFramerateData {
     framerate: u32,
     repaint: Arc<dyn RepaintSignal>,
@@ -29,6 +31,8 @@ struct CurrentFramerate {
 pub struct Framerate {
     current: Mutex<CurrentFramerate>,
     repaint: Arc<dyn RepaintSignal>,
+    pending_request: Option<u32>,
+    max: u32,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -62,6 +66,8 @@ impl Framerate {
         Self {
             current: Mutex::new(current),
             repaint,
+            pending_request: None,
+            max: DEFAULT_MAX_FRAMERATE,
         }
     }
 
@@ -121,7 +127,26 @@ impl Framerate {
         }
     }
 
-    pub fn set_target(&self, target: Option<u32>) {
+    pub fn request(&mut self, target: Option<u32>) {
+        if let Some(existing_request) = &self.pending_request {
+            if let Some(target) = target {
+                if target > *existing_request {
+                    self.pending_request = Some(target);
+                }
+            }
+        } else {
+            self.pending_request = target;
+        }
+    }
+
+    pub fn request_max(&mut self) {
+        self.request(Some(self.max));
+    }
+
+    pub fn commit(&mut self) {
+        let target = self.pending_request;
+        self.pending_request = None;
+
         let mut current = self.current.lock().unwrap();
         if current.target != target {
             current.target = target;

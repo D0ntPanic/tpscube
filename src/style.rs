@@ -1,5 +1,6 @@
 use crate::theme::Theme;
 use egui::{
+    epaint::Shadow,
     style::{Selection, Visuals, WidgetVisuals, Widgets},
     Color32, Stroke,
 };
@@ -85,6 +86,10 @@ pub fn base_visuals() -> Visuals {
         hyperlink_color: Theme::Blue.into(),
         code_bg_color: Theme::BackgroundDark.into(),
         window_corner_radius: 0.0,
+        window_shadow: Shadow {
+            extrusion: 12.0,
+            color: Color32::from_rgba_premultiplied(0, 0, 0, 160),
+        },
         ..Default::default()
     }
 }
@@ -104,6 +109,20 @@ pub fn content_visuals() -> Visuals {
 pub fn side_visuals() -> Visuals {
     let mut result = base_visuals();
     result.widgets.noninteractive.bg_fill = Theme::Background.into();
+    result
+}
+
+pub fn dialog_visuals() -> Visuals {
+    let mut result = base_visuals();
+    result.widgets.noninteractive.bg_fill = Theme::BackgroundHighlight.into();
+    result.widgets.noninteractive.bg_stroke = Stroke {
+        width: 1.0,
+        color: Theme::Disabled.into(),
+    };
+    result.widgets.inactive.fg_stroke = Stroke {
+        width: 1.0,
+        color: Theme::Blue.into(),
+    };
     result
 }
 

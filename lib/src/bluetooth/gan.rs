@@ -320,15 +320,14 @@ impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion1<P> {
         *self.synced.lock().unwrap()
     }
 
-    fn needs_update(&self) -> bool {
-        true
-    }
-
     fn update(&self) {
-        if let Err(error) = self.move_poll() {
-            println!("Error: {}", error);
+        if let Err(_) = self.move_poll() {
             *self.synced.lock().unwrap() = false;
         }
+    }
+
+    fn disconnect(&self) {
+        let _ = self.device.disconnect();
     }
 
     // Older GAN cubes have *very* uncalibrated clocks
@@ -758,6 +757,10 @@ impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion2<P> {
 
     fn synced(&self) -> bool {
         *self.synced.lock().unwrap()
+    }
+
+    fn disconnect(&self) {
+        let _ = self.device.disconnect();
     }
 }
 

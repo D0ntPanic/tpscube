@@ -13,8 +13,7 @@ use egui::{
 };
 use instant::Instant;
 use tpscube_core::{
-    scramble_3x3x3, Average, BestSolve, Cube, Cube3x3x3, History, Move, Penalty, Solve, SolveList,
-    SolveType,
+    scramble_3x3x3, Average, BestSolve, History, Move, Penalty, Solve, SolveList, SolveType,
 };
 
 const MIN_SCRAMBLE_LINES: usize = 2;
@@ -78,10 +77,9 @@ impl CachedSessionSolves {
 impl TimerWidget {
     pub fn new() -> Self {
         let current_scramble = scramble_3x3x3();
-        let mut cube_state = Cube3x3x3::new();
-        cube_state.do_moves(&current_scramble);
         let mut cube = CubeRenderer::new();
-        cube.set_cube_state(cube_state);
+        cube.reset_cube_state();
+        cube.do_moves(&current_scramble);
 
         Self {
             state: TimerState::Inactive(0),
@@ -186,9 +184,8 @@ impl TimerWidget {
         self.current_scramble_displayed = false;
         self.next_scramble = None;
 
-        let mut cube_state = Cube3x3x3::new();
-        cube_state.do_moves(&self.current_scramble);
-        self.cube.set_cube_state(cube_state);
+        self.cube.reset_cube_state();
+        self.cube.do_moves(&self.current_scramble);
         self.cube.reset_angle();
     }
 
@@ -347,7 +344,7 @@ impl TimerWidget {
         ctxt: &CtxRef,
         _frame: &mut epi::Frame<'_>,
         history: &mut History,
-        framerate: &Framerate,
+        framerate: &mut Framerate,
         cube_rect: &mut Option<Rect>,
     ) {
         // Generate a scramble when the current one is onscreen. The slight delay will
@@ -718,6 +715,9 @@ impl TimerWidget {
                         );
                         if computed_cube_rect.width() > 0.0 && computed_cube_rect.height() > 0.0 {
                             *cube_rect = Some(computed_cube_rect);
+                            if self.cube.animating() {
+                                framerate.request_max();
+                            }
                         }
 
                         // Render timer
@@ -752,16 +752,10 @@ impl TimerWidget {
 
         // Run at 10 FPS when solving (to update counting timer), or only when
         // updates occur otherwise
-        framerate.set_target(match self.state {
-            TimerState::Preparing(_, _) | TimerState::Solving(_) => Some(10),
-            _ => {
-                if history.sync_in_progress() {
-                    Some(10)
-                } else {
-                    None
-                }
-            }
-        });
+        match self.state {
+            TimerState::Preparing(_, _) | TimerState::Solving(_) => framerate.request(Some(10)),
+            _ => (),
+        }
     }
 
     pub fn paint_cube(

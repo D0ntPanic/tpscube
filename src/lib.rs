@@ -14,6 +14,9 @@ mod theme;
 mod timer;
 mod widgets;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod bluetooth;
+
 // This code is from backend.rs and lib.rs in egui_web, but modified to allow for
 // rendering of 3D elements.
 

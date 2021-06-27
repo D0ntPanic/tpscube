@@ -9,19 +9,20 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use uuid::Uuid;
 
-struct GiikerCube {
+struct GiikerCube<P: Peripheral + 'static> {
+    device: P,
     state: Arc<Mutex<Cube3x3x3>>,
     synced: Arc<Mutex<bool>>,
 }
 
-impl GiikerCube {
+impl<P: Peripheral + 'static> GiikerCube<P> {
     const KEY_STREAM: &'static [u8] = &[
         0xb0, 0x51, 0x68, 0xe0, 0x56, 0x89, 0xed, 0x77, 0x26, 0x1a, 0xc1, 0xa1, 0xd2, 0x7e, 0x96,
         0x51, 0x5d, 0x0d, 0xec, 0xf9, 0x59, 0xeb, 0x58, 0x18, 0x71, 0x51, 0xd6, 0x83, 0x82, 0xc7,
         0x02, 0xa9, 0x27, 0xa5, 0xab, 0x29,
     ];
 
-    pub fn new<P: Peripheral>(
+    pub fn new(
         device: P,
         move_data: Characteristic,
         move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
@@ -107,11 +108,15 @@ impl GiikerCube {
         }));
         device.subscribe(&move_data)?;
 
-        Ok(Self { state, synced })
+        Ok(Self {
+            device,
+            state,
+            synced,
+        })
     }
 }
 
-impl BluetoothCubeDevice for GiikerCube {
+impl<P: Peripheral + 'static> BluetoothCubeDevice for GiikerCube<P> {
     fn cube_state(&self) -> Cube3x3x3 {
         self.state.lock().unwrap().clone()
     }
@@ -133,6 +138,10 @@ impl BluetoothCubeDevice for GiikerCube {
 
     fn synced(&self) -> bool {
         *self.synced.lock().unwrap()
+    }
+
+    fn disconnect(&self) {
+        let _ = self.device.disconnect();
     }
 }
 

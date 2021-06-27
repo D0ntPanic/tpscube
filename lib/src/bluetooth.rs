@@ -28,11 +28,8 @@ pub(crate) trait BluetoothCubeDevice: Send {
     fn battery_charging(&self) -> Option<bool>;
     fn reset_cube_state(&self);
     fn synced(&self) -> bool;
-
-    fn needs_update(&self) -> bool {
-        false
-    }
     fn update(&self) {}
+    fn disconnect(&self);
 
     fn estimated_clock_ratio(&self) -> f64 {
         1.0
@@ -75,12 +72,17 @@ pub enum BluetoothCubeState {
     Discovering,
     Connecting,
     Connected,
+    Desynced,
+    Error,
 }
 
 pub struct BluetoothCube {
     discovered_devices: Arc<Mutex<Vec<AvailableDevice>>>,
     to_connect: Arc<Mutex<Option<BDAddr>>>,
+    state: Arc<Mutex<BluetoothCubeState>>,
     connected_device: Arc<Mutex<Option<Box<dyn BluetoothCubeDevice>>>>,
+    connected_name: Arc<Mutex<Option<String>>>,
+    battery: Arc<Mutex<(Option<u32>, Option<bool>)>>,
     listeners:
         Arc<Mutex<HashMap<MoveListenerHandle, Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send>>>>,
     next_listener_id: AtomicU64,
@@ -89,30 +91,42 @@ pub struct BluetoothCube {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MoveListenerHandle {
-    pub(crate) id: u64,
+    id: u64,
 }
 
 impl BluetoothCube {
     pub fn new() -> Self {
         let discovered_devices = Arc::new(Mutex::new(Vec::new()));
         let to_connect = Arc::new(Mutex::new(None));
+        let state = Arc::new(Mutex::new(BluetoothCubeState::Discovering));
         let connected_device = Arc::new(Mutex::new(None));
+        let connected_name = Arc::new(Mutex::new(None));
+        let battery = Arc::new(Mutex::new((None, None)));
         let listeners = Arc::new(Mutex::new(HashMap::new()));
         let error = Arc::new(Mutex::new(None));
 
         let discovered_devices_copy = discovered_devices.clone();
         let to_connect_copy = to_connect.clone();
+        let state_copy = state.clone();
         let connected_device_copy = connected_device.clone();
+        let connected_name_copy = connected_name.clone();
+        let battery_copy = battery.clone();
         let listeners_copy = listeners.clone();
         let error_copy = error.clone();
         std::thread::spawn(move || {
             match Self::discovery_handler(
                 discovered_devices_copy,
                 to_connect_copy,
+                state_copy.clone(),
                 connected_device_copy,
+                connected_name_copy,
+                battery_copy,
                 listeners_copy,
             ) {
-                Err(error) => *error_copy.lock().unwrap() = Some(error.to_string()),
+                Err(error) => {
+                    *state_copy.lock().unwrap() = BluetoothCubeState::Error;
+                    *error_copy.lock().unwrap() = Some(error.to_string());
+                }
                 _ => (),
             }
         });
@@ -120,7 +134,10 @@ impl BluetoothCube {
         Self {
             discovered_devices,
             to_connect,
+            state,
             connected_device,
+            connected_name,
+            battery,
             listeners,
             next_listener_id: AtomicU64::new(0),
             error,
@@ -130,7 +147,10 @@ impl BluetoothCube {
     fn discovery_handler(
         discovered_devices: Arc<Mutex<Vec<AvailableDevice>>>,
         to_connect: Arc<Mutex<Option<BDAddr>>>,
+        state: Arc<Mutex<BluetoothCubeState>>,
         connected_device: Arc<Mutex<Option<Box<dyn BluetoothCubeDevice>>>>,
+        connected_name: Arc<Mutex<Option<String>>>,
+        battery: Arc<Mutex<(Option<u32>, Option<bool>)>>,
         listeners: Arc<
             Mutex<HashMap<MoveListenerHandle, Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send>>>,
         >,
@@ -173,8 +193,11 @@ impl BluetoothCube {
                         }));
                         let init_calibration_state = calibration_state.clone();
 
-                        Self::connect_handler(
+                        let _ = Self::connect_handler(
+                            state.clone(),
                             connected_device.clone(),
+                            connected_name.clone(),
+                            battery.clone(),
                             device,
                             Box::new(move |cube| {
                                 init_calibration_state.lock().unwrap().clock_ratio =
@@ -270,12 +293,17 @@ impl BluetoothCube {
                                     listener.1(&adjusted_moves, state);
                                 }
                             }),
-                        )?;
+                        );
 
-                        return Ok(());
+                        // On Mac the disconnect API literally does nothing, and we can't reconnect.
+                        // Tell the user to deal with it since there's nothing we can do.
+                        #[cfg(target_os = "macos")]
+                        return Err(anyhow!(
+                            "Device disconnection not supported on this platform. Restart \
+                            to connect another cube."
+                        ));
                     }
                 }
-                return Err(anyhow!("Device no longer available"));
             }
 
             // Enumerate devices
@@ -303,13 +331,17 @@ impl BluetoothCube {
     }
 
     fn connect_handler<P: Peripheral + 'static>(
+        state: Arc<Mutex<BluetoothCubeState>>,
         connected_device: Arc<Mutex<Option<Box<dyn BluetoothCubeDevice>>>>,
+        connected_name: Arc<Mutex<Option<String>>>,
+        battery: Arc<Mutex<(Option<u32>, Option<bool>)>>,
         peripheral: P,
         init: Box<dyn Fn(&dyn BluetoothCubeDevice) + Send + 'static>,
         move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
     ) -> Result<()> {
         // Determine cube type
-        let cube_type = if let Some(name) = peripheral.properties().local_name {
+        let name = peripheral.properties().local_name.clone();
+        let cube_type = if let Some(name) = &name {
             match BluetoothCubeType::from_name(&name) {
                 Some(cube_type) => cube_type,
                 None => return Err(anyhow!("Cube type not recognized")),
@@ -317,6 +349,8 @@ impl BluetoothCube {
         } else {
             return Err(anyhow!("Cube name missing"));
         };
+
+        *state.lock().unwrap() = BluetoothCubeState::Connecting;
 
         // Connect to the cube
         peripheral.connect()?;
@@ -328,22 +362,29 @@ impl BluetoothCube {
         };
 
         init(cube.as_ref());
-        let needs_update = cube.needs_update();
 
         *connected_device.lock().unwrap() = Some(cube);
+        *connected_name.lock().unwrap() = name;
+        *state.lock().unwrap() = BluetoothCubeState::Connected;
 
-        if needs_update {
-            // Cube protocol requires active polling
-            loop {
-                std::thread::sleep(Duration::from_millis(10));
-                if let Some(device) = connected_device.lock().unwrap().deref() {
-                    device.update();
-                } else {
-                    // Connection was closed
-                    break;
+        loop {
+            std::thread::sleep(Duration::from_millis(10));
+            if let Some(device) = connected_device.lock().unwrap().deref() {
+                device.update();
+                if !device.synced() {
+                    *state.lock().unwrap() = BluetoothCubeState::Desynced;
                 }
+                *battery.lock().unwrap() = (device.battery_percentage(), device.battery_charging())
+            } else {
+                // Connection was closed
+                break;
             }
         }
+
+        *state.lock().unwrap() = BluetoothCubeState::Discovering;
+        *connected_device.lock().unwrap() = None;
+        *connected_name.lock().unwrap() = None;
+        *battery.lock().unwrap() = (None, None);
 
         Ok(())
     }
@@ -357,13 +398,7 @@ impl BluetoothCube {
 
     pub fn state(&self) -> Result<BluetoothCubeState> {
         self.check_for_error()?;
-        if self.connected_device.lock().unwrap().is_some() {
-            Ok(BluetoothCubeState::Connected)
-        } else if self.to_connect.lock().unwrap().is_some() {
-            Ok(BluetoothCubeState::Connecting)
-        } else {
-            Ok(BluetoothCubeState::Discovering)
-        }
+        Ok(*self.state.lock().unwrap())
     }
 
     pub fn available_devices(&self) -> Result<Vec<AvailableDevice>> {
@@ -377,6 +412,21 @@ impl BluetoothCube {
         Ok(())
     }
 
+    pub fn disconnect(&self) {
+        match self.connected_device.lock().unwrap().deref() {
+            Some(device) => device.disconnect(),
+            _ => (),
+        }
+
+        *self.to_connect.lock().unwrap() = None;
+        *self.connected_device.lock().unwrap() = None;
+    }
+
+    pub fn name(&self) -> Result<Option<String>> {
+        self.check_for_error()?;
+        Ok(self.connected_name.lock().unwrap().clone())
+    }
+
     pub fn cube_state(&self) -> Result<Cube3x3x3> {
         self.check_for_error()?;
         match self.connected_device.lock().unwrap().deref() {
@@ -387,18 +437,12 @@ impl BluetoothCube {
 
     pub fn battery_percentage(&self) -> Result<Option<u32>> {
         self.check_for_error()?;
-        match self.connected_device.lock().unwrap().deref() {
-            Some(device) => Ok(device.battery_percentage()),
-            None => Err(anyhow!("Cube not connected")),
-        }
+        Ok(self.battery.lock().unwrap().0)
     }
 
     pub fn battery_charging(&self) -> Result<Option<bool>> {
         self.check_for_error()?;
-        match self.connected_device.lock().unwrap().deref() {
-            Some(device) => Ok(device.battery_charging()),
-            None => Err(anyhow!("Cube not connected")),
-        }
+        Ok(self.battery.lock().unwrap().1)
     }
 
     pub fn reset_cube_state(&self) -> Result<()> {
@@ -414,10 +458,7 @@ impl BluetoothCube {
 
     pub fn synced(&self) -> Result<bool> {
         self.check_for_error()?;
-        match self.connected_device.lock().unwrap().deref() {
-            Some(device) => Ok(device.synced()),
-            None => Err(anyhow!("Cube not connected")),
-        }
+        Ok(*self.state.lock().unwrap() == BluetoothCubeState::Connected)
     }
 
     pub fn register_move_listener<F: Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>(

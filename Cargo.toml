@@ -17,6 +17,7 @@ anyhow = "1.0"
 chrono = "0.4"
 gl_matrix = "0.0"
 num-traits = "0.2"
+image = { version="0.23", default-features=false, features=["png"] }
 
 [features]
 default = ["tpscube_core/native-storage", "tpscube_core/bluetooth"]

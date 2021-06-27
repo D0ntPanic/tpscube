@@ -30,9 +30,9 @@ impl Into<TextStyle> for FontSize {
         match self {
             FontSize::Small => TextStyle::Small,
             FontSize::Normal => TextStyle::Body,
-            FontSize::Section => TextStyle::Button,
-            FontSize::Scramble => TextStyle::Heading,
-            FontSize::BestTime => TextStyle::Heading,
+            FontSize::Section => TextStyle::Heading,
+            FontSize::Scramble => TextStyle::Button,
+            FontSize::BestTime => TextStyle::Button,
             FontSize::Timer => TextStyle::Monospace,
         }
     }
