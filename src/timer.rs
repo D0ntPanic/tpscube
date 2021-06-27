@@ -22,14 +22,18 @@ const MAX_SCRAMBLE_LINES: usize = 5;
 
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
 const TARGET_TIMER_FRACTION: f32 = 0.2;
+const TARGET_CUBE_FRACTION: f32 = 0.75;
 
 const NEW_SCRAMBLE_PADDING: f32 = 4.0;
 
+#[derive(Clone)]
 enum TimerState {
     Inactive(u32),
     Preparing(Instant, u32),
     Ready,
+    BluetoothReady,
     Solving(Instant),
+    BluetoothSolving(Instant, Vec<TimedMove>),
     SolveComplete(u32),
 }
 
@@ -136,8 +140,8 @@ impl TimerWidget {
                     solve_time_string(time)
                 }
             }
-            TimerState::Ready => solve_time_short_string(0),
-            TimerState::Solving(start) => {
+            TimerState::Ready | TimerState::BluetoothReady => solve_time_short_string(0),
+            TimerState::Solving(start) | TimerState::BluetoothSolving(start, _) => {
                 solve_time_short_string((Instant::now() - start).as_millis() as u32)
             }
         }
@@ -145,9 +149,10 @@ impl TimerWidget {
 
     fn current_time_color(&self) -> Color32 {
         match self.state {
-            TimerState::Inactive(_) | TimerState::Solving(_) | TimerState::SolveComplete(_) => {
-                Theme::Content.into()
-            }
+            TimerState::Inactive(_)
+            | TimerState::Solving(_)
+            | TimerState::BluetoothSolving(_, _)
+            | TimerState::SolveComplete(_) => Theme::Content.into(),
             TimerState::Preparing(_, _) => {
                 if self.is_solving() {
                     Theme::BackgroundHighlight.into()
@@ -155,7 +160,7 @@ impl TimerWidget {
                     Theme::Content.into()
                 }
             }
-            TimerState::Ready => Theme::Green.into(),
+            TimerState::Ready | TimerState::BluetoothReady => Theme::Green.into(),
         }
     }
 
@@ -190,7 +195,7 @@ impl TimerWidget {
         Self::scramble_lines(scramble, MAX_SCRAMBLE_LINES)
     }
 
-    fn is_solving(&self) -> bool {
+    pub fn is_solving(&self) -> bool {
         match self.state {
             TimerState::Inactive(_) | TimerState::SolveComplete(_) => false,
             TimerState::Preparing(start, _) => (Instant::now() - start).as_millis() > 10,
@@ -228,6 +233,45 @@ impl TimerWidget {
             penalty: Penalty::None,
             device: None,
             moves: None,
+        });
+        let _ = history.local_commit();
+        self.state = TimerState::SolveComplete(time);
+        self.new_scramble();
+    }
+
+    fn finish_bluetooth_solve(
+        &mut self,
+        history: &mut History,
+        moves: Vec<TimedMove>,
+        name: Option<String>,
+    ) {
+        // Sanity check move data and modify move timing to be relative to the start
+        // instead of relative to the prior move
+        let mut cube = Cube3x3x3::new();
+        cube.do_moves(&self.current_scramble);
+        let mut final_moves = Vec::new();
+        let mut time = 0;
+        for mv in &moves {
+            cube.do_move(mv.move_());
+            time += mv.time();
+            final_moves.push(TimedMove::new(mv.move_(), time));
+        }
+        let moves = if cube.is_solved() {
+            Some(final_moves)
+        } else {
+            None
+        };
+
+        history.new_solve(Solve {
+            id: Solve::new_id(),
+            solve_type: SolveType::Standard3x3x3,
+            session: history.current_session().into(),
+            scramble: self.current_scramble.clone(),
+            created: Local::now(),
+            time,
+            penalty: Penalty::None,
+            device: name,
+            moves,
         });
         let _ = history.local_commit();
         self.state = TimerState::SolveComplete(time);
@@ -512,7 +556,8 @@ impl TimerWidget {
         _frame: &mut epi::Frame<'_>,
         history: &mut History,
         bluetooth_state: Option<Cube3x3x3>,
-        bluetooth_moves: Vec<TimedMove>,
+        mut bluetooth_moves: Vec<TimedMove>,
+        bluetooth_name: Option<String>,
         framerate: &mut Framerate,
         cube_rect: &mut Option<Rect>,
     ) {
@@ -798,7 +843,7 @@ impl TimerWidget {
                     // Check for user input to interact with the timer
                     let touching = crate::is_mobile() == Some(true)
                         && (interact.is_pointer_button_down_on() || interact.dragged());
-                    match self.state {
+                    match self.state.clone() {
                         TimerState::Inactive(time) => {
                             if ctxt.input().keys_down.contains(&Key::Space) || touching {
                                 self.state = TimerState::Preparing(Instant::now(), time);
@@ -806,6 +851,14 @@ impl TimerWidget {
 
                             if self.bluetooth_active {
                                 self.apply_bluetooth_moves_for_scramble(&bluetooth_moves);
+                                if let Some(move_index) = self.scramble_move_index {
+                                    if move_index >= self.displayed_scramble.len()
+                                        && self.scramble_fix_moves.len() == 0
+                                    {
+                                        // Scramble complete, go to ready state
+                                        self.state = TimerState::BluetoothReady;
+                                    }
+                                }
                             }
                         }
                         TimerState::Preparing(start, time) => {
@@ -820,38 +873,119 @@ impl TimerWidget {
                                 self.state = TimerState::Solving(Instant::now());
                             }
                         }
+                        TimerState::BluetoothReady => {
+                            if bluetooth_moves.len() != 0 {
+                                // Rewrite first move timing data to be at start
+                                let first_move = TimedMove::new(bluetooth_moves[0].move_(), 0);
+                                bluetooth_moves[0] = first_move;
+
+                                // Start solving and keep track of moves
+                                self.state =
+                                    TimerState::BluetoothSolving(Instant::now(), bluetooth_moves);
+                            }
+                        }
                         TimerState::Solving(start) => {
                             if ctxt.input().keys_down.contains(&Key::Escape) {
                                 self.abort_solve(
                                     (Instant::now() - start).as_millis() as u32,
                                     history,
                                 );
+                                ctxt.request_repaint();
                             } else if ctxt.input().keys_down.len() != 0 || touching {
                                 self.finish_solve(
                                     (Instant::now() - start).as_millis() as u32,
                                     history,
                                 );
+                                ctxt.request_repaint();
+                            }
+                        }
+                        TimerState::BluetoothSolving(start, moves) => {
+                            if ctxt.input().keys_down.contains(&Key::Escape) {
+                                self.abort_solve(
+                                    (Instant::now() - start).as_millis() as u32,
+                                    history,
+                                );
+                                ctxt.request_repaint();
+                            } else if ctxt.input().keys_down.len() != 0 || touching {
+                                self.finish_solve(
+                                    (Instant::now() - start).as_millis() as u32,
+                                    history,
+                                );
+                                ctxt.request_repaint();
+                            } else if bluetooth_moves.len() != 0 {
+                                let mut moves = moves.clone();
+                                moves.extend(bluetooth_moves);
+                                if self.cube.is_solved() {
+                                    self.finish_bluetooth_solve(history, moves, bluetooth_name);
+                                    ctxt.request_repaint();
+                                } else {
+                                    self.state = TimerState::BluetoothSolving(start, moves);
+                                }
                             }
                         }
                         TimerState::SolveComplete(time) => {
                             if ctxt.input().keys_down.len() == 0 && !touching {
-                                self.state = TimerState::Inactive(time)
+                                self.state = TimerState::Inactive(time);
+                                ctxt.request_repaint();
                             }
                         }
                     }
 
                     if is_solving {
-                        // Render timer only in center of screen
-                        let timer_height = ui.fonts().row_height(FontSize::Timer.into());
-                        let galley = ui
-                            .fonts()
-                            .layout_single_line(FontSize::Timer.into(), self.current_time_string());
-                        let timer_width = galley.size.x;
-                        ui.painter().galley(
-                            Pos2::new(center.x - timer_width / 2.0, center.y - timer_height / 2.0),
-                            galley,
-                            self.current_time_color(),
-                        );
+                        if self.bluetooth_active {
+                            // In Bluetooth mode, render cube as well as timer
+                            let timer_height = ui.fonts().row_height(FontSize::Timer.into());
+                            let timer_padding = 32.0;
+                            let cube_height = (rect.height() - timer_height - timer_padding)
+                                * TARGET_CUBE_FRACTION;
+                            let total_height = timer_height + timer_padding + cube_height;
+
+                            // Allocate space for the cube rendering. This is 3D so it will be rendered
+                            // with OpenGL after egui is done painting.
+                            let y = center.y - total_height / 2.0;
+                            let computed_cube_rect = Rect::from_min_size(
+                                Pos2::new(center.x - cube_height / 2.0, y),
+                                Vec2::new(cube_height, cube_height),
+                            );
+                            if computed_cube_rect.width() > 0.0 && computed_cube_rect.height() > 0.0
+                            {
+                                *cube_rect = Some(computed_cube_rect);
+                                if self.cube.animating() {
+                                    framerate.request_max();
+                                }
+                            }
+
+                            // Draw timer
+                            let galley = ui.fonts().layout_single_line(
+                                FontSize::Timer.into(),
+                                self.current_time_string(),
+                            );
+                            let timer_width = galley.size.x;
+                            ui.painter().galley(
+                                Pos2::new(
+                                    center.x - timer_width / 2.0,
+                                    y + cube_height + timer_padding,
+                                ),
+                                galley,
+                                self.current_time_color(),
+                            );
+                        } else {
+                            // Render timer only in center of screen
+                            let timer_height = ui.fonts().row_height(FontSize::Timer.into());
+                            let galley = ui.fonts().layout_single_line(
+                                FontSize::Timer.into(),
+                                self.current_time_string(),
+                            );
+                            let timer_width = galley.size.x;
+                            ui.painter().galley(
+                                Pos2::new(
+                                    center.x - timer_width / 2.0,
+                                    center.y - timer_height / 2.0,
+                                ),
+                                galley,
+                                self.current_time_color(),
+                            );
+                        }
                     } else {
                         // Compute sizes of components in the main view
                         let target_scramble_height = rect.height() * TARGET_SCRAMBLE_FRACTION;
@@ -1001,7 +1135,9 @@ impl TimerWidget {
         // Run at 10 FPS when solving (to update counting timer), or only when
         // updates occur otherwise
         match self.state {
-            TimerState::Preparing(_, _) | TimerState::Solving(_) => framerate.request(Some(10)),
+            TimerState::Preparing(_, _)
+            | TimerState::Solving(_)
+            | TimerState::BluetoothSolving(_, _) => framerate.request(Some(10)),
             _ => (),
         }
     }

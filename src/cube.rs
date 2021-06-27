@@ -291,6 +291,10 @@ impl CubeRenderer {
         self.target_cube.clone()
     }
 
+    pub fn is_solved(&self) -> bool {
+        self.target_cube.is_solved()
+    }
+
     pub fn reset_angle(&mut self) {
         self.pitch = 30.0;
         self.yaw = -35.0;

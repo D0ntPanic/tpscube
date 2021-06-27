@@ -125,7 +125,12 @@ pub fn is_mobile() -> Option<bool> {
 // ----------------------------------------------------------------------------
 
 /// Run an egui app
-pub fn run(mut app: Box<dyn app::App>, nativve_options: epi::NativeOptions) -> ! {
+pub fn run(
+    mut app: Box<dyn app::App>,
+    nativve_options: epi::NativeOptions,
+    video_subsystem: sdl2::VideoSubsystem,
+) -> ! {
+    let mut screensaver_enabled = false;
     let window_settings = None;
     let event_loop = glutin::event_loop::EventLoop::with_user_event();
     let icon = nativve_options.icon_data.clone().and_then(load_icon);
@@ -226,6 +231,16 @@ pub fn run(mut app: Box<dyn app::App>, nativve_options: epi::NativeOptions) -> !
                 target.finish().unwrap();
             }
 
+            let desired_screensaver_enabled = app.screensaver_enabled();
+            if screensaver_enabled != desired_screensaver_enabled {
+                screensaver_enabled = desired_screensaver_enabled;
+                if screensaver_enabled {
+                    video_subsystem.enable_screen_saver();
+                } else {
+                    video_subsystem.disable_screen_saver();
+                }
+            }
+
             {
                 let epi::backend::AppOutput { quit, window_size } = app_output;
 
@@ -284,10 +299,15 @@ pub fn run(mut app: Box<dyn app::App>, nativve_options: epi::NativeOptions) -> !
 }
 
 pub fn main() {
+    // Initialize SDL2 just for stopping the screensaver. There are no other crates for this and
+    // its a giant pile of platform dependent code.
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
     let app: Box<dyn app::App> = match app::Application::new() {
         Ok(app) => Box::new(app),
         Err(error) => Box::new(app::ErrorApplication::new(error.to_string())),
     };
     let native_options = epi::NativeOptions::default();
-    run(app, native_options);
+    run(app, native_options, video_subsystem);
 }

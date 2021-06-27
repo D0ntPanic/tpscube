@@ -110,6 +110,18 @@ impl BluetoothState {
         self.cube_state.clone()
     }
 
+    pub fn name(&self) -> Option<String> {
+        if let Some(cube) = &self.cube {
+            if let Ok(name) = cube.name() {
+                name
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     pub fn new_moves(&mut self) -> Vec<TimedMove> {
         let mut move_queue = self.move_queue.lock().unwrap();
         let mut result = Vec::new();
@@ -226,7 +238,9 @@ impl BluetoothState {
         let cube = self.cube.as_ref().unwrap();
         match cube.state()? {
             BluetoothCubeState::Connected => {
-                self.renderer.set_cube_state(cube.cube_state()?);
+                let state = cube.cube_state()?;
+                self.cube_state = state.clone();
+                self.renderer.set_cube_state(state);
                 self.mode = BluetoothMode::CheckState;
             }
             BluetoothCubeState::Desynced => {
@@ -371,6 +385,7 @@ impl BluetoothState {
                         self.error = Some(error.to_string());
                     } else {
                         self.mode = BluetoothMode::Finished;
+                        self.cube_state = Cube3x3x3::new();
                     }
                 }
             });

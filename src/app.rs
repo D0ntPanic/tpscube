@@ -94,6 +94,9 @@ pub trait App {
     fn name(&self) -> &str;
     fn update(&mut self, ctxt: &CtxRef, frame: &mut epi::Frame<'_>);
     fn update_gl(&mut self, _ctxt: &CtxRef, _gl: &mut GlContext<'_, '_>) {}
+    fn screensaver_enabled(&self) -> bool {
+        true
+    }
 }
 
 impl Application {
@@ -318,15 +321,16 @@ impl App for Application {
         match self.mode {
             Mode::Timer => {
                 #[cfg(target_arch = "wasm32")]
-                let (bluetooth_state, bluetooth_moves) = (None, Vec::new());
+                let (bluetooth_state, bluetooth_moves, bluetooth_name) = (None, Vec::new(), None);
                 #[cfg(not(target_arch = "wasm32"))]
-                let (bluetooth_state, bluetooth_moves) =
+                let (bluetooth_state, bluetooth_moves, bluetooth_name) =
                     if !self.bluetooth_dialog_open && self.bluetooth.ready() {
                         let moves = self.bluetooth.new_moves();
                         let state = self.bluetooth.cube_state();
-                        (Some(state), moves)
+                        let name = self.bluetooth.name();
+                        (Some(state), moves, name)
                     } else {
-                        (None, Vec::new())
+                        (None, Vec::new(), None)
                     };
 
                 self.timer_widget.update(
@@ -335,6 +339,7 @@ impl App for Application {
                     &mut self.history,
                     bluetooth_state,
                     bluetooth_moves,
+                    bluetooth_name,
                     framerate,
                     &mut self.timer_cube_rect,
                 )
@@ -400,6 +405,15 @@ impl App for Application {
                 self.bluetooth.paint_cube(ctxt, gl, rect).unwrap();
             }
         }
+    }
+
+    fn screensaver_enabled(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        let bluetooth_enabled = false;
+        #[cfg(not(target_arch = "wasm32"))]
+        let bluetooth_enabled = self.bluetooth.active();
+
+        self.mode != Mode::Timer || (!self.timer_widget.is_solving() && !bluetooth_enabled)
     }
 }
 
