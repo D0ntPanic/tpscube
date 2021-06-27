@@ -52,43 +52,59 @@ impl<P: Peripheral + 'static> GoCube<P> {
                 *synced_copy.lock().unwrap() = false;
                 return;
             }
+            if value.value.len() < value.value[1] as usize {
+                *synced_copy.lock().unwrap() = false;
+                return;
+            }
+            if value.value[1] < 4 {
+                *synced_copy.lock().unwrap() = false;
+                return;
+            }
 
             match value.value[2] {
                 Self::ROTATE_MESSAGE => {
-                    let move_idx = value.value[3] as usize;
-                    let mv = match move_idx {
-                        0 => Move::B,
-                        1 => Move::Bp,
-                        2 => Move::F,
-                        3 => Move::Fp,
-                        4 => Move::U,
-                        5 => Move::Up,
-                        6 => Move::D,
-                        7 => Move::Dp,
-                        8 => Move::R,
-                        9 => Move::Rp,
-                        0xa => Move::L,
-                        0xb => Move::Lp,
-                        _ => {
-                            *synced_copy.lock().unwrap() = false;
-                            return;
-                        }
-                    };
+                    let count = (value.value[1] as usize - 4) / 2;
+                    let mut moves = Vec::new();
+                    for i in 0..count {
+                        let move_idx = value.value[3 + i * 2] as usize;
+                        let mv = match move_idx {
+                            0 => Move::B,
+                            1 => Move::Bp,
+                            2 => Move::F,
+                            3 => Move::Fp,
+                            4 => Move::U,
+                            5 => Move::Up,
+                            6 => Move::D,
+                            7 => Move::Dp,
+                            8 => Move::R,
+                            9 => Move::Rp,
+                            0xa => Move::L,
+                            0xb => Move::Lp,
+                            _ => {
+                                *synced_copy.lock().unwrap() = false;
+                                return;
+                            }
+                        };
 
-                    // Apply move to the cube state.
-                    state_copy.lock().unwrap().do_move(mv);
+                        // Apply move to the cube state.
+                        state_copy.lock().unwrap().do_move(mv);
+
+                        moves.push(mv);
+                    }
 
                     // Get time since last move. Keep computation relative to start time so
                     // that rounding errors don't cause errors in the total time.
                     let current_time = (Instant::now() - *start_time.lock().unwrap()).as_millis();
-                    let move_time = current_time - *last_move_time.lock().unwrap();
+                    let move_time = (current_time - *last_move_time.lock().unwrap()) as u32;
                     *last_move_time.lock().unwrap() = current_time;
 
+                    let mut timed_moves = Vec::new();
+                    for (idx, mv) in moves.iter().enumerate() {
+                        timed_moves.push(TimedMove::new(*mv, if idx == 0 { move_time } else { 0 }));
+                    }
+
                     // Let clients know there is a new move
-                    move_listener(
-                        &[TimedMove::new(mv, move_time as u32)],
-                        state_copy.lock().unwrap().deref(),
-                    );
+                    move_listener(&timed_moves, state_copy.lock().unwrap().deref());
                 }
                 Self::STATE_MESSAGE => {
                     if value.value.len() < 64 {
