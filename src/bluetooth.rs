@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 use egui::{
     Color32, CtxRef, Direction, Label, Layout, Rect, ScrollArea, Sense, Stroke, Ui, Vec2, Window,
 };
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 use tpscube_core::{BluetoothCube, BluetoothCubeState, Cube, Cube3x3x3, TimedMove};
 
@@ -28,6 +28,7 @@ pub struct BluetoothState {
     error: Option<String>,
     renderer: CubeRenderer,
     move_queue: Arc<Mutex<Vec<(Vec<TimedMove>, Cube3x3x3)>>>,
+    cube_state: Cube3x3x3,
 }
 
 impl BluetoothState {
@@ -38,6 +39,7 @@ impl BluetoothState {
             error: None,
             renderer: CubeRenderer::new(),
             move_queue: Arc::new(Mutex::new(Vec::new())),
+            cube_state: Cube3x3x3::new(),
         }
     }
 
@@ -100,8 +102,25 @@ impl BluetoothState {
         self.mode == BluetoothMode::Finished
     }
 
-    pub fn cube(&self) -> &Option<BluetoothCube> {
-        &self.cube
+    pub fn ready(&self) -> bool {
+        self.finished() && self.active()
+    }
+
+    pub fn cube_state(&self) -> Cube3x3x3 {
+        self.cube_state.clone()
+    }
+
+    pub fn new_moves(&mut self) -> Vec<TimedMove> {
+        let mut move_queue = self.move_queue.lock().unwrap();
+        let mut result = Vec::new();
+        for (moves, state) in move_queue.deref() {
+            for mv in moves {
+                result.push(mv.clone());
+            }
+            self.cube_state = state.clone();
+        }
+        move_queue.clear();
+        result
     }
 
     pub fn disconnect(&mut self) {
@@ -303,6 +322,7 @@ impl BluetoothState {
             for mv in moves {
                 self.renderer.do_move(mv.move_());
             }
+            self.cube_state = state.clone();
             self.renderer.verify_state(state);
         }
 

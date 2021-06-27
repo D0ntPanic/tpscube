@@ -287,6 +287,10 @@ impl CubeRenderer {
         }
     }
 
+    pub fn cube_state(&self) -> Cube3x3x3 {
+        self.target_cube.clone()
+    }
+
     pub fn reset_angle(&mut self) {
         self.pitch = 30.0;
         self.yaw = -35.0;

@@ -13,7 +13,8 @@ use egui::{
 };
 use instant::Instant;
 use tpscube_core::{
-    scramble_3x3x3, Average, BestSolve, History, Move, Penalty, Solve, SolveList, SolveType,
+    scramble_3x3x3, Average, BestSolve, Cube, Cube3x3x3, History, Move, MoveSequence, Penalty,
+    Solve, SolveList, SolveType, TimedMove,
 };
 
 const MIN_SCRAMBLE_LINES: usize = 2;
@@ -47,9 +48,20 @@ pub struct TimerWidget {
     state: TimerState,
     current_scramble: Vec<Move>,
     current_scramble_displayed: bool,
+    displayed_scramble: Vec<Move>,
     next_scramble: Option<Vec<Move>>,
     session_solves: CachedSessionSolves,
     cube: CubeRenderer,
+    bluetooth_active: bool,
+    scramble_move_index: Option<usize>,
+    scramble_pending_move: Option<Move>,
+    scramble_fix_moves: Vec<Move>,
+}
+
+enum ScrambleMoveResult {
+    Good,
+    Bad,
+    Pending,
 }
 
 impl CachedSessionSolves {
@@ -77,6 +89,7 @@ impl CachedSessionSolves {
 impl TimerWidget {
     pub fn new() -> Self {
         let current_scramble = scramble_3x3x3();
+        let displayed_scramble = current_scramble.clone();
         let mut cube = CubeRenderer::new();
         cube.reset_cube_state();
         cube.do_moves(&current_scramble);
@@ -85,9 +98,14 @@ impl TimerWidget {
             state: TimerState::Inactive(0),
             current_scramble,
             current_scramble_displayed: false,
+            displayed_scramble,
             next_scramble: Some(scramble_3x3x3()),
             session_solves: CachedSessionSolves::new(None, Vec::new()),
             cube,
+            bluetooth_active: false,
+            scramble_move_index: None,
+            scramble_pending_move: None,
+            scramble_fix_moves: Vec::new(),
         }
     }
 
@@ -141,22 +159,27 @@ impl TimerWidget {
         }
     }
 
-    fn scramble_lines(scramble: &[Move], line_count: usize) -> Vec<String> {
+    fn scramble_lines(scramble: &[Move], line_count: usize) -> Vec<Vec<Move>> {
         let per_line = (scramble.len() + line_count - 1) / line_count;
         let mut lines = Vec::new();
         for chunks in scramble.chunks(per_line) {
-            let moves: Vec<String> = chunks.iter().map(|mv| mv.to_string()).collect();
-            lines.push(moves.join("  "));
+            lines.push(chunks.to_vec());
         }
         lines
     }
 
-    fn fit_scramble(ui: &Ui, scramble: &[Move], width: f32) -> Vec<String> {
+    fn fit_scramble(ui: &Ui, scramble: &[Move], width: f32) -> Vec<Vec<Move>> {
         for line_count in MIN_SCRAMBLE_LINES..MAX_SCRAMBLE_LINES {
             let lines = Self::scramble_lines(scramble, line_count);
             if !lines.iter().any(|line| {
                 ui.fonts()
-                    .layout_single_line(FontSize::Scramble.into(), line.into())
+                    .layout_single_line(
+                        FontSize::Scramble.into(),
+                        line.iter()
+                            .map(|mv| mv.to_string())
+                            .collect::<Vec<String>>()
+                            .join("  "),
+                    )
                     .size
                     .x
                     > width
@@ -182,11 +205,16 @@ impl TimerWidget {
             self.current_scramble = scramble_3x3x3();
         }
         self.current_scramble_displayed = false;
+        self.displayed_scramble = self.current_scramble.clone();
         self.next_scramble = None;
 
-        self.cube.reset_cube_state();
-        self.cube.do_moves(&self.current_scramble);
-        self.cube.reset_angle();
+        if self.bluetooth_active {
+            self.display_scramble_from_current_state();
+        } else {
+            self.cube.reset_cube_state();
+            self.cube.do_moves(&self.current_scramble);
+            self.cube.reset_angle();
+        }
     }
 
     fn finish_solve(&mut self, time: u32, history: &mut History) {
@@ -339,11 +367,152 @@ impl TimerWidget {
         ui.ctx().set_visuals(old_visuals);
     }
 
+    fn display_scramble_from_current_state(&mut self) {
+        if self.bluetooth_active {
+            let state = self.cube.cube_state();
+
+            if state.is_solved() {
+                self.displayed_scramble = self.current_scramble.clone();
+            } else {
+                // Use the solver to determine a minimal set of moves to arrive
+                // at the correct state from the current state. This will be a
+                // different sequence of moves from the original scramble but
+                // it will arrive in the same state.
+                let to_solved = state.solve_fast().unwrap();
+                let mut new_state = Cube3x3x3::new();
+                new_state.do_moves(&to_solved);
+                new_state.do_moves(&self.current_scramble);
+                self.displayed_scramble = new_state.solve().unwrap().inverse();
+            }
+
+            // Start from first move of new sequence
+            self.scramble_move_index = Some(0);
+            self.scramble_pending_move = None;
+            self.scramble_fix_moves.clear();
+        }
+    }
+
+    fn bluetooth_started(&mut self, state: Cube3x3x3) {
+        self.bluetooth_active = true;
+        self.cube.set_cube_state(state);
+        self.cube.reset_angle();
+
+        self.display_scramble_from_current_state();
+    }
+
+    fn bluetooth_lost(&mut self) {
+        self.bluetooth_active = false;
+        self.scramble_move_index = None;
+        self.scramble_pending_move = None;
+        self.scramble_fix_moves.clear();
+
+        self.displayed_scramble = self.current_scramble.clone();
+        self.cube.reset_cube_state();
+        self.cube.do_moves(&self.current_scramble);
+        self.cube.reset_angle();
+    }
+
+    fn apply_bluetooth_move_for_expected_move(
+        &mut self,
+        mv: Move,
+        expected: Move,
+    ) -> ScrambleMoveResult {
+        if let Some(pending) = self.scramble_pending_move {
+            // There is a pending move, check for correct completion
+            self.scramble_pending_move = None;
+            if mv == pending {
+                // Redoing pending move will complete it
+                ScrambleMoveResult::Good
+            } else if mv == pending.inverse() {
+                // Undoing pending move, stay at current state but clear
+                // pending move.
+                ScrambleMoveResult::Pending
+            } else {
+                ScrambleMoveResult::Bad
+            }
+        } else if expected.rotation() == 2 {
+            // This is a 180 degree rotation that will appear as two moves from
+            // the Bluetooth cube. Check for half completion.
+            if mv.face() == expected.face() {
+                // Correct face, set this as a pending move. If the same move
+                // is performed again, this step is complete.
+                self.scramble_pending_move = Some(mv);
+                ScrambleMoveResult::Pending
+            } else {
+                ScrambleMoveResult::Bad
+            }
+        } else if mv == expected {
+            // 90 degree rotation, move must match exactly
+            ScrambleMoveResult::Good
+        } else {
+            ScrambleMoveResult::Bad
+        }
+    }
+
+    fn bad_bluetooth_move(&mut self, mv: Move) {
+        if self.scramble_fix_moves.len() > 0 {
+            let last_fix_move = self.scramble_fix_moves.last().unwrap();
+            if mv.face() == last_fix_move.face() {
+                match Move::from_face_and_rotation(
+                    mv.face(),
+                    last_fix_move.rotation() - mv.rotation(),
+                ) {
+                    Some(mv) => *self.scramble_fix_moves.last_mut().unwrap() = mv,
+                    None => {
+                        self.scramble_fix_moves.pop();
+                    }
+                }
+                return;
+            }
+        }
+        self.scramble_fix_moves.push(mv.inverse());
+    }
+
+    fn apply_bluetooth_moves_for_scramble(&mut self, moves: &[TimedMove]) {
+        for mv in moves {
+            if self.scramble_fix_moves.len() > 0 {
+                // There are moves needed to fix a bad scramble. Verify them.
+                match self.apply_bluetooth_move_for_expected_move(
+                    mv.move_(),
+                    *self.scramble_fix_moves.last().unwrap(),
+                ) {
+                    ScrambleMoveResult::Good => {
+                        self.scramble_fix_moves.pop();
+                    }
+                    ScrambleMoveResult::Bad => self.bad_bluetooth_move(mv.move_()),
+                    ScrambleMoveResult::Pending => (),
+                }
+            } else if let Some(index) = self.scramble_move_index {
+                if index >= self.displayed_scramble.len() {
+                    // Extra moves when already done with scramble but timer hasn't
+                    // started yet, go into fix mode to undo them.
+                    self.bad_bluetooth_move(mv.move_());
+                } else {
+                    // Verify scramble step
+                    let expected = self.displayed_scramble[index];
+                    match self.apply_bluetooth_move_for_expected_move(mv.move_(), expected) {
+                        ScrambleMoveResult::Good => self.scramble_move_index = Some(index + 1),
+                        ScrambleMoveResult::Bad => self.bad_bluetooth_move(mv.move_()),
+                        ScrambleMoveResult::Pending => (),
+                    }
+                }
+            }
+        }
+
+        // If the fix path gets long, redo the scramble to get a correct result from
+        // whatever the current state is.
+        if self.scramble_fix_moves.len() > 3 {
+            self.display_scramble_from_current_state();
+        }
+    }
+
     pub fn update(
         &mut self,
         ctxt: &CtxRef,
         _frame: &mut epi::Frame<'_>,
         history: &mut History,
+        bluetooth_state: Option<Cube3x3x3>,
+        bluetooth_moves: Vec<TimedMove>,
         framerate: &mut Framerate,
         cube_rect: &mut Option<Rect>,
     ) {
@@ -351,6 +520,21 @@ impl TimerWidget {
         // not be noticed as much when performing a new scramble.
         if self.current_scramble_displayed && self.next_scramble.is_none() {
             self.next_scramble = Some(scramble_3x3x3());
+        }
+
+        // Check for Bluetooth state changes, and update rendered cube with Bluetooth moves
+        if let Some(state) = bluetooth_state {
+            if self.bluetooth_active {
+                for mv in &bluetooth_moves {
+                    self.cube.do_move(mv.move_());
+                }
+            } else {
+                self.bluetooth_started(state);
+            }
+        } else {
+            if self.bluetooth_active {
+                self.bluetooth_lost();
+            }
         }
 
         ctxt.set_visuals(side_visuals());
@@ -619,6 +803,10 @@ impl TimerWidget {
                             if ctxt.input().keys_down.contains(&Key::Space) || touching {
                                 self.state = TimerState::Preparing(Instant::now(), time);
                             }
+
+                            if self.bluetooth_active {
+                                self.apply_bluetooth_moves_for_scramble(&bluetooth_moves);
+                            }
                         }
                         TimerState::Preparing(start, time) => {
                             if ctxt.input().keys_down.len() == 0 && !touching {
@@ -671,7 +859,26 @@ impl TimerWidget {
 
                         let scramble_padding = 8.0;
 
-                        let scramble = Self::fit_scramble(ui, &self.current_scramble, rect.width());
+                        let (fix, scramble) =
+                            if self.bluetooth_active && self.scramble_fix_moves.len() > 0 {
+                                (
+                                    true,
+                                    vec![
+                                        vec![],
+                                        self.scramble_fix_moves
+                                            .iter()
+                                            .rev()
+                                            .cloned()
+                                            .collect::<Vec<Move>>(),
+                                    ],
+                                )
+                            } else {
+                                (
+                                    false,
+                                    Self::fit_scramble(ui, &self.displayed_scramble, rect.width()),
+                                )
+                            };
+
                         let scramble_line_height = ui.fonts().row_height(FontSize::Scramble.into());
                         let min_scramble_height = scramble_line_height * scramble.len() as f32;
                         let scramble_height = min_scramble_height.max(target_scramble_height);
@@ -693,16 +900,57 @@ impl TimerWidget {
                         let mut y = rect.top()
                             + scramble_padding
                             + (scramble_height - min_scramble_height) / 2.0;
-                        for line in scramble {
-                            let galley = ui
-                                .fonts()
-                                .layout_single_line(FontSize::Scramble.into(), line);
-                            let line_width = galley.size.x;
-                            ui.painter().galley(
-                                Pos2::new(center.x - line_width / 2.0, y),
-                                galley,
-                                Theme::Blue.into(),
-                            );
+                        let mut move_idx = 0;
+                        for (line_idx, line) in scramble.iter().enumerate() {
+                            // Layout individual moves in the scramble
+                            let mut tokens = Vec::new();
+                            if fix && line_idx == 0 {
+                                tokens.push(ui.fonts().layout_single_line(
+                                    FontSize::Scramble.into(),
+                                    "Scramble incorrect, fix with".into(),
+                                ));
+                            } else {
+                                for (idx, mv) in line.iter().enumerate() {
+                                    tokens.push(ui.fonts().layout_single_line(
+                                        FontSize::Scramble.into(),
+                                        if idx == 0 {
+                                            mv.to_string()
+                                        } else {
+                                            format!("  {}", mv.to_string())
+                                        },
+                                    ));
+                                }
+                            }
+
+                            // Determine line width and center on screen
+                            let line_width =
+                                tokens.iter().fold(0.0, |sum, token| sum + token.size.x);
+                            let mut x = center.x - line_width / 2.0;
+
+                            // Render individual moves
+                            for token in tokens {
+                                let width = token.size.x;
+                                ui.painter().galley(
+                                    Pos2::new(x, y),
+                                    token,
+                                    if !fix
+                                        && (self.scramble_move_index.is_none()
+                                            || Some(move_idx) == self.scramble_move_index)
+                                    {
+                                        Theme::Blue.into()
+                                    } else if fix && (line_idx == 0 || move_idx == 0) {
+                                        Theme::Red.into()
+                                    } else {
+                                        Theme::VeryLight.into()
+                                    },
+                                );
+
+                                x += width;
+                                if !fix || line_idx != 0 {
+                                    move_idx += 1;
+                                }
+                            }
+
                             y += scramble_line_height;
                         }
                         self.current_scramble_displayed = true;

@@ -316,13 +316,29 @@ impl App for Application {
         }
 
         match self.mode {
-            Mode::Timer => self.timer_widget.update(
-                ctxt,
-                frame,
-                &mut self.history,
-                framerate,
-                &mut self.timer_cube_rect,
-            ),
+            Mode::Timer => {
+                #[cfg(target_arch = "wasm32")]
+                let (bluetooth_state, bluetooth_moves) = (None, Vec::new());
+                #[cfg(not(target_arch = "wasm32"))]
+                let (bluetooth_state, bluetooth_moves) =
+                    if !self.bluetooth_dialog_open && self.bluetooth.ready() {
+                        let moves = self.bluetooth.new_moves();
+                        let state = self.bluetooth.cube_state();
+                        (Some(state), moves)
+                    } else {
+                        (None, Vec::new())
+                    };
+
+                self.timer_widget.update(
+                    ctxt,
+                    frame,
+                    &mut self.history,
+                    bluetooth_state,
+                    bluetooth_moves,
+                    framerate,
+                    &mut self.timer_cube_rect,
+                )
+            }
             Mode::History => self.history_widget.update(ctxt, frame, &mut self.history),
             Mode::Graphs => self.graph_widget.update(ctxt, frame, &mut self.history),
             Mode::Settings => self.settings_widget.update(ctxt, frame, &mut self.history),

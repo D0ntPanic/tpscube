@@ -280,6 +280,66 @@ impl ToString for SolveType {
 }
 
 impl Move {
+    pub fn from_face_and_rotation(face: Face, rotation: i32) -> Option<Self> {
+        let rotation = rotation % 4;
+        match face {
+            Face::Top => match rotation {
+                -3 => Some(Move::U),
+                -2 => Some(Move::U2),
+                -1 => Some(Move::Up),
+                1 => Some(Move::U),
+                2 => Some(Move::U2),
+                3 => Some(Move::Up),
+                _ => None,
+            },
+            Face::Front => match rotation {
+                -3 => Some(Move::F),
+                -2 => Some(Move::F2),
+                -1 => Some(Move::Fp),
+                1 => Some(Move::F),
+                2 => Some(Move::F2),
+                3 => Some(Move::Fp),
+                _ => None,
+            },
+            Face::Right => match rotation {
+                -3 => Some(Move::R),
+                -2 => Some(Move::R2),
+                -1 => Some(Move::Rp),
+                1 => Some(Move::R),
+                2 => Some(Move::R2),
+                3 => Some(Move::Rp),
+                _ => None,
+            },
+            Face::Back => match rotation {
+                -3 => Some(Move::B),
+                -2 => Some(Move::B2),
+                -1 => Some(Move::Bp),
+                1 => Some(Move::B),
+                2 => Some(Move::B2),
+                3 => Some(Move::Bp),
+                _ => None,
+            },
+            Face::Left => match rotation {
+                -3 => Some(Move::L),
+                -2 => Some(Move::L2),
+                -1 => Some(Move::Lp),
+                1 => Some(Move::L),
+                2 => Some(Move::L2),
+                3 => Some(Move::Lp),
+                _ => None,
+            },
+            Face::Bottom => match rotation {
+                -3 => Some(Move::D),
+                -2 => Some(Move::D2),
+                -1 => Some(Move::Dp),
+                1 => Some(Move::D),
+                2 => Some(Move::D2),
+                3 => Some(Move::Dp),
+                _ => None,
+            },
+        }
+    }
+
     pub(crate) fn sourced_random_3x3x3<T: RandomSource>(rng: &mut T) -> Move {
         Move::try_from(rng.next(Self::count_3x3x3() as u32) as u8).unwrap()
     }
