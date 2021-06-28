@@ -467,6 +467,32 @@ impl HistoryRegion for SessionRegion {
                         FontSize::Small.into(),
                         Theme::Red.into(),
                     );
+                } else if self.solves[i].moves.is_some() {
+                    // Draw icon to show move data is available
+                    let icon_rect = Rect::from_min_size(
+                        Pos2::new(
+                            content_area.left()
+                                + col as f32 * col_width
+                                + layout_metrics.solve_number_width
+                                + layout_metrics.solve_time_width,
+                            y + row as f32 * row_height
+                                + ui.fonts().row_height(FontSize::Normal.into())
+                                - ui.fonts().row_height(FontSize::Small.into()),
+                        ),
+                        Vec2::new(
+                            layout_metrics.solve_penalty_width,
+                            ui.fonts().row_height(FontSize::Small.into()),
+                        ),
+                    );
+                    ui.allocate_rect(icon_rect, Sense::hover())
+                        .on_hover_text("Analysis available for this solve");
+                    ui.painter().text(
+                        icon_rect.left_bottom(),
+                        Align2::LEFT_BOTTOM,
+                        "   📊",
+                        FontSize::Small.into(),
+                        Theme::VeryLight.into(),
+                    );
                 }
 
                 // Draw menu
