@@ -30,6 +30,7 @@ const NEW_SCRAMBLE_PADDING: f32 = 4.0;
 enum TimerState {
     Inactive(u32),
     Preparing(Instant, u32),
+    BluetoothPreparing(Instant, u32),
     Ready,
     BluetoothReady,
     Solving(Instant),
@@ -140,7 +141,9 @@ impl TimerWidget {
                     solve_time_string(time)
                 }
             }
-            TimerState::Ready | TimerState::BluetoothReady => solve_time_short_string(0),
+            TimerState::Ready
+            | TimerState::BluetoothReady
+            | TimerState::BluetoothPreparing(_, _) => solve_time_short_string(0),
             TimerState::Solving(start) | TimerState::BluetoothSolving(start, _) => {
                 solve_time_short_string((Instant::now() - start).as_millis() as u32)
             }
@@ -150,6 +153,7 @@ impl TimerWidget {
     fn current_time_color(&self) -> Color32 {
         match self.state {
             TimerState::Inactive(_)
+            | TimerState::BluetoothPreparing(_, _)
             | TimerState::Solving(_)
             | TimerState::BluetoothSolving(_, _)
             | TimerState::SolveComplete(_) => Theme::Content.into(),
@@ -855,8 +859,9 @@ impl TimerWidget {
                                     if move_index >= self.displayed_scramble.len()
                                         && self.scramble_fix_moves.len() == 0
                                     {
-                                        // Scramble complete, go to ready state
-                                        self.state = TimerState::BluetoothReady;
+                                        // Scramble complete, get ready to transition to solving
+                                        self.state =
+                                            TimerState::BluetoothPreparing(Instant::now(), time);
                                     }
                                 }
                             }
@@ -866,6 +871,33 @@ impl TimerWidget {
                                 self.state = TimerState::Inactive(time);
                             } else if (Instant::now() - start).as_millis() > 300 {
                                 self.state = TimerState::Ready;
+                            }
+                        }
+                        TimerState::BluetoothPreparing(start, time) => {
+                            if self.bluetooth_active {
+                                if bluetooth_moves.len() != 0 {
+                                    // For the first second after finishing a Bluetooth scramble,
+                                    // cause any extra moves to transition to the fix bad
+                                    // scramble state. This means that extra accidental turns
+                                    // at the end of a scramble will not cause the timer to
+                                    // start before the user is ready.
+                                    self.apply_bluetooth_moves_for_scramble(&bluetooth_moves);
+                                    if let Some(move_index) = self.scramble_move_index {
+                                        if move_index < self.displayed_scramble.len()
+                                            || self.scramble_fix_moves.len() != 0
+                                        {
+                                            self.state = TimerState::Inactive(time);
+                                        } else if (Instant::now() - start).as_millis() >= 1000 {
+                                            self.state = TimerState::BluetoothReady;
+                                        }
+                                    } else {
+                                        self.state = TimerState::Inactive(time);
+                                    }
+                                } else if (Instant::now() - start).as_millis() >= 1000 {
+                                    self.state = TimerState::BluetoothReady;
+                                }
+                            } else {
+                                self.state = TimerState::Inactive(time);
                             }
                         }
                         TimerState::Ready => {
@@ -1136,6 +1168,7 @@ impl TimerWidget {
         // updates occur otherwise
         match self.state {
             TimerState::Preparing(_, _)
+            | TimerState::BluetoothPreparing(_, _)
             | TimerState::Solving(_)
             | TimerState::BluetoothSolving(_, _) => framerate.request(Some(10)),
             _ => (),
