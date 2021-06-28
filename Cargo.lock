@@ -327,7 +327,7 @@ dependencies = [
 [[package]]
 name = "btleplug"
 version = "0.7.2"
-source = "git+https://github.com/D0ntPanic/btleplug#1bfb34b514688908aaaf13273dcd23724d10a30a"
+source = "git+https://github.com/D0ntPanic/btleplug#e43a788f07539a46e0189a085ae4da786fceeda0"
 dependencies = [
  "async-std",
  "bitflags",

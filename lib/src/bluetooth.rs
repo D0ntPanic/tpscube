@@ -294,14 +294,6 @@ impl BluetoothCube {
                                 }
                             }),
                         );
-
-                        // On Mac the disconnect API literally does nothing, and we can't reconnect.
-                        // Tell the user to deal with it since there's nothing we can do.
-                        #[cfg(target_os = "macos")]
-                        return Err(anyhow!(
-                            "Device disconnection not supported on this platform. Restart \
-                            to connect another cube."
-                        ));
                     }
                 }
             }
