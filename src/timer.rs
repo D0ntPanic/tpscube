@@ -9,7 +9,8 @@ use anyhow::Result;
 use chrono::Local;
 use egui::{
     containers::ScrollArea, popup_below_widget, widgets::Label, Align, Align2, CentralPanel,
-    Color32, CtxRef, Key, Layout, Pos2, Rect, Sense, SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
+    Color32, CtxRef, Key, Layout, Pos2, Rect, SelectableLabel, Sense, SidePanel, Stroke,
+    TopBottomPanel, Ui, Vec2,
 };
 use instant::Instant;
 use tpscube_core::{
@@ -339,12 +340,15 @@ impl TimerWidget {
                 popup_below_widget(ui, popup_id, &response, |ui| {
                     ui.set_min_width(180.0);
                     if ui
-                        .selectable_label(
-                            match solve.penalty {
-                                Penalty::None => true,
-                                _ => false,
-                            },
-                            "No penalty",
+                        .add(
+                            SelectableLabel::new(
+                                match solve.penalty {
+                                    Penalty::None => true,
+                                    _ => false,
+                                },
+                                "No penalty",
+                            )
+                            .text_style(FontSize::Normal.into()),
                         )
                         .clicked()
                     {
@@ -353,12 +357,15 @@ impl TimerWidget {
                     }
 
                     if ui
-                        .selectable_label(
-                            match solve.penalty {
-                                Penalty::Time(2000) => true,
-                                _ => false,
-                            },
-                            "2 second penalty",
+                        .add(
+                            SelectableLabel::new(
+                                match solve.penalty {
+                                    Penalty::Time(2000) => true,
+                                    _ => false,
+                                },
+                                "2 second penalty",
+                            )
+                            .text_style(FontSize::Normal.into()),
                         )
                         .clicked()
                     {
@@ -367,12 +374,15 @@ impl TimerWidget {
                     }
 
                     if ui
-                        .selectable_label(
-                            match solve.penalty {
-                                Penalty::DNF => true,
-                                _ => false,
-                            },
-                            "DNF",
+                        .add(
+                            SelectableLabel::new(
+                                match solve.penalty {
+                                    Penalty::DNF => true,
+                                    _ => false,
+                                },
+                                "DNF",
+                            )
+                            .text_style(FontSize::Normal.into()),
                         )
                         .clicked()
                     {
@@ -382,7 +392,13 @@ impl TimerWidget {
 
                     ui.separator();
 
-                    if ui.selectable_label(false, "Delete solve").clicked() {
+                    if ui
+                        .add(
+                            SelectableLabel::new(false, "Delete solve")
+                                .text_style(FontSize::Normal.into()),
+                        )
+                        .clicked()
+                    {
                         history.delete_solve(solve.id.clone());
                         let _ = history.local_commit();
                     }

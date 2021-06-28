@@ -3,8 +3,8 @@ use crate::style::content_visuals;
 use crate::theme::Theme;
 use crate::widgets::{date_string, solve_time_string};
 use egui::{
-    containers::ScrollArea, popup_below_widget, Align2, CentralPanel, CtxRef, Pos2, Rect, Sense,
-    Stroke, Ui, Vec2,
+    containers::ScrollArea, popup_below_widget, Align2, CentralPanel, CtxRef, Pos2, Rect,
+    SelectableLabel, Sense, Stroke, Ui, Vec2,
 };
 use tpscube_core::{Average, BestSolve, History, Penalty, Solve, SolveList};
 
@@ -509,12 +509,15 @@ impl HistoryRegion for SessionRegion {
                 popup_below_widget(ui, popup_id, &interact, |ui| {
                     ui.set_min_width(180.0);
                     if ui
-                        .selectable_label(
-                            match self.solves[i].penalty {
-                                Penalty::None => true,
-                                _ => false,
-                            },
-                            "No penalty",
+                        .add(
+                            SelectableLabel::new(
+                                match self.solves[i].penalty {
+                                    Penalty::None => true,
+                                    _ => false,
+                                },
+                                "No penalty",
+                            )
+                            .text_style(FontSize::Normal.into()),
                         )
                         .clicked()
                     {
@@ -523,12 +526,15 @@ impl HistoryRegion for SessionRegion {
                     }
 
                     if ui
-                        .selectable_label(
-                            match self.solves[i].penalty {
-                                Penalty::Time(2000) => true,
-                                _ => false,
-                            },
-                            "2 second penalty",
+                        .add(
+                            SelectableLabel::new(
+                                match self.solves[i].penalty {
+                                    Penalty::Time(2000) => true,
+                                    _ => false,
+                                },
+                                "2 second penalty",
+                            )
+                            .text_style(FontSize::Normal.into()),
                         )
                         .clicked()
                     {
@@ -537,12 +543,15 @@ impl HistoryRegion for SessionRegion {
                     }
 
                     if ui
-                        .selectable_label(
-                            match self.solves[i].penalty {
-                                Penalty::DNF => true,
-                                _ => false,
-                            },
-                            "DNF",
+                        .add(
+                            SelectableLabel::new(
+                                match self.solves[i].penalty {
+                                    Penalty::DNF => true,
+                                    _ => false,
+                                },
+                                "DNF",
+                            )
+                            .text_style(FontSize::Normal.into()),
                         )
                         .clicked()
                     {
@@ -552,7 +561,13 @@ impl HistoryRegion for SessionRegion {
 
                     ui.separator();
 
-                    if ui.selectable_label(false, "Delete solve").clicked() {
+                    if ui
+                        .add(
+                            SelectableLabel::new(false, "Delete solve")
+                                .text_style(FontSize::Normal.into()),
+                        )
+                        .clicked()
+                    {
                         history.delete_solve(self.solves[i].id.clone());
                         let _ = history.local_commit();
                     }
