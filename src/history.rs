@@ -23,6 +23,7 @@ trait HistoryRegion {
         rect: Rect,
         layout_metrics: &SolveLayoutMetrics,
         history: &mut History,
+        all_time_best: &Option<AllTimeBestRegion>,
     );
 }
 
@@ -54,6 +55,7 @@ struct HistoryRegionLayout {
 
 pub struct HistoryWidget {
     regions: Vec<HistoryRegionLayout>,
+    all_time_best_region: Option<AllTimeBestRegion>,
     total_height: f32,
     cached_update_id: Option<u64>,
     cached_best_columns: usize,
@@ -83,6 +85,7 @@ impl HistoryRegion for NoSolvesRegion {
         rect: Rect,
         _layout_metrics: &SolveLayoutMetrics,
         _history: &mut History,
+        _all_time_best: &Option<AllTimeBestRegion>,
     ) {
         let galley = ui.fonts().layout_multiline(
             FontSize::Section.into(),
@@ -134,6 +137,7 @@ impl HistoryRegion for AllTimeBestRegion {
         rect: Rect,
         layout_metrics: &SolveLayoutMetrics,
         _history: &mut History,
+        _all_time_best: &Option<AllTimeBestRegion>,
     ) {
         let mut best_count = self.columns();
         let mut row_columns_left = if best_count <= layout_metrics.best_columns {
@@ -347,7 +351,17 @@ impl HistoryRegion for SessionRegion {
         rect: Rect,
         layout_metrics: &SolveLayoutMetrics,
         history: &mut History,
+        all_time_best: &Option<AllTimeBestRegion>,
     ) {
+        let (all_time_best_solve, all_time_best_ao5, all_time_best_ao12) = match all_time_best {
+            Some(region) => (
+                region.best_solve.as_ref().map(|best| best.time),
+                region.best_ao5.as_ref().map(|best| best.time),
+                region.best_ao12.as_ref().map(|best| best.time),
+            ),
+            None => (None, None, None),
+        };
+
         // Draw session background
         let shaded_area = match layout_metrics.solve_columns {
             1 => rect.shrink2(Vec2::new(REGION_PADDING, 0.0)),
@@ -446,7 +460,15 @@ impl HistoryRegion for SessionRegion {
                     ),
                     galley,
                     match time {
-                        Some(_) => Theme::Content.into(),
+                        Some(_) => {
+                            if time == all_time_best_solve {
+                                Theme::Orange.into()
+                            } else if time == self.best_solve.as_ref().map(|best| best.time) {
+                                Theme::Green.into()
+                            } else {
+                                Theme::Content.into()
+                            }
+                        }
                         None => Theme::Red.into(),
                     },
                 );
@@ -653,8 +675,15 @@ impl HistoryRegion for SessionRegion {
                 .fonts()
                 .layout_single_line(FontSize::Normal.into(), solve_time_string(best_solve.time));
             let width = galley.size.x;
-            ui.painter()
-                .galley(Pos2::new(x, y), galley, Theme::Content.into());
+            ui.painter().galley(
+                Pos2::new(x, y),
+                galley,
+                if Some(best_solve.time) == all_time_best_solve {
+                    Theme::Orange.into()
+                } else {
+                    Theme::Content.into()
+                },
+            );
             x += width + SESSION_BEST_PADDING;
         }
 
@@ -680,7 +709,11 @@ impl HistoryRegion for SessionRegion {
             ui.painter().galley(
                 Pos2::new(x + label_width, y),
                 time_galley,
-                Theme::Content.into(),
+                if Some(best_ao5.time) == all_time_best_ao5 {
+                    Theme::Orange.into()
+                } else {
+                    Theme::Content.into()
+                },
             );
             x += width;
         }
@@ -707,7 +740,11 @@ impl HistoryRegion for SessionRegion {
             ui.painter().galley(
                 Pos2::new(x + label_width, y),
                 time_galley,
-                Theme::Content.into(),
+                if Some(best_ao12.time) == all_time_best_ao12 {
+                    Theme::Orange.into()
+                } else {
+                    Theme::Content.into()
+                },
             );
             x += width;
         }
@@ -744,6 +781,7 @@ impl HistoryWidget {
     pub fn new() -> Self {
         Self {
             regions: Vec::new(),
+            all_time_best_region: None,
             total_height: 0.0,
             cached_update_id: None,
             cached_best_columns: 0,
@@ -850,21 +888,23 @@ impl HistoryWidget {
         if regions.len() == 0 {
             // There are no sessions
             regions.push(Box::new(NoSolvesRegion));
+            self.all_time_best_region = None;
         } else {
             // Add an all-time best region at the top
-            regions.insert(
-                0,
-                Box::new(AllTimeBestRegion {
-                    best_solve: all_time_best_solve,
-                    best_ao5: all_time_best_ao5,
-                    best_ao12: all_time_best_ao12,
-                }),
-            );
+            self.all_time_best_region = Some(AllTimeBestRegion {
+                best_solve: all_time_best_solve,
+                best_ao5: all_time_best_ao5,
+                best_ao12: all_time_best_ao12,
+            });
         }
 
         // Lay out regions
         let mut y = 0.0;
         self.regions.clear();
+        if let Some(region) = &self.all_time_best_region {
+            let height = region.height(ui, layout_metrics);
+            y += height + REGION_PADDING;
+        }
         for region in regions {
             let height = region.height(ui, layout_metrics);
             self.regions.push(HistoryRegionLayout { region, y, height });
@@ -939,6 +979,19 @@ impl HistoryWidget {
                         Vec2::new(ui.max_rect().width(), self.total_height),
                         Sense::hover(),
                     );
+                    if let Some(region) = &self.all_time_best_region {
+                        let height = region.height(ui, &solve_layout_metrics);
+                        region.paint(
+                            ui,
+                            Rect::from_min_size(
+                                Pos2::new(rect.left(), rect.top()),
+                                Vec2::new(rect.width(), height),
+                            ),
+                            &solve_layout_metrics,
+                            history,
+                            &None,
+                        );
+                    }
                     for region in &self.regions {
                         region.region.paint(
                             ui,
@@ -948,6 +1001,7 @@ impl HistoryWidget {
                             ),
                             &solve_layout_metrics,
                             history,
+                            &self.all_time_best_region,
                         );
                     }
                 });
