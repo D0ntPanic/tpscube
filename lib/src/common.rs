@@ -19,6 +19,30 @@ pub enum Color {
     Yellow = 5,
 }
 
+impl Color {
+    pub fn face(&self) -> Face {
+        match self {
+            Color::White => Face::Top,
+            Color::Green => Face::Front,
+            Color::Red => Face::Right,
+            Color::Blue => Face::Back,
+            Color::Orange => Face::Left,
+            Color::Yellow => Face::Bottom,
+        }
+    }
+
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Color::White => "White",
+            Color::Green => "Green",
+            Color::Red => "Red",
+            Color::Blue => "Blue",
+            Color::Orange => "Orange",
+            Color::Yellow => "Yellow",
+        }
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
 /// Faces of the cube relative to viewing the cube with white on top and green in front
@@ -29,6 +53,30 @@ pub enum Face {
     Back = 3,
     Left = 4,
     Bottom = 5,
+}
+
+impl Face {
+    pub fn color(&self) -> Color {
+        match self {
+            Face::Top => Color::White,
+            Face::Front => Color::Green,
+            Face::Right => Color::Red,
+            Face::Back => Color::Blue,
+            Face::Left => Color::Orange,
+            Face::Bottom => Color::Yellow,
+        }
+    }
+
+    pub fn opposite(&self) -> Face {
+        match self {
+            Face::Top => Face::Bottom,
+            Face::Front => Face::Back,
+            Face::Right => Face::Left,
+            Face::Back => Face::Front,
+            Face::Left => Face::Right,
+            Face::Bottom => Face::Top,
+        }
+    }
 }
 
 #[repr(u8)]

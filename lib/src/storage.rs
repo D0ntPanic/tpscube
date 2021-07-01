@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::collections::BTreeMap;
 
 #[cfg(feature = "native-storage")]
 use rocksdb::{DBCompressionType, Options, DB};
@@ -15,6 +16,10 @@ pub(crate) trait Storage {
     fn flush(&self);
 }
 
+pub(crate) struct TemporaryStorage {
+    storage: BTreeMap<String, Vec<u8>>,
+}
+
 #[cfg(feature = "native-storage")]
 pub(crate) struct RocksDBStorage {
     db: DB,
@@ -22,6 +27,32 @@ pub(crate) struct RocksDBStorage {
 
 #[cfg(feature = "web-storage")]
 pub(crate) struct WebStorage;
+
+impl TemporaryStorage {
+    pub fn new() -> Self {
+        Self {
+            storage: BTreeMap::new(),
+        }
+    }
+}
+
+impl Storage for TemporaryStorage {
+    fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        Ok(self.storage.get(key).cloned())
+    }
+
+    fn put(&mut self, key: &str, value: &[u8]) -> Result<()> {
+        self.storage.insert(key.into(), value.to_vec());
+        Ok(())
+    }
+
+    fn delete(&mut self, key: &str) -> Result<()> {
+        self.storage.remove(key);
+        Ok(())
+    }
+
+    fn flush(&self) {}
+}
 
 #[cfg(feature = "native-storage")]
 impl RocksDBStorage {

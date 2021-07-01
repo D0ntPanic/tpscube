@@ -109,6 +109,24 @@ pub trait FaceRotation3x3x3 {
     fn rotate(&mut self, face: Face, dir: RotationDirection);
 }
 
+pub(crate) enum FaceRowOrColumn {
+    RowLeftToRight(Face, usize),
+    RowRightToLeft(Face, usize),
+    ColumnTopDown(Face, usize),
+    ColumnBottomUp(Face, usize),
+}
+
+impl FaceRowOrColumn {
+    pub fn idx(&self, idx: usize) -> usize {
+        match self {
+            FaceRowOrColumn::RowLeftToRight(face, row) => Cube3x3x3Faces::idx(*face, *row, idx),
+            FaceRowOrColumn::RowRightToLeft(face, row) => Cube3x3x3Faces::idx(*face, *row, 2 - idx),
+            FaceRowOrColumn::ColumnTopDown(face, col) => Cube3x3x3Faces::idx(*face, idx, *col),
+            FaceRowOrColumn::ColumnBottomUp(face, col) => Cube3x3x3Faces::idx(*face, 2 - idx, *col),
+        }
+    }
+}
+
 #[cfg(not(feature = "no_solver"))]
 struct CornerOrientationMoveTable;
 #[cfg(not(feature = "no_solver"))]
@@ -904,6 +922,12 @@ impl Cube3x3x3Faces {
     /// `col` represent the zero-indexed position on the face to be accessed.
     pub fn color(&self, face: Face, row: usize, col: usize) -> Color {
         self.state[Self::idx(face, row, col)]
+    }
+
+    /// Gets the color for a given place on the cube. For a given `face`, the `row` and
+    /// `col` represent the zero-indexed position on the face to be accessed.
+    pub(crate) fn color_by_idx(&self, idx: usize) -> Color {
+        self.state[idx]
     }
 
     /// Gets the color of a specific corner (there are three colors per corner)

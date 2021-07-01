@@ -3,6 +3,7 @@ use crate::common::{MoveSequence, Penalty, Solve, SolveType, TimedMoveSequence};
 use crate::import::ImportedSession;
 use crate::request::{SyncRequest, SyncResponse};
 use crate::storage::Storage;
+use crate::storage::TemporaryStorage;
 use crate::sync::{SyncOperation, SyncStatus};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
@@ -98,6 +99,10 @@ impl History {
     #[cfg(feature = "web-storage")]
     pub fn open() -> Result<Self> {
         Self::open_with_storage(Box::new(WebStorage))
+    }
+
+    pub fn temporary() -> Result<Self> {
+        Self::open_with_storage(Box::new(TemporaryStorage::new()))
     }
 
     fn open_with_storage(mut storage: Box<dyn Storage>) -> Result<Self> {

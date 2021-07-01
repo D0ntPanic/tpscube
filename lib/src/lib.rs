@@ -1,4 +1,5 @@
 mod action;
+mod analysis;
 mod common;
 mod cube3x3x3;
 mod rand;
@@ -24,6 +25,10 @@ mod index_generated;
 
 pub use crate::rand::{RandomSource, SimpleSeededRandomSource, StandardRandomSource};
 pub use action::{Action, StoredAction};
+pub use analysis::{
+    Analysis, CFOPAnalysis, CFOPPartialAnalysis, CFOPProgress, CrossAnalysis, CubeWithSolution,
+    F2LPairAnalysis, FinalAlignmentAnalysis, OLLAlgorithm, OLLAnalysis, PLLAlgorithm, PLLAnalysis,
+};
 pub use common::{
     parse_move_string, parse_timed_move_string, Average, BestSolve, Color, Cube, Face, Move,
     MoveSequence, Penalty, RotationDirection, Solve, SolveList, SolveType, TimedMove,
