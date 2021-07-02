@@ -1488,7 +1488,7 @@ pub(crate) const CUBE3_F2L_PAIRS: [[[usize; 5]; 4]; 6] = [
     [
         [
             Cube3x3x3Faces::idx(Face::Right, 0, 0),
-            Cube3x3x3Faces::idx(Face::Front, 0, 0),
+            Cube3x3x3Faces::idx(Face::Front, 0, 2),
             Cube3x3x3Faces::idx(Face::Front, 0, 1),
             Cube3x3x3Faces::idx(Face::Top, 2, 2),
             Cube3x3x3Faces::idx(Face::Top, 2, 1),

@@ -144,10 +144,8 @@ pub enum PLLAlgorithm {
 /// fields may be zero if the cube was solved directly after the PLL algorithm.
 #[derive(Clone)]
 pub struct FinalAlignmentAnalysis {
-    /// Time spent recognizing the state
-    pub recognition_time: u32,
     /// Time spent aligning the last layer
-    pub execution_time: u32,
+    pub time: u32,
     /// Move index of the start of the algorithm
     pub start_move_index: usize,
     /// Moves performed
@@ -587,9 +585,10 @@ impl AnalysisData {
                 let new_pair_count = self.f2l_pair_count();
                 if self.cross_solved() && new_pair_count > count {
                     if self.state_moves.len() != 0 {
+                        let recognition_time = self.state_recognition_time.unwrap_or(0);
                         self.f2l_pairs.push(F2LPairAnalysis {
-                            recognition_time: self.state_recognition_time.unwrap_or(0),
-                            execution_time: self.time - self.state_start_time,
+                            recognition_time,
+                            execution_time: self.time - self.state_start_time - recognition_time,
                             start_move_index: self.state_start_index,
                             moves: self.state_moves.clone(),
                         });
@@ -620,12 +619,15 @@ impl AnalysisData {
                         if self.state_moves.len() != 0 {
                             // To arrive at OLL solved state, we must have performed the OLL
                             // algorithm found at the start of the state.
+                            let recognition_time = self.state_recognition_time.unwrap_or(0);
                             self.oll_analysis.push(OLLAnalysis {
                                 one_look_algorithm,
                                 performed_algorithm: one_look_algorithm,
                                 new_state: None,
-                                recognition_time: self.state_recognition_time.unwrap_or(0),
-                                execution_time: self.time - self.state_start_time,
+                                recognition_time,
+                                execution_time: self.time
+                                    - self.state_start_time
+                                    - recognition_time,
                                 start_move_index: self.state_start_index,
                                 moves: self.state_moves.clone(),
                             });
@@ -661,12 +663,15 @@ impl AnalysisData {
                                 OLLAlgorithm::from_cube(&xform_cube, self.cross_face.opposite())
                                     .unwrap();
 
+                            let recognition_time = self.state_recognition_time.unwrap_or(0);
                             self.oll_analysis.push(OLLAnalysis {
                                 one_look_algorithm,
                                 performed_algorithm,
                                 new_state: Some(new_one_look_algorithm),
-                                recognition_time: self.state_recognition_time.unwrap_or(0),
-                                execution_time: self.time - self.state_start_time,
+                                recognition_time,
+                                execution_time: self.time
+                                    - self.state_start_time
+                                    - recognition_time,
                                 start_move_index: self.state_start_index,
                                 moves: self.state_moves.clone(),
                             });
@@ -682,12 +687,15 @@ impl AnalysisData {
                         if self.state_moves.len() != 0 {
                             // To arrive at PLL solved state, we must have performed the PLL
                             // algorithm found at the start of the state.
+                            let recognition_time = self.state_recognition_time.unwrap_or(0);
                             self.pll_analysis.push(PLLAnalysis {
                                 one_look_algorithm,
                                 performed_algorithm: one_look_algorithm,
                                 new_state: None,
-                                recognition_time: self.state_recognition_time.unwrap_or(0),
-                                execution_time: self.time - self.state_start_time,
+                                recognition_time,
+                                execution_time: self.time
+                                    - self.state_start_time
+                                    - recognition_time,
                                 start_move_index: self.state_start_index,
                                 moves: self.state_moves.clone(),
                             });
@@ -713,12 +721,15 @@ impl AnalysisData {
                                 PLLAlgorithm::from_cube(&xform_cube, self.cross_face.opposite())
                                     .unwrap();
 
+                            let recognition_time = self.state_recognition_time.unwrap_or(0);
                             self.pll_analysis.push(PLLAnalysis {
                                 one_look_algorithm,
                                 performed_algorithm,
                                 new_state: Some(new_one_look_algorithm),
-                                recognition_time: self.state_recognition_time.unwrap_or(0),
-                                execution_time: self.time - self.state_start_time,
+                                recognition_time,
+                                execution_time: self.time
+                                    - self.state_start_time
+                                    - recognition_time,
                                 start_move_index: self.state_start_index,
                                 moves: self.state_moves.clone(),
                             });
@@ -730,8 +741,7 @@ impl AnalysisData {
             CFOPProgress::FinalAlignment => {
                 if self.cube.is_solved() {
                     self.alignment = Some(FinalAlignmentAnalysis {
-                        recognition_time: self.state_recognition_time.unwrap_or(0),
-                        execution_time: self.time - self.state_start_time,
+                        time: self.time - self.state_start_time,
                         start_move_index: self.state_start_index,
                         moves: self.state_moves.clone(),
                     });
@@ -760,16 +770,68 @@ impl AnalysisData {
         self.total_moves += 1;
         self.state_moves.push(timed_move.move_());
         self.check_for_state_transitions();
-        if self.state_recognition_time.is_none() && self.total_moves != self.state_start_index {
-            self.state_recognition_time = Some(self.time - self.state_start_time);
-        }
     }
 }
 
 impl CFOPPartialAnalysis {
     pub fn analyze(solve: &CubeWithSolution) -> Self {
-        // TODO: Color neutral
-        Self::analyze_for_cross_color(solve, Color::White)
+        let cases = [
+            Self::analyze_for_cross_color(solve, Color::White),
+            Self::analyze_for_cross_color(solve, Color::Green),
+            Self::analyze_for_cross_color(solve, Color::Red),
+            Self::analyze_for_cross_color(solve, Color::Blue),
+            Self::analyze_for_cross_color(solve, Color::Orange),
+            Self::analyze_for_cross_color(solve, Color::Yellow),
+        ];
+        let mut best: Option<Self> = None;
+        for case in cases {
+            if let Some(prev_best) = &best {
+                if case.transition_count() > prev_best.transition_count()
+                    || (case.transition_count() == prev_best.transition_count()
+                        && case.sum_of_transition_times() < prev_best.sum_of_transition_times())
+                {
+                    best = Some(case);
+                }
+            } else {
+                best = Some(case);
+            }
+        }
+        best.unwrap()
+    }
+
+    fn transition_count(&self) -> usize {
+        let mut count = 0;
+        if self.cross.is_some() {
+            count += 1;
+        }
+        count += self.oll.len();
+        count += self.pll.len();
+        if self.alignment.is_some() {
+            count += 1;
+        }
+        count
+    }
+
+    fn sum_of_transition_times(&self) -> u32 {
+        let mut sum = 0;
+        let mut time = 0;
+        if let Some(cross) = &self.cross {
+            time += cross.time;
+            sum += time;
+        }
+        for oll in &self.oll {
+            time += oll.recognition_time + oll.execution_time;
+            sum += time;
+        }
+        for pll in &self.pll {
+            time += pll.recognition_time + pll.execution_time;
+            sum += time;
+        }
+        if let Some(align) = &self.alignment {
+            time += align.time;
+            sum += time;
+        }
+        sum
     }
 
     fn analyze_for_cross_color(solve: &CubeWithSolution, cross_color: Color) -> Self {
@@ -878,10 +940,9 @@ impl std::fmt::Display for CFOPPartialAnalysis {
             if alignment.moves.len() != 0 {
                 write!(
                     f,
-                    "Alignment: Recognition {}ms, {} moves in {}ms\n",
-                    alignment.recognition_time,
+                    "Alignment: {} moves in {}ms\n",
                     alignment.moves.len(),
-                    alignment.execution_time
+                    alignment.time
                 )?;
             }
         }
