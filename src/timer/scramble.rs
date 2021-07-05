@@ -37,6 +37,7 @@ pub struct TimerCube {
 enum ScrambleMoveResult {
     Good,
     Bad,
+    BadWithPending(Move),
     Pending,
 }
 
@@ -149,7 +150,7 @@ impl TimerCube {
                 // pending move.
                 ScrambleMoveResult::Pending
             } else {
-                ScrambleMoveResult::Bad
+                ScrambleMoveResult::BadWithPending(pending)
             }
         } else if expected.rotation() == 2 {
             // This is a 180 degree rotation that will appear as two moves from
@@ -201,6 +202,10 @@ impl TimerCube {
                         self.scramble_fix_moves.pop();
                     }
                     ScrambleMoveResult::Bad => self.bad_bluetooth_move(mv.move_()),
+                    ScrambleMoveResult::BadWithPending(pending) => {
+                        self.bad_bluetooth_move(pending);
+                        self.bad_bluetooth_move(mv.move_());
+                    }
                     ScrambleMoveResult::Pending => (),
                 }
             } else if let Some(index) = self.scramble_move_index {
@@ -214,6 +219,10 @@ impl TimerCube {
                     match self.apply_bluetooth_move_for_expected_move(mv.move_(), expected) {
                         ScrambleMoveResult::Good => self.scramble_move_index = Some(index + 1),
                         ScrambleMoveResult::Bad => self.bad_bluetooth_move(mv.move_()),
+                        ScrambleMoveResult::BadWithPending(pending) => {
+                            self.bad_bluetooth_move(pending);
+                            self.bad_bluetooth_move(mv.move_());
+                        }
                         ScrambleMoveResult::Pending => (),
                     }
                 }
