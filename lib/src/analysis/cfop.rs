@@ -2,8 +2,9 @@ use crate::tables::{
     CUBE3_EDGE_ADJACENCY, CUBE3_F2L_PAIRS, CUBE3_LAST_LAYER_EDGE, CUBE3_OLL_CASES, CUBE3_PLL_CASES,
 };
 use crate::{
-    cube3x3x3::FaceRowOrColumn, Color, Cube, Cube3x3x3Faces, CubeWithSolution, Face, Move,
-    MoveSequence, TimedMove,
+    cube3x3x3::FaceRowOrColumn, AnalysisStepSummary, AnalysisSubstepTime, AnalysisSummary, Color,
+    Cube, Cube3x3x3Faces, CubeWithSolution, Face, Move, MoveSequence, PartialAnalysis,
+    PartialAnalysisMethod, TimedMove,
 };
 
 /// Analysis of a full solve using CFOP method. Both one-look and two-look
@@ -27,6 +28,14 @@ pub struct CFOPPartialAnalysis {
     pub oll: Vec<OLLAnalysis>,
     pub pll: Vec<PLLAnalysis>,
     pub alignment: Option<FinalAlignmentAnalysis>,
+}
+
+pub trait CFOPAnalysisStages {
+    fn cross(&self) -> Option<&CrossAnalysis>;
+    fn f2l_pairs(&self) -> &[F2LPairAnalysis];
+    fn oll(&self) -> &[OLLAnalysis];
+    fn pll(&self) -> &[PLLAnalysis];
+    fn alignment(&self) -> Option<&FinalAlignmentAnalysis>;
 }
 
 /// Analysis of the cross phase of a CFOP solution.
@@ -799,6 +808,271 @@ impl CFOPPartialAnalysis {
         best.unwrap()
     }
 
+    fn analyze_for_cross_color(solve: &CubeWithSolution, cross_color: Color) -> Self {
+        let mut data = AnalysisData::new(solve, cross_color);
+        for mv in &solve.solution {
+            data.do_move(mv);
+        }
+
+        Self {
+            progress: data.progress,
+            cross: data.cross_analysis,
+            f2l_pairs: data.f2l_pairs,
+            oll: data.oll_analysis,
+            pll: data.pll_analysis,
+            alignment: data.alignment,
+        }
+    }
+}
+
+impl CFOPAnalysisStages for CFOPAnalysis {
+    fn cross(&self) -> Option<&CrossAnalysis> {
+        Some(&self.cross)
+    }
+
+    fn f2l_pairs(&self) -> &[F2LPairAnalysis] {
+        &self.f2l_pairs
+    }
+
+    fn oll(&self) -> &[OLLAnalysis] {
+        &self.oll
+    }
+
+    fn pll(&self) -> &[PLLAnalysis] {
+        &self.pll
+    }
+
+    fn alignment(&self) -> Option<&FinalAlignmentAnalysis> {
+        Some(&self.alignment)
+    }
+}
+
+impl CFOPAnalysisStages for CFOPPartialAnalysis {
+    fn cross(&self) -> Option<&CrossAnalysis> {
+        self.cross.as_ref()
+    }
+
+    fn f2l_pairs(&self) -> &[F2LPairAnalysis] {
+        &self.f2l_pairs
+    }
+
+    fn oll(&self) -> &[OLLAnalysis] {
+        &self.oll
+    }
+
+    fn pll(&self) -> &[PLLAnalysis] {
+        &self.pll
+    }
+
+    fn alignment(&self) -> Option<&FinalAlignmentAnalysis> {
+        self.alignment.as_ref()
+    }
+}
+
+impl<T: CFOPAnalysisStages> AnalysisSummary for T {
+    fn step_summary(&self) -> Vec<AnalysisStepSummary> {
+        let mut result = Vec::new();
+        if let Some(cross) = self.cross() {
+            result.push(AnalysisStepSummary {
+                name: "Cross".into(),
+                short_name: "Cross".into(),
+                major_step_index: 0,
+                algorithm: None,
+                recognition_time: 0,
+                execution_time: cross.time,
+                substeps: vec![AnalysisSubstepTime::Execution(cross.time)],
+                move_count: cross.moves.len(),
+            });
+        }
+
+        // Gather F2L pairs
+        for pair in self.f2l_pairs() {
+            result.push(AnalysisStepSummary {
+                name: "F2L Pair".into(),
+                short_name: "Pair".into(),
+                major_step_index: 1,
+                algorithm: None,
+                recognition_time: pair.recognition_time,
+                execution_time: pair.execution_time,
+                substeps: vec![
+                    AnalysisSubstepTime::Recognition(pair.recognition_time),
+                    AnalysisSubstepTime::Execution(pair.execution_time),
+                ],
+                move_count: pair.moves.len(),
+            });
+        }
+
+        // Gather OLL totals
+        let mut oll_recognition_time = 0;
+        let mut oll_execution_time = 0;
+        let mut oll_move_count = 0;
+        let mut oll_algorithm = None;
+        let mut substeps = Vec::new();
+        for oll in self.oll() {
+            oll_recognition_time += oll.recognition_time;
+            oll_execution_time += oll.execution_time;
+            oll_move_count += oll.moves.len();
+            substeps.push(AnalysisSubstepTime::Recognition(oll.recognition_time));
+            substeps.push(AnalysisSubstepTime::Execution(oll.execution_time));
+
+            // Only show last performed OLL algorithm. First part of two-look OLL
+            // is not very interesting.
+            oll_algorithm = Some(oll.performed_algorithm.to_string());
+        }
+
+        if oll_move_count > 0 {
+            result.push(AnalysisStepSummary {
+                name: "OLL".into(),
+                short_name: "OLL".into(),
+                major_step_index: 2,
+                algorithm: oll_algorithm,
+                recognition_time: oll_recognition_time,
+                execution_time: oll_execution_time,
+                substeps,
+                move_count: oll_move_count,
+            });
+        }
+
+        // Gather PLL totals
+        let mut pll_recognition_time = 0;
+        let mut pll_execution_time = 0;
+        let mut pll_move_count = 0;
+        let mut pll_algorithms = Vec::new();
+        let mut substeps = Vec::new();
+        for pll in self.pll() {
+            pll_recognition_time += pll.recognition_time;
+            pll_execution_time += pll.execution_time;
+            pll_move_count += pll.moves.len();
+            pll_algorithms.push(pll.performed_algorithm);
+            substeps.push(AnalysisSubstepTime::Recognition(pll.recognition_time));
+            substeps.push(AnalysisSubstepTime::Execution(pll.execution_time));
+        }
+
+        // Add final alignment into PLL stage timing
+        if let Some(alignment) = self.alignment() {
+            pll_execution_time += alignment.time;
+            pll_move_count += alignment.moves.len();
+            substeps.push(AnalysisSubstepTime::Execution(alignment.time));
+        }
+
+        if pll_algorithms.len() > 0 {
+            // Show up to the last two algorithms performed. If more than two were
+            // performed, there was a mistake, so show the correct permutation.
+            let algorithm = match pll_algorithms.len() {
+                1 => Some(pll_algorithms[0].to_str().into()),
+                2 => Some(format!(
+                    "{}+{}",
+                    pll_algorithms[0].to_str(),
+                    pll_algorithms[1].to_str()
+                )),
+                _ => Some(format!("⚠ {}", self.pll()[0].one_look_algorithm.to_str())),
+            };
+
+            result.push(AnalysisStepSummary {
+                name: "PLL".into(),
+                short_name: "PLL".into(),
+                major_step_index: 3,
+                algorithm,
+                recognition_time: pll_recognition_time,
+                execution_time: pll_execution_time,
+                substeps,
+                move_count: pll_move_count,
+            });
+        } else if pll_move_count > 0 {
+            // PLL skip, show this as a separate alignment step. This prevents PLL skips
+            // from affecting PLL execution statistics.
+            result.push(AnalysisStepSummary {
+                name: "Alignment".into(),
+                short_name: "Align".into(),
+                major_step_index: 3,
+                algorithm: None,
+                recognition_time: pll_recognition_time,
+                execution_time: pll_execution_time,
+                substeps,
+                move_count: pll_move_count,
+            });
+        }
+
+        result
+    }
+
+    fn detailed_step_summary(&self) -> Vec<AnalysisStepSummary> {
+        let mut result = Vec::new();
+        if let Some(cross) = self.cross() {
+            result.push(AnalysisStepSummary {
+                name: format!("{} Cross", cross.color.to_str()),
+                short_name: "Cross".into(),
+                major_step_index: 0,
+                algorithm: None,
+                recognition_time: 0,
+                execution_time: cross.time,
+                substeps: vec![AnalysisSubstepTime::Execution(cross.time)],
+                move_count: cross.moves.len(),
+            });
+        }
+        for pair in self.f2l_pairs() {
+            result.push(AnalysisStepSummary {
+                name: "F2L Pair".into(),
+                short_name: "Pair".into(),
+                major_step_index: 1,
+                algorithm: None,
+                recognition_time: pair.recognition_time,
+                execution_time: pair.execution_time,
+                substeps: vec![
+                    AnalysisSubstepTime::Recognition(pair.recognition_time),
+                    AnalysisSubstepTime::Execution(pair.execution_time),
+                ],
+                move_count: pair.moves.len(),
+            });
+        }
+        for oll in self.oll() {
+            result.push(AnalysisStepSummary {
+                name: "OLL".into(),
+                short_name: "OLL".into(),
+                major_step_index: 2,
+                algorithm: Some(oll.performed_algorithm.to_string()),
+                recognition_time: oll.recognition_time,
+                execution_time: oll.execution_time,
+                substeps: vec![
+                    AnalysisSubstepTime::Recognition(oll.recognition_time),
+                    AnalysisSubstepTime::Execution(oll.execution_time),
+                ],
+                move_count: oll.moves.len(),
+            });
+        }
+        for pll in self.pll() {
+            result.push(AnalysisStepSummary {
+                name: "PLL".into(),
+                short_name: "PLL".into(),
+                major_step_index: 3,
+                algorithm: Some(pll.performed_algorithm.to_str().into()),
+                recognition_time: pll.recognition_time,
+                execution_time: pll.execution_time,
+                substeps: vec![
+                    AnalysisSubstepTime::Recognition(pll.recognition_time),
+                    AnalysisSubstepTime::Execution(pll.execution_time),
+                ],
+                move_count: pll.moves.len(),
+            });
+        }
+        if let Some(alignment) = self.alignment() {
+            result.push(AnalysisStepSummary {
+                name: "Alignment".into(),
+                short_name: "Align".into(),
+                major_step_index: 3,
+                algorithm: None,
+                recognition_time: 0,
+                execution_time: alignment.time,
+                substeps: vec![AnalysisSubstepTime::Execution(alignment.time)],
+                move_count: alignment.moves.len(),
+            });
+        }
+
+        result
+    }
+}
+
+impl PartialAnalysisMethod for CFOPPartialAnalysis {
     fn transition_count(&self) -> usize {
         let mut count = 0;
         if self.cross.is_some() {
@@ -834,24 +1108,12 @@ impl CFOPPartialAnalysis {
         sum
     }
 
-    fn analyze_for_cross_color(solve: &CubeWithSolution, cross_color: Color) -> Self {
-        let mut data = AnalysisData::new(solve, cross_color);
-        for mv in &solve.solution {
-            data.do_move(mv);
-        }
-
-        Self {
-            progress: data.progress,
-            cross: data.cross_analysis,
-            f2l_pairs: data.f2l_pairs,
-            oll: data.oll_analysis,
-            pll: data.pll_analysis,
-            alignment: data.alignment,
-        }
+    fn is_complete(&self) -> bool {
+        self.progress == CFOPProgress::Solved
     }
 
-    pub fn is_complete(&self) -> bool {
-        self.progress == CFOPProgress::Solved
+    fn to_partial_analysis(&self) -> PartialAnalysis {
+        PartialAnalysis::CFOP(self.clone())
     }
 }
 

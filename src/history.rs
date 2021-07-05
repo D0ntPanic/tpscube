@@ -513,7 +513,7 @@ impl HistoryRegion for SessionRegion {
                         Align2::LEFT_BOTTOM,
                         "   📊",
                         FontSize::Small.into(),
-                        Theme::VeryLight.into(),
+                        Theme::Light.into(),
                     );
                 }
 

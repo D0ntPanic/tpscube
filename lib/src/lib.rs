@@ -26,8 +26,10 @@ mod index_generated;
 pub use crate::rand::{RandomSource, SimpleSeededRandomSource, StandardRandomSource};
 pub use action::{Action, StoredAction};
 pub use analysis::{
-    Analysis, CFOPAnalysis, CFOPPartialAnalysis, CFOPProgress, CrossAnalysis, CubeWithSolution,
-    F2LPairAnalysis, FinalAlignmentAnalysis, OLLAlgorithm, OLLAnalysis, PLLAlgorithm, PLLAnalysis,
+    Analysis, AnalysisStepSummary, AnalysisSubstepTime, AnalysisSummary, CFOPAnalysis,
+    CFOPPartialAnalysis, CFOPProgress, CrossAnalysis, CubeWithSolution, F2LPairAnalysis,
+    FinalAlignmentAnalysis, OLLAlgorithm, OLLAnalysis, PLLAlgorithm, PLLAnalysis, PartialAnalysis,
+    PartialAnalysisMethod, SolveAnalysis,
 };
 pub use common::{
     parse_move_string, parse_timed_move_string, Average, BestSolve, Color, Cube, Face, Move,
