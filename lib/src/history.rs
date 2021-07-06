@@ -39,6 +39,7 @@ pub struct History {
     current_session: String,
     update_id: u64,
     next_update_id: u64,
+    setting_cache: HashMap<String, Option<Vec<u8>>>,
 }
 
 #[derive(Clone)]
@@ -159,6 +160,7 @@ impl History {
             current_session,
             update_id: 0,
             next_update_id: 1,
+            setting_cache: HashMap::new(),
         };
 
         // Resolve actions to create solve and session lists
@@ -592,6 +594,61 @@ impl History {
             new_solve_count,
             changed_solve_count
         ))
+    }
+
+    pub fn setting(&mut self, name: &str) -> Option<Vec<u8>> {
+        if let Some(setting) = self.setting_cache.get(name) {
+            setting.clone()
+        } else {
+            let value = self
+                .storage
+                .get(&format!("setting/{}", name))
+                .unwrap_or(None);
+            self.setting_cache.insert(name.into(), value.clone());
+            value
+        }
+    }
+
+    pub fn setting_as_bool(&mut self, name: &str) -> Option<bool> {
+        if let Some(value) = self.setting(name) {
+            if value.len() == 1 {
+                return Some(value[0] != 0);
+            }
+        }
+        None
+    }
+
+    pub fn setting_as_string(&mut self, name: &str) -> Option<String> {
+        if let Some(value) = self.setting(name) {
+            return Some(String::from_utf8_lossy(&value).into_owned());
+        }
+        None
+    }
+
+    pub fn setting_as_i64(&mut self, name: &str) -> Option<i64> {
+        if let Some(value) = self.setting(name) {
+            if value.len() == 8 {
+                return Some(i64::from_le_bytes(value.try_into().unwrap()));
+            }
+        }
+        None
+    }
+
+    pub fn set_setting(&mut self, name: &str, value: &[u8]) -> Result<()> {
+        self.setting_cache.insert(name.into(), Some(value.to_vec()));
+        self.storage.put(&format!("setting/{}", name), value)
+    }
+
+    pub fn set_bool_setting(&mut self, name: &str, value: bool) -> Result<()> {
+        self.set_setting(name, &[if value { 1 } else { 0 }])
+    }
+
+    pub fn set_string_setting(&mut self, name: &str, value: &str) -> Result<()> {
+        self.set_setting(name, value.as_bytes())
+    }
+
+    pub fn set_i64_setting(&mut self, name: &str, value: i64) -> Result<()> {
+        self.set_setting(name, &value.to_le_bytes())
     }
 }
 

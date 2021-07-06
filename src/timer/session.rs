@@ -1,6 +1,7 @@
 use crate::font::{FontSize, LabelFontSize};
 use crate::theme::Theme;
 use crate::widgets::{solve_time_string, CustomWidgets};
+use chrono::{DateTime, Local};
 use egui::{
     popup_below_widget, Align2, CtxRef, Label, Layout, ScrollArea, SelectableLabel, Sense,
     SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
@@ -361,5 +362,18 @@ impl TimerSession {
 
             ui.add_space(4.0);
         });
+    }
+
+    pub fn last_solve_time(&self) -> Option<DateTime<Local>> {
+        if let Some(solve) = self.solves.last() {
+            Some(solve.created)
+        } else {
+            None
+        }
+    }
+
+    pub fn new_session(&mut self, history: &mut History) {
+        let _ = history.new_session();
+        self.update(history);
     }
 }

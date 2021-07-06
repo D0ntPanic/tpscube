@@ -3,7 +3,10 @@ use crate::style::settings_visuals;
 use crate::theme::Theme;
 use crate::widgets::CustomWidgets;
 use anyhow::Result;
-use egui::{containers::ScrollArea, widgets::Label, CentralPanel, CtxRef, Sense, Stroke};
+use egui::{
+    containers::ScrollArea, popup_below_widget, widgets::Label, CentralPanel, CtxRef,
+    SelectableLabel, Sense, Stroke,
+};
 use tpscube_core::{History, SyncRequest};
 
 pub struct SettingsWidget {
@@ -68,6 +71,88 @@ impl SettingsWidget {
             ui.visuals_mut().widgets.active.bg_fill = Theme::Disabled.into();
             ScrollArea::auto_sized().show(ui, |ui| {
                 ui.vertical(|ui| {
+                    ui.section("Session Management");
+
+                    let auto_sessions = history.setting_as_bool("auto_sessions").unwrap_or(true);
+                    if ui
+                        .add(
+                            Label::new(format!(
+                                "{}  Automatic sessions",
+                                if auto_sessions { "☑" } else { "☐" }
+                            ))
+                            .text_style(FontSize::Section.into())
+                            .sense(Sense::click()),
+                        )
+                        .clicked()
+                    {
+                        let _ = history.set_bool_setting("auto_sessions", !auto_sessions);
+                    }
+                    ui.add(
+                        Label::new(
+                            "Automatically create a new session after a period of time \
+                                has passed.",
+                        )
+                        .wrap(true),
+                    );
+
+                    if auto_sessions {
+                        ui.add_space(8.0);
+
+                        let auto_session_time =
+                            history.setting_as_i64("auto_session_time").unwrap_or(3600);
+
+                        let session_time_str = if auto_session_time >= 7200 {
+                            format!("{} hours", auto_session_time / 3600)
+                        } else if auto_session_time >= 3600 {
+                            "1 hour".into()
+                        } else {
+                            format!("{} minutes", auto_session_time / 60)
+                        };
+
+                        let popup_id = ui.make_persistent_id("auto-session-time");
+                        let response = ui.add(
+                            Label::new(format!("⏰  Session Timeout: {} ⏷", session_time_str))
+                                .text_style(FontSize::Section.into())
+                                .sense(Sense::click()),
+                        );
+                        if response.clicked() {
+                            ui.memory().toggle_popup(popup_id);
+                        }
+                        popup_below_widget(ui, popup_id, &response, |ui| {
+                            ui.set_min_width(180.0);
+                            for time in &[1800, 3600, 3600 * 2, 3600 * 4, 3600 * 8, 3600 * 12] {
+                                let item_time_str = if *time >= 7200 {
+                                    format!("{} hours", *time / 3600)
+                                } else if *time >= 3600 {
+                                    "1 hour".into()
+                                } else {
+                                    format!("{} minutes", *time / 60)
+                                };
+                                if ui
+                                    .add(
+                                        SelectableLabel::new(
+                                            auto_session_time == *time,
+                                            item_time_str,
+                                        )
+                                        .text_style(FontSize::Normal.into()),
+                                    )
+                                    .clicked()
+                                {
+                                    let _ = history.set_i64_setting("auto_session_time", *time);
+                                }
+                            }
+                        });
+
+                        ui.add(
+                            Label::new(
+                                "If there have not been any solves in this amount of time, a new \
+                                    session will be automatically created.",
+                            )
+                            .wrap(true),
+                        );
+                    }
+
+                    ui.add_space(16.0);
                     ui.section("Cloud Sync");
 
                     // Show sync key option
@@ -185,7 +270,6 @@ impl SettingsWidget {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         ui.add_space(16.0);
-
                         ui.section("Import / Export");
 
                         // Import solves option

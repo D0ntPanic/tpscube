@@ -257,6 +257,19 @@ impl TimerWidget {
         interact
     }
 
+    fn check_for_expired_session(&mut self, history: &mut History) {
+        if let Some(last_solve_time) = self.session.last_solve_time() {
+            let auto_sessions = history.setting_as_bool("auto_sessions").unwrap_or(true);
+            if auto_sessions {
+                let auto_session_time = history.setting_as_i64("auto_session_time").unwrap_or(3600);
+                let since = Local::now() - last_solve_time;
+                if since.num_seconds() > auto_session_time {
+                    self.session.new_session(history);
+                }
+            }
+        }
+    }
+
     pub fn update(
         &mut self,
         ctxt: &CtxRef,
@@ -271,6 +284,8 @@ impl TimerWidget {
         self.cube.check_for_new_scramble();
         self.cube
             .update_bluetooth_state(&bluetooth_state, &bluetooth_moves);
+
+        self.check_for_expired_session(history);
 
         ctxt.set_visuals(side_visuals());
         let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
