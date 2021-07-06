@@ -596,6 +596,51 @@ impl History {
         ))
     }
 
+    pub fn auto_split_sessions(&mut self, max_gap_time: i64) -> Result<String> {
+        // Go through all sessions for organization
+        let mut to_move = BTreeMap::new();
+        let mut new_session_count = 0;
+        for (_, session) in self.sessions() {
+            if session.name.is_some() {
+                continue;
+            }
+
+            let mut new_session = None;
+            let mut prev_solve: Option<SolveTimeAndId> = None;
+
+            // Go through solves in this session
+            for solve in &session.solves {
+                if let Some(prev) = &prev_solve {
+                    let gap = solve.time - prev.time;
+                    if gap.num_seconds() > max_gap_time {
+                        // Found a gap larger than the timeout, create a new session
+                        // for this solve and solves after it.
+                        let session_id = Uuid::new_v4().to_simple().to_string();
+                        new_session = Some(session_id);
+                        new_session_count += 1;
+                    }
+                }
+
+                // Add solve to list of solves to move to a new session if we
+                // need to move it.
+                if let Some(session_id) = &new_session {
+                    to_move.insert(solve.id.clone(), session_id.clone());
+                }
+
+                prev_solve = Some(solve.clone());
+            }
+        }
+
+        // Commit session changes
+        for (solve_id, session_id) in to_move {
+            self.change_session(solve_id, session_id);
+        }
+
+        self.local_commit()?;
+
+        Ok(format!("Created {} new session(s).", new_session_count))
+    }
+
     pub fn setting(&mut self, name: &str) -> Option<Vec<u8>> {
         if let Some(setting) = self.setting_cache.get(name) {
             setting.clone()

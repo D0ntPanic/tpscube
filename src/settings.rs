@@ -13,6 +13,7 @@ pub struct SettingsWidget {
     sync_key_visible: bool,
     set_key_visible: bool,
     new_sync_key: String,
+    organize_result: Option<Result<String>>,
     import_result: Option<Result<String>>,
     export_result: Option<Result<()>>,
 }
@@ -23,6 +24,7 @@ impl SettingsWidget {
             sync_key_visible: false,
             set_key_visible: false,
             new_sync_key: "".into(),
+            organize_result: None,
             import_result: None,
             export_result: None,
         }
@@ -147,6 +149,49 @@ impl SettingsWidget {
                             Label::new(
                                 "If there have not been any solves in this amount of time, a new \
                                     session will be automatically created.",
+                            )
+                            .wrap(true),
+                        );
+
+                        ui.add_space(8.0);
+
+                        if ui
+                            .add(
+                                Label::new("🗄  Organize sessions")
+                                    .text_style(FontSize::Section.into())
+                                    .sense(Sense::click()),
+                            )
+                            .clicked()
+                        {
+                            self.organize_result =
+                                Some(history.auto_split_sessions(auto_session_time));
+                        }
+                        if let Some(result) = &self.organize_result {
+                            match result {
+                                Ok(message) => {
+                                    ui.add(
+                                        Label::new(format!(
+                                            "Organization complete.\n{}\n",
+                                            message
+                                        ))
+                                        .text_color(Theme::Green),
+                                    );
+                                }
+                                Err(error) => {
+                                    ui.add(
+                                        Label::new(format!("Error: {}", error))
+                                            .wrap(true)
+                                            .text_color(Theme::Red),
+                                    );
+                                }
+                            }
+                        }
+                        ui.add(
+                            Label::new(
+                                "Automatically organize all existing sessions using the timeout \
+                                    above. Sessions with gaps longer than the timeout will be \
+                                    split into multiple sessions. Named sessions will not be \
+                                    affected.",
                             )
                             .wrap(true),
                         );
