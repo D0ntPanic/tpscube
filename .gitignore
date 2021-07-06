@@ -1,9 +1,10 @@
 .vscode/
 tpscube
-tpscube.app/
+TPS\ Cube.app/
 target/
 lambda.zip
 web/tpscube.js
 web/tpscube_bg.wasm
 web/tpscube_bg.wasm.gz
 web/manifest.appcache
+.DS_Store

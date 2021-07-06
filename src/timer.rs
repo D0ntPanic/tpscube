@@ -9,7 +9,7 @@ use crate::gl::GlContext;
 use crate::style::{content_visuals, side_visuals};
 use anyhow::Result;
 use chrono::Local;
-use egui::{Align, CentralPanel, CtxRef, Key, Layout, Rect, Response, Sense, Ui};
+use egui::{Align, CentralPanel, CtxRef, Key, Layout, Rect, Response, Sense, Ui, Vec2};
 use instant::Instant;
 use scramble::TimerCube;
 use session::TimerSession;
@@ -131,7 +131,15 @@ impl TimerWidget {
         bluetooth_name: Option<String>,
     ) -> Response {
         let id = ui.make_persistent_id("timer_input");
-        let interact = ui.interact(*rect, id, Sense::click_and_drag());
+
+        // Don't allow interaction at the very bottom of the screen. This is to avoid false
+        // starts when closing the app on an iPhone.
+        let interact_rect = Rect::from_min_size(
+            rect.left_top(),
+            Vec2::new(rect.width(), rect.height() - 96.0),
+        );
+
+        let interact = ui.interact(interact_rect, id, Sense::click_and_drag());
         ui.memory().request_focus(id);
 
         // Check for user input to interact with the timer
