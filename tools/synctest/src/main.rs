@@ -7,12 +7,13 @@ use tpscube_core::{
 
 const SOLVE_COUNT: usize = 100;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let temp_dir = TempDir::new("synctest").unwrap();
 
     {
         let begin = Instant::now();
-        let mut history = History::open_at(temp_dir.path()).unwrap();
+        let mut history = History::open_at(temp_dir.path()).await.unwrap();
 
         for i in 0..SOLVE_COUNT {
             let scramble = scramble_3x3x3_fast();
@@ -36,7 +37,7 @@ fn main() {
             history.new_solve(solve);
         }
 
-        history.local_commit().unwrap();
+        history.local_commit();
         let duration = Instant::now() - begin;
         println!(
             "Added {} solves in {:.3} secs",
@@ -47,7 +48,7 @@ fn main() {
 
     {
         let begin = Instant::now();
-        let history = History::open_at(temp_dir.path()).unwrap();
+        let history = History::open_at(temp_dir.path()).await.unwrap();
 
         let duration = Instant::now() - begin;
         println!("After restore, {} solves present", history.iter().count());

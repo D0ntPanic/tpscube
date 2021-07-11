@@ -9,10 +9,12 @@ use uuid::Uuid;
 #[cfg(feature = "storage")]
 use crate::index_generated;
 #[cfg(feature = "storage")]
-use crate::storage::Storage;
+use crate::storage::{DeferredStorage, Storage};
 
 #[cfg(feature = "storage")]
 const TARGET_BUNDLE_SIZE: usize = 65536;
+#[cfg(feature = "storage")]
+const MAX_ACTIONS_PER_ITEM: usize = 256;
 
 #[derive(Clone, Debug)]
 pub enum Action {
@@ -239,7 +241,7 @@ impl StoredAction {
         action_builder.finish()
     }
 
-    pub fn serialize_list(actions: &[Self]) -> Result<Vec<u8>> {
+    pub fn serialize_list(actions: &[Self]) -> Vec<u8> {
         let mut builder = FlatBufferBuilder::new();
 
         // Serialize each action in the bundle
@@ -257,7 +259,7 @@ impl StoredAction {
         builder.finish(actions, None);
 
         // Save serialized action bundle to the database
-        Ok(builder.finished_data().to_vec())
+        builder.finished_data().to_vec()
     }
 
     pub fn deserialize(action: action_generated::Action) -> Option<Self> {
@@ -465,14 +467,14 @@ impl ActionList {
         }
     }
 
-    pub fn load(storage: &dyn Storage, name: &'static str) -> Result<Self> {
-        if let Some(data) = storage.get(name)? {
+    pub async fn load(storage: &Storage, name: &'static str) -> Result<Self> {
+        if let Some(data) = storage.get(name).await? {
             let index = index_generated::root_as_action_list_index(&data)?;
             if let Some(lists) = index.lists() {
                 // Load each bundle referenced in the index
                 let mut bundles = Vec::new();
                 for bundle in lists {
-                    bundles.push(ActionBundle::load(storage, bundle)?);
+                    bundles.push(ActionBundle::load(storage, bundle).await?);
                 }
 
                 if bundles.len() != 0 {
@@ -504,23 +506,32 @@ impl ActionList {
         self.current.actions.push(action);
     }
 
-    pub fn commit(&mut self, storage: &mut dyn Storage, always_write: bool) -> Result<()> {
+    pub fn commit(&mut self, storage: &DeferredStorage, always_write: bool) {
         if self.current.actions.len() == 0 {
             if always_write {
-                self.save_index(storage)?;
+                self.save_index(storage);
             }
 
             // Nothing to save
-            return Ok(());
+            return;
+        }
+
+        // If there are too many actions in the current bundle, split them off
+        while self.current.actions.len() > MAX_ACTIONS_PER_ITEM {
+            let mut bundle = ActionBundle::new();
+            bundle.actions = self.current.actions.split_off(MAX_ACTIONS_PER_ITEM);
+            std::mem::swap(&mut bundle, &mut self.current);
+            self.archive.push(bundle);
+            self.archive.last().unwrap().save(storage);
         }
 
         // Save the current bundle to storage
-        let bundle_complete = self.current.save(storage)?;
+        let bundle_complete = self.current.save(storage);
 
         // Make sure the current bundle is present in the index, otherwise
         // it will not be visible on reload
         if !self.current.present_in_index || always_write {
-            self.save_index(storage)?;
+            self.save_index(storage);
             self.current.present_in_index = true;
         }
 
@@ -534,10 +545,9 @@ impl ActionList {
         }
 
         storage.flush();
-        Ok(())
     }
 
-    pub fn save_index(&self, storage: &mut dyn Storage) -> Result<()> {
+    pub fn save_index(&self, storage: &DeferredStorage) {
         // Serialize list of action bundles to a flatbuffer
         let mut builder = FlatBufferBuilder::new();
         let mut lists: Vec<&str> = Vec::with_capacity(self.archive.len() + 1);
@@ -555,8 +565,7 @@ impl ActionList {
         builder.finish(index, None);
 
         // Save serialized index to the database
-        storage.put(self.name, builder.finished_data())?;
-        Ok(())
+        storage.put(self.name, builder.finished_data());
     }
 
     pub fn iter(&self) -> ActionListIterator {
@@ -589,11 +598,7 @@ impl ActionList {
         std::mem::swap(&mut new_index, &mut self.archive);
     }
 
-    pub fn remove_before(
-        &mut self,
-        position: ActionListPosition,
-        storage: &mut dyn Storage,
-    ) -> Result<()> {
+    pub fn remove_before(&mut self, position: ActionListPosition, storage: &DeferredStorage) {
         let mut index_changed = false;
         let local_remove_idx = if let Some(archive_idx) = position.archive_idx {
             // Deletion position is in archive, check to see if it is past the end of
@@ -613,20 +618,20 @@ impl ActionList {
                     // No more actions, delete this archive and any before it
                     let new_archive = self.archive.split_off(archive_idx + 1);
                     for removed_archive in &self.archive {
-                        removed_archive.delete(storage)?;
+                        removed_archive.delete(storage);
                     }
                     index_changed = true;
                     self.archive = new_archive;
                 } else {
                     // This archive still has some actions in it, save the revised archive
                     if archive_updated {
-                        archive.save(storage)?;
+                        archive.save(storage);
                     }
 
                     // Remove any archives before this one
                     let new_archive = self.archive.split_off(archive_idx);
                     for removed_archive in &self.archive {
-                        removed_archive.delete(storage)?;
+                        removed_archive.delete(storage);
                         index_changed = true;
                     }
                     self.archive = new_archive;
@@ -634,7 +639,7 @@ impl ActionList {
             } else {
                 // Position is after all archives, delete all archives
                 for archive in &self.archive {
-                    archive.delete(storage)?;
+                    archive.delete(storage);
                     index_changed = true;
                 }
                 self.archive.clear();
@@ -646,7 +651,7 @@ impl ActionList {
             // Position is in current bundle, start removing before the position's action.
             // Delete all archives as these are before the current bundle.
             for archive in &self.archive {
-                archive.delete(storage)?;
+                archive.delete(storage);
                 index_changed = true;
             }
             self.archive.clear();
@@ -661,31 +666,28 @@ impl ActionList {
             if self.current.actions.len() == 0 {
                 // There are no more actions in this bundle, delete it and create a new
                 // empty bundle.
-                self.current.delete(storage)?;
+                self.current.delete(storage);
                 self.current = ActionBundle::new();
                 index_changed = true;
             } else {
                 // Save the updated action list
-                self.current.save(storage)?;
+                self.current.save(storage);
             }
         }
 
         // If there were changes to the bundle list, save them now
         if index_changed {
-            self.save_index(storage)?;
+            self.save_index(storage);
         }
-
-        Ok(())
     }
 
-    pub fn delete_bundles(&self, storage: &mut dyn Storage) -> Result<()> {
+    pub fn delete_bundles(&self, storage: &DeferredStorage) {
         for archive in &self.archive {
-            archive.delete(storage)?;
+            archive.delete(storage);
         }
         if self.current.present_in_index {
-            self.current.delete(storage)?;
+            self.current.delete(storage);
         }
-        Ok(())
     }
 }
 
@@ -763,8 +765,8 @@ impl ActionBundle {
         }
     }
 
-    fn load(storage: &dyn Storage, id: &str) -> Result<Self> {
-        if let Some(data) = storage.get(id)? {
+    async fn load(storage: &Storage, id: &str) -> Result<Self> {
+        if let Some(data) = storage.get(id).await? {
             let actions = StoredAction::deserialize_list(&data)?;
             Ok(Self {
                 id: id.to_string(),
@@ -780,13 +782,13 @@ impl ActionBundle {
         }
     }
 
-    fn save(&self, storage: &mut dyn Storage) -> Result<bool> {
-        let data = StoredAction::serialize_list(&self.actions)?;
-        storage.put(&self.id, &data)?;
-        Ok(data.len() >= TARGET_BUNDLE_SIZE)
+    fn save(&self, storage: &DeferredStorage) -> bool {
+        let data = StoredAction::serialize_list(&self.actions);
+        storage.put(&self.id, &data);
+        data.len() >= TARGET_BUNDLE_SIZE
     }
 
-    fn delete(&self, storage: &mut dyn Storage) -> Result<()> {
+    fn delete(&self, storage: &DeferredStorage) {
         storage.delete(&self.id)
     }
 }

@@ -4,9 +4,9 @@ use std::str::FromStr;
 use std::time::Duration;
 use tpscube_core::{CFOPPartialAnalysis, CubeWithSolution, History};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let matches = App::new("TPS Cube Analysis")
-        .arg(Arg::with_name("json").long("json").takes_value(true))
         .arg(Arg::with_name("hours").long("hours").takes_value(true))
         .arg(Arg::with_name("days").long("days").takes_value(true))
         .arg(Arg::with_name("weeks").long("weeks").takes_value(true))
@@ -30,14 +30,7 @@ fn main() {
         duration += Duration::from_secs(3600 * 24 * 7 * weeks);
     }
 
-    let history = if let Some(json) = json {
-        let contents = String::from_utf8(std::fs::read(json).unwrap()).unwrap();
-        let mut history = History::temporary().unwrap();
-        history.import(contents).unwrap();
-        history
-    } else {
-        History::open().unwrap()
-    };
+    let history = History::open().await.unwrap();
 
     let mut last_session = None;
     for solve in history.iter().rev() {

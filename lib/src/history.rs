@@ -2,11 +2,11 @@ use crate::action::{Action, ActionList, StoredAction};
 use crate::common::{MoveSequence, Penalty, Solve, SolveType, TimedMoveSequence};
 use crate::import::ImportedSession;
 use crate::request::{SyncRequest, SyncResponse};
-use crate::storage::Storage;
-use crate::storage::TemporaryStorage;
+use crate::storage::{DeferredStorage, Storage};
 use crate::sync::{SyncOperation, SyncStatus};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -15,19 +15,14 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 #[cfg(feature = "native-storage")]
-use crate::storage::RocksDBStorage;
-#[cfg(feature = "native-storage")]
 use dirs::data_local_dir;
 #[cfg(feature = "native-storage")]
 use std::path::Path;
 
-#[cfg(feature = "web-storage")]
-use crate::storage::WebStorage;
-
 const UNSYNCED: u32 = 0;
 
 pub struct History {
-    storage: Box<dyn Storage>,
+    storage: DeferredStorage,
     solves: SolveDatabase,
     synced_solves: SolveDatabase,
     synced_actions: ActionList,
@@ -39,7 +34,7 @@ pub struct History {
     current_session: String,
     update_id: u64,
     next_update_id: u64,
-    setting_cache: HashMap<String, Option<Vec<u8>>>,
+    settings: Settings,
 }
 
 #[derive(Clone)]
@@ -81,71 +76,81 @@ pub struct SessionSolveIterator<'a> {
     solve: std::collections::btree_set::Iter<'a, SolveTimeAndId>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Settings {
+    settings: HashMap<String, Vec<u8>>,
+}
+
 impl History {
     #[cfg(feature = "native-storage")]
-    pub fn open() -> Result<Self> {
+    pub async fn open() -> Result<Self> {
         let mut path =
             data_local_dir().ok_or_else(|| anyhow!("Local data directory not defined"))?;
         path.push("tpscube");
         path.push("solves");
-        Self::open_at(path)
+        Self::open_at(path).await
     }
 
     #[cfg(feature = "native-storage")]
-    pub fn open_at<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub async fn open_at<P: AsRef<Path>>(path: P) -> Result<Self> {
         // Open up the local database and read actions from it
-        Self::open_with_storage(Box::new(RocksDBStorage::open(path.as_ref())?))
+        Self::open_with_storage(Storage::open(path.as_ref())?).await
     }
 
     #[cfg(feature = "web-storage")]
-    pub fn open() -> Result<Self> {
-        Self::open_with_storage(Box::new(WebStorage))
+    pub async fn open() -> Result<Self> {
+        Self::open_with_storage(Storage).await
     }
 
-    pub fn temporary() -> Result<Self> {
-        Self::open_with_storage(Box::new(TemporaryStorage::new()))
-    }
-
-    fn open_with_storage(mut storage: Box<dyn Storage>) -> Result<Self> {
-        let mut synced_actions = ActionList::load(storage.as_ref(), "synced")?;
-        let mut local_actions = ActionList::load(storage.as_ref(), "local")?;
+    async fn open_with_storage(mut storage: Storage) -> Result<Self> {
+        let mut synced_actions = ActionList::load(&storage, "synced").await?;
+        let mut local_actions = ActionList::load(&storage, "local").await?;
 
         // Fetch sync information from local database
-        let mut sync_key = match storage.get("sync_key")? {
+        let mut sync_key = match storage.get("sync_key").await? {
             Some(key) => SyncRequest::validate_sync_key(&String::from_utf8_lossy(&key)),
             None => None,
         };
-        let mut sync_id = match storage.get("sync_id")? {
+        let mut sync_id = match storage.get("sync_id").await? {
             Some(raw_id) => Some(u32::from_le_bytes(
                 raw_id.try_into().map_err(|_| anyhow!("Invalid sync ID"))?,
             )),
             None => None,
         };
 
+        let current_session = match storage.get("session").await? {
+            Some(session) => String::from_utf8_lossy(&session).into_owned(),
+            None => {
+                let session = Uuid::new_v4().to_simple().to_string();
+                storage.put("session", session.as_bytes()).await?;
+                session
+            }
+        };
+
+        let settings = match storage.get("settings").await? {
+            Some(settings) => serde_json::from_str(&String::from_utf8_lossy(&settings))?,
+            None => Settings {
+                settings: HashMap::new(),
+            },
+        };
+
+        let storage = DeferredStorage::new(storage);
+
         if sync_key.is_none() || sync_id.is_none() {
             // No valid sync information in the database, create new sync information
             sync_key = Some(SyncRequest::new_sync_key());
             sync_id = Some(UNSYNCED);
-            storage.put("sync_key", sync_key.as_ref().unwrap().as_bytes())?;
-            storage.put("sync_id", &sync_id.unwrap().to_le_bytes())?;
+            storage.put("sync_key", sync_key.as_ref().unwrap().as_bytes());
+            storage.put("sync_id", &sync_id.unwrap().to_le_bytes());
 
             // If there was synced information that is now invalid, move it to local so
             // that can be synced under the new key and data loss is avoided.
             if synced_actions.has_actions() {
                 local_actions.prepend(&mut synced_actions);
-                local_actions.save_index(storage.as_mut())?;
-                synced_actions.save_index(storage.as_mut())?;
+                local_actions.save_index(&storage);
+                synced_actions.save_index(&storage);
             }
         }
-
-        let current_session = match storage.get("session")? {
-            Some(session) => String::from_utf8_lossy(&session).into_owned(),
-            None => {
-                let session = Uuid::new_v4().to_simple().to_string();
-                storage.put("session", session.as_bytes())?;
-                session
-            }
-        };
 
         let mut result = Self {
             storage,
@@ -160,7 +165,7 @@ impl History {
             current_session,
             update_id: 0,
             next_update_id: 1,
-            setting_cache: HashMap::new(),
+            settings,
         };
 
         // Resolve actions to create solve and session lists
@@ -213,13 +218,13 @@ impl History {
         // the new key.
         if self.synced_actions.has_actions() {
             self.local_actions.prepend(&mut self.synced_actions);
-            self.local_actions.save_index(self.storage.as_mut())?;
-            self.synced_actions.save_index(self.storage.as_mut())?;
+            self.local_actions.save_index(&self.storage);
+            self.synced_actions.save_index(&self.storage);
             self.synced_solves = SolveDatabase::new();
         }
 
-        self.storage.put("sync_key", self.sync_key.as_bytes())?;
-        self.storage.put("sync_id", &self.sync_id.to_le_bytes())?;
+        self.storage.put("sync_key", self.sync_key.as_bytes());
+        self.storage.put("sync_id", &self.sync_id.to_le_bytes());
 
         Ok(())
     }
@@ -239,13 +244,13 @@ impl History {
         self.new_action(StoredAction::new(Action::NewSolve(solve)));
     }
 
-    pub fn new_session(&mut self) -> Result<String> {
+    pub fn new_session(&mut self) -> String {
         let session = Uuid::new_v4().to_simple().to_string();
         self.current_session = session.clone();
-        self.storage.put("session", session.as_bytes())?;
+        self.storage.put("session", session.as_bytes());
         self.update_id = self.next_update_id;
         self.next_update_id += 1;
-        Ok(session)
+        session
     }
 
     pub fn current_session(&self) -> &str {
@@ -289,8 +294,8 @@ impl History {
         self.new_action(StoredAction::new(Action::DeleteSolve(solve_id)));
     }
 
-    pub fn local_commit(&mut self) -> Result<()> {
-        self.local_actions.commit(self.storage.as_mut(), false)
+    pub fn local_commit(&mut self) {
+        self.local_actions.commit(&self.storage, false);
     }
 
     pub fn local_action_count(&self) -> usize {
@@ -343,9 +348,7 @@ impl History {
                         Ok(response) => {
                             // Response is OK, process it now
                             self.current_sync = None;
-                            if let Err(error) = self.resolve_sync(response) {
-                                self.last_sync_result = SyncStatus::SyncFailed(error.to_string());
-                            }
+                            self.resolve_sync(response);
 
                             // Response processing may have triggered another sync stage. Check
                             // for another pending sync, or if there isn't one, return the status
@@ -375,7 +378,7 @@ impl History {
         }
     }
 
-    fn resolve_sync(&mut self, response: &SyncResponse) -> Result<()> {
+    fn resolve_sync(&mut self, response: &SyncResponse) {
         if response.new_actions.len() != 0 || response.uploaded != 0 {
             // There are new actions, commit them to the synced state
             for action in &response.new_actions {
@@ -383,7 +386,7 @@ impl History {
                     .resolve_action(action, &mut self.next_update_id);
                 self.synced_actions.push(action.clone());
             }
-            self.synced_actions.commit(self.storage.as_mut(), false)?;
+            self.synced_actions.commit(&self.storage, false);
 
             if response.uploaded != 0 {
                 // Transfer completed local actions to synced state. Actions are only
@@ -399,12 +402,11 @@ impl History {
                         break;
                     }
                 }
-                self.synced_actions.commit(self.storage.as_mut(), false)?;
+                self.synced_actions.commit(&self.storage, false);
 
                 // Remove completed local actions
                 let pos = local_iter.position();
-                self.local_actions
-                    .remove_before(pos, self.storage.as_mut())?;
+                self.local_actions.remove_before(pos, &self.storage);
             }
 
             // Resolve local actions on top of the synced state. If there are actions that
@@ -428,8 +430,8 @@ impl History {
                 for action in new_actions {
                     new_list.push(action);
                 }
-                new_list.commit(self.storage.as_mut(), true)?;
-                self.local_actions.delete_bundles(self.storage.as_mut())?;
+                new_list.commit(&self.storage, true);
+                self.local_actions.delete_bundles(&self.storage);
                 self.local_actions = new_list;
             }
 
@@ -440,7 +442,7 @@ impl History {
         // Update sync ID and commit to local database if changed
         if response.new_sync_id != self.sync_id {
             self.sync_id = response.new_sync_id;
-            self.storage.put("sync_id", &self.sync_id.to_le_bytes())?;
+            self.storage.put("sync_id", &self.sync_id.to_le_bytes());
 
             // If there are still local solves after receiving a new sync ID, resync to
             // apply the local solves to the new sync point
@@ -450,8 +452,6 @@ impl History {
                 self.current_sync = Some(SyncOperation::new(self.sync_request()));
             }
         }
-
-        Ok(())
     }
 
     pub fn export(&self) -> Result<String> {
@@ -578,7 +578,7 @@ impl History {
             }
         }
 
-        self.local_commit()?;
+        self.local_commit();
 
         // Import complete, return statistics about merge
         Ok(format!(
@@ -596,7 +596,7 @@ impl History {
         ))
     }
 
-    pub fn auto_split_sessions(&mut self, max_gap_time: i64) -> Result<String> {
+    pub fn auto_split_sessions(&mut self, max_gap_time: i64) -> usize {
         // Go through all sessions for organization
         let mut to_move = BTreeMap::new();
         let mut new_session_count = 0;
@@ -636,25 +636,19 @@ impl History {
             self.change_session(solve_id, session_id);
         }
 
-        self.local_commit()?;
-
-        Ok(format!("Created {} new session(s).", new_session_count))
+        self.local_commit();
+        new_session_count
     }
 
-    pub fn setting(&mut self, name: &str) -> Option<Vec<u8>> {
-        if let Some(setting) = self.setting_cache.get(name) {
-            setting.clone()
+    pub fn setting(&self, name: &str) -> Option<Vec<u8>> {
+        if let Some(setting) = self.settings.settings.get(name) {
+            Some(setting.clone())
         } else {
-            let value = self
-                .storage
-                .get(&format!("setting/{}", name))
-                .unwrap_or(None);
-            self.setting_cache.insert(name.into(), value.clone());
-            value
+            None
         }
     }
 
-    pub fn setting_as_bool(&mut self, name: &str) -> Option<bool> {
+    pub fn setting_as_bool(&self, name: &str) -> Option<bool> {
         if let Some(value) = self.setting(name) {
             if value.len() == 1 {
                 return Some(value[0] != 0);
@@ -663,14 +657,14 @@ impl History {
         None
     }
 
-    pub fn setting_as_string(&mut self, name: &str) -> Option<String> {
+    pub fn setting_as_string(&self, name: &str) -> Option<String> {
         if let Some(value) = self.setting(name) {
             return Some(String::from_utf8_lossy(&value).into_owned());
         }
         None
     }
 
-    pub fn setting_as_i64(&mut self, name: &str) -> Option<i64> {
+    pub fn setting_as_i64(&self, name: &str) -> Option<i64> {
         if let Some(value) = self.setting(name) {
             if value.len() == 8 {
                 return Some(i64::from_le_bytes(value.try_into().unwrap()));
@@ -680,8 +674,12 @@ impl History {
     }
 
     pub fn set_setting(&mut self, name: &str, value: &[u8]) -> Result<()> {
-        self.setting_cache.insert(name.into(), Some(value.to_vec()));
-        self.storage.put(&format!("setting/{}", name), value)
+        self.settings.settings.insert(name.into(), value.to_vec());
+        self.storage.put(
+            "settings",
+            serde_json::to_string(&self.settings)?.as_bytes(),
+        );
+        Ok(())
     }
 
     pub fn set_bool_setting(&mut self, name: &str, value: bool) -> Result<()> {
@@ -694,6 +692,10 @@ impl History {
 
     pub fn set_i64_setting(&mut self, name: &str, value: i64) -> Result<()> {
         self.set_setting(name, &value.to_le_bytes())
+    }
+
+    pub fn check_for_error(&self) -> Option<String> {
+        self.storage.check_for_error()
     }
 }
 

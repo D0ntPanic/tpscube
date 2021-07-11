@@ -6,6 +6,7 @@ mod state;
 
 use crate::framerate::Framerate;
 use crate::gl::GlContext;
+use crate::settings::Settings;
 use crate::style::{content_visuals, side_visuals};
 use anyhow::Result;
 use chrono::Local;
@@ -259,11 +260,9 @@ impl TimerWidget {
 
     fn check_for_expired_session(&mut self, history: &mut History) {
         if let Some(last_solve_time) = self.session.last_solve_time() {
-            let auto_sessions = history.setting_as_bool("auto_sessions").unwrap_or(true);
-            if auto_sessions {
-                let auto_session_time = history.setting_as_i64("auto_session_time").unwrap_or(3600);
+            if Settings::auto_sessions_enabled(history) {
                 let since = Local::now() - last_solve_time;
-                if since.num_seconds() > auto_session_time {
+                if since.num_seconds() > Settings::auto_session_time(history) {
                     self.session.new_session(history);
                 }
             }

@@ -373,7 +373,7 @@ impl TimerSession {
     }
 
     pub fn new_session(&mut self, history: &mut History) {
-        let _ = history.new_session();
+        history.new_session();
         self.update(history);
     }
 }

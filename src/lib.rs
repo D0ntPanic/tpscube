@@ -5,6 +5,7 @@ mod cube;
 mod edge_generated;
 mod font;
 mod framerate;
+mod future;
 mod gl;
 mod graph;
 mod history;

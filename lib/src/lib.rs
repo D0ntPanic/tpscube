@@ -7,6 +7,8 @@ mod request;
 mod tables;
 
 #[cfg(feature = "storage")]
+mod future;
+#[cfg(feature = "storage")]
 mod history;
 #[cfg(feature = "storage")]
 mod import;

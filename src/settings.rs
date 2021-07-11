@@ -9,16 +9,16 @@ use egui::{
 };
 use tpscube_core::{History, SyncRequest};
 
-pub struct SettingsWidget {
+pub struct Settings {
     sync_key_visible: bool,
     set_key_visible: bool,
     new_sync_key: String,
-    organize_result: Option<Result<String>>,
+    organize_result: Option<String>,
     import_result: Option<Result<String>>,
     export_result: Option<Result<()>>,
 }
 
-impl SettingsWidget {
+impl Settings {
     pub fn new() -> Self {
         Self {
             sync_key_visible: false,
@@ -28,6 +28,14 @@ impl SettingsWidget {
             import_result: None,
             export_result: None,
         }
+    }
+
+    pub fn auto_sessions_enabled(history: &History) -> bool {
+        history.setting_as_bool("auto_sessions").unwrap_or(true)
+    }
+
+    pub fn auto_session_time(history: &History) -> i64 {
+        history.setting_as_i64("auto_session_time").unwrap_or(3600)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -75,19 +83,24 @@ impl SettingsWidget {
                 ui.vertical(|ui| {
                     ui.section("Session Management");
 
-                    let auto_sessions = history.setting_as_bool("auto_sessions").unwrap_or(true);
                     if ui
                         .add(
                             Label::new(format!(
                                 "{}  Automatic sessions",
-                                if auto_sessions { "☑" } else { "☐" }
+                                if Self::auto_sessions_enabled(history) {
+                                    "☑"
+                                } else {
+                                    "☐"
+                                }
                             ))
                             .text_style(FontSize::Section.into())
                             .sense(Sense::click()),
                         )
                         .clicked()
                     {
-                        let _ = history.set_bool_setting("auto_sessions", !auto_sessions);
+                        let new_auto_sessions_enabled = !Self::auto_sessions_enabled(history);
+                        let _ =
+                            history.set_bool_setting("auto_sessions", new_auto_sessions_enabled);
                     }
                     ui.add(
                         Label::new(
@@ -97,12 +110,10 @@ impl SettingsWidget {
                         .wrap(true),
                     );
 
-                    if auto_sessions {
+                    if Self::auto_sessions_enabled(history) {
                         ui.add_space(8.0);
 
-                        let auto_session_time =
-                            history.setting_as_i64("auto_session_time").unwrap_or(3600);
-
+                        let auto_session_time = Self::auto_session_time(history);
                         let session_time_str = if auto_session_time >= 7200 {
                             format!("{} hours", auto_session_time / 3600)
                         } else if auto_session_time >= 3600 {
@@ -163,28 +174,15 @@ impl SettingsWidget {
                             )
                             .clicked()
                         {
+                            let new_session_count = history.auto_split_sessions(auto_session_time);
                             self.organize_result =
-                                Some(history.auto_split_sessions(auto_session_time));
+                                Some(format!("Created {} new session(s).", new_session_count));
                         }
-                        if let Some(result) = &self.organize_result {
-                            match result {
-                                Ok(message) => {
-                                    ui.add(
-                                        Label::new(format!(
-                                            "Organization complete.\n{}\n",
-                                            message
-                                        ))
-                                        .text_color(Theme::Green),
-                                    );
-                                }
-                                Err(error) => {
-                                    ui.add(
-                                        Label::new(format!("Error: {}", error))
-                                            .wrap(true)
-                                            .text_color(Theme::Red),
-                                    );
-                                }
-                            }
+                        if let Some(message) = &self.organize_result {
+                            ui.add(
+                                Label::new(format!("Organization complete.\n{}", message))
+                                    .text_color(Theme::Green),
+                            );
                         }
                         ui.add(
                             Label::new(

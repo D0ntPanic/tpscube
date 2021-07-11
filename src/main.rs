@@ -5,6 +5,7 @@ mod cube;
 mod edge_generated;
 mod font;
 mod framerate;
+mod future;
 mod gl;
 mod graph;
 mod history;
@@ -298,7 +299,8 @@ pub fn run(
     });
 }
 
-pub fn main() {
+#[tokio::main]
+async fn main() {
     // Initialize SDL2 just for stopping the screensaver. There are no other crates for this and
     // its a giant pile of platform dependent code.
     let sdl_context = sdl2::init().unwrap();
@@ -309,5 +311,6 @@ pub fn main() {
         Err(error) => Box::new(app::ErrorApplication::new(error.to_string())),
     };
     let native_options = epi::NativeOptions::default();
+
     run(app, native_options, video_subsystem);
 }

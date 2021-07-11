@@ -5,7 +5,7 @@ authors = ["Rusty Wagner <rusty.wagner@gmail.com>"]
 edition = "2018"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
 egui = { version="0.13", default-features=false }
@@ -82,3 +82,4 @@ egui_glium = { version="0.13", default-features=false }
 glium = "0.30"
 tinyfiledialogs = "3.8"
 sdl2 = { version="0.34", features=["bundled", "static-link"] }
+tokio = { version="1.7", features=["full"] }

@@ -15,6 +15,7 @@ flatbuffers = "2.0"
 anyhow = "1.0"
 uuid = { version="0.8", features=["v4"] }
 dirs = "3.0"
+serde = { version="1.0", features=["derive"] }
 serde_json = "1.0"
 base64 = "0.13"
 csv = "1.1"
@@ -31,6 +32,7 @@ reqwest = { version="0.11", features=["rustls-tls", "blocking", "json"], optiona
 http = { version="0.2", optional=true }
 btleplug = { git="https://github.com/D0ntPanic/btleplug", optional=true }
 aes = { version="0.7", optional=true }
+tokio = { version="1.7", features=["full"] }
 
 [features]
 default = []

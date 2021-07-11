@@ -7,3 +7,4 @@ edition = "2018"
 tpscube_core = { path="../../lib", features=["native-storage"] }
 tempdir = "0.3"
 chrono = "0.4"
+tokio = { version="1.7", features=["full"] }

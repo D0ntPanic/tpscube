@@ -128,7 +128,7 @@ impl SyncRequest {
     pub fn serialize(&self) -> Result<Value> {
         Ok(match &self.upload {
             Some(upload) => {
-                let upload = base64::encode(StoredAction::serialize_list(upload)?);
+                let upload = base64::encode(StoredAction::serialize_list(upload));
                 json!({
                     "api_version": SYNC_API_VERSION,
                     "sync_key": self.sync_key,
@@ -187,7 +187,7 @@ impl SyncResponse {
                 "uploaded": self.uploaded
             }))
         } else {
-            let new_data = base64::encode(StoredAction::serialize_list(&self.new_actions)?);
+            let new_data = base64::encode(StoredAction::serialize_list(&self.new_actions));
             Ok(json!({
                 "sync_id": self.new_sync_id,
                 "data": new_data,
