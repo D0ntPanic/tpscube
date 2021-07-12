@@ -21,6 +21,8 @@ use std::sync::{Arc, Mutex};
 use tpscube_core::{History, HistoryLoadProgress, SyncStatus};
 
 #[cfg(target_arch = "wasm32")]
+use crate::is_safari;
+#[cfg(target_arch = "wasm32")]
 use instant::Instant;
 #[cfg(target_arch = "wasm32")]
 use std::time::Duration;
@@ -481,15 +483,13 @@ impl App for Application {
                                 {
                                     let now = Instant::now();
                                     if now - self.start_time > Duration::from_secs(2) {
-                                        ui.add(
-                                            Label::new(
-                                                "⚠ If you are using Safari, you may need to \
-                                                refresh the page to work around a bug in the \
-                                                browser.",
-                                            )
-                                            .wrap(true)
-                                            .text_color(Theme::Yellow),
-                                        );
+                                        if is_safari() == Some(true) {
+                                            // Some versions of Safari have a bug that causes
+                                            // IndexedDB to hang on the initial visit. If we
+                                            // are on the initialization phase for 2 seconds,
+                                            // just reload the page to fix it.
+                                            web_sys::window().unwrap().location().reload();
+                                        }
                                     }
                                 }
 

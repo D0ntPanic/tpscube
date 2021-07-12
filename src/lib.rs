@@ -988,6 +988,12 @@ pub fn is_mobile() -> Option<bool> {
     Some(false)
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn is_safari() -> Option<bool> {
+    let user_agent = web_sys::window()?.navigator().user_agent().ok()?;
+    Some(user_agent.contains("Safari") && !user_agent.contains("Chrome"))
+}
+
 // Move text agent to text cursor's position, on desktop/laptop,
 // candidate window moves following text element (agent),
 // so it appears that the IME candidate window moves with text cursor.
