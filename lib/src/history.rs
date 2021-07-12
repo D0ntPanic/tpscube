@@ -37,6 +37,14 @@ pub struct History {
     settings: Settings,
 }
 
+#[derive(Clone, Copy)]
+pub enum HistoryLoadProgress {
+    InitializeDatabase,
+    ReadSyncedActions,
+    ReadLocalActions,
+    ResolveDeltas(usize, usize),
+}
+
 #[derive(Clone)]
 struct SolveDatabase {
     solve_map: SolveMap,
@@ -81,29 +89,79 @@ struct Settings {
     settings: HashMap<String, Vec<u8>>,
 }
 
+impl Default for HistoryLoadProgress {
+    fn default() -> Self {
+        Self::InitializeDatabase
+    }
+}
+
+impl HistoryLoadProgress {
+    pub fn approximate_percent_done(&self) -> f32 {
+        match self {
+            Self::InitializeDatabase => 0.0,
+            Self::ReadSyncedActions => 5.0,
+            Self::ReadLocalActions => 20.0,
+            Self::ResolveDeltas(done, total) => {
+                if *total == 0 {
+                    100.0
+                } else {
+                    let frac = *done as f32 / *total as f32;
+                    25.0 + frac * 75.0
+                }
+            }
+        }
+    }
+}
+
 impl History {
     #[cfg(feature = "native-storage")]
     pub async fn open() -> Result<Self> {
+        let progress = Arc::new(Mutex::new(HistoryLoadProgress::default()));
+        Self::open_with_progress(progress).await
+    }
+
+    #[cfg(feature = "native-storage")]
+    pub async fn open_with_progress(progress: Arc<Mutex<HistoryLoadProgress>>) -> Result<Self> {
         let mut path =
             data_local_dir().ok_or_else(|| anyhow!("Local data directory not defined"))?;
         path.push("tpscube");
         path.push("solves");
-        Self::open_at(path).await
+        Self::open_at_with_progress(path, progress).await
     }
 
     #[cfg(feature = "native-storage")]
     pub async fn open_at<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let progress = Arc::new(Mutex::new(HistoryLoadProgress::default()));
+        Self::open_at_with_progress(path, progress).await
+    }
+
+    #[cfg(feature = "native-storage")]
+    pub async fn open_at_with_progress<P: AsRef<Path>>(
+        path: P,
+        progress: Arc<Mutex<HistoryLoadProgress>>,
+    ) -> Result<Self> {
         // Open up the local database and read actions from it
-        Self::open_with_storage(Storage::open(path.as_ref())?).await
+        Self::open_with_storage(Storage::open(path.as_ref())?, progress).await
     }
 
     #[cfg(feature = "web-storage")]
     pub async fn open() -> Result<Self> {
-        Self::open_with_storage(Storage).await
+        let progress = Arc::new(Mutex::new(HistoryLoadProgress::default()));
+        Self::open_with_progress(progress).await
     }
 
-    async fn open_with_storage(mut storage: Storage) -> Result<Self> {
+    #[cfg(feature = "web-storage")]
+    pub async fn open_with_progress(progress: Arc<Mutex<HistoryLoadProgress>>) -> Result<Self> {
+        Self::open_with_storage(Storage::new().await?, progress).await
+    }
+
+    async fn open_with_storage(
+        mut storage: Storage,
+        progress: Arc<Mutex<HistoryLoadProgress>>,
+    ) -> Result<Self> {
+        *progress.lock().unwrap() = HistoryLoadProgress::ReadSyncedActions;
         let mut synced_actions = ActionList::load(&storage, "synced").await?;
+        *progress.lock().unwrap() = HistoryLoadProgress::ReadLocalActions;
         let mut local_actions = ActionList::load(&storage, "local").await?;
 
         // Fetch sync information from local database
@@ -169,16 +227,31 @@ impl History {
         };
 
         // Resolve actions to create solve and session lists
+        let total = result.synced_actions.len() + result.local_actions.len();
+        *progress.lock().unwrap() = HistoryLoadProgress::ResolveDeltas(0, total);
+        let mut done = 0;
+
         for action in &result.synced_actions {
             result
                 .synced_solves
                 .resolve_action(action, &mut result.next_update_id);
+
+            done += 1;
+            if done % 4096 == 0 {
+                *progress.lock().unwrap() = HistoryLoadProgress::ResolveDeltas(done, total);
+            }
         }
+
         result.solves = result.synced_solves.clone();
         for action in &result.local_actions {
             result
                 .solves
                 .resolve_action(action, &mut result.next_update_id);
+
+            done += 1;
+            if done % 4096 == 0 {
+                *progress.lock().unwrap() = HistoryLoadProgress::ResolveDeltas(done, total);
+            }
         }
 
         Ok(result)
@@ -447,7 +520,7 @@ impl History {
             // If there are still local solves after receiving a new sync ID, resync to
             // apply the local solves to the new sync point
             if (response.new_actions.len() != 0 || response.uploaded != 0)
-                && self.local_actions.has_actions()
+                && (self.local_actions.has_actions() || response.more_actions)
             {
                 self.current_sync = Some(SyncOperation::new(self.sync_request()));
             }

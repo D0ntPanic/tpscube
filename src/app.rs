@@ -18,7 +18,12 @@ use epi::RepaintSignal;
 use image::GenericImageView;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
-use tpscube_core::{History, SyncStatus};
+use tpscube_core::{History, HistoryLoadProgress, SyncStatus};
+
+#[cfg(target_arch = "wasm32")]
+use instant::Instant;
+#[cfg(target_arch = "wasm32")]
+use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::bluetooth::BluetoothState;
@@ -38,6 +43,7 @@ pub struct Application {
     graph_widget: GraphWidget,
     settings_widget: Settings,
     history: Option<History>,
+    history_load_progress: Arc<Mutex<HistoryLoadProgress>>,
     loading_history: Arc<Mutex<Option<Result<Option<History>>>>>,
     repaint_signal: Arc<Mutex<Option<Arc<dyn RepaintSignal>>>>,
     framerate: Option<Framerate>,
@@ -51,6 +57,9 @@ pub struct Application {
 
     bluetooth_icon: Icon,
     bluetooth_dialog_open: bool,
+
+    #[cfg(target_arch = "wasm32")]
+    start_time: Instant,
 }
 
 pub struct ErrorApplication {
@@ -107,13 +116,18 @@ pub trait App {
 
 impl Application {
     pub fn new() -> Result<Self> {
+        let history_load_progress = Arc::new(Mutex::new(HistoryLoadProgress::default()));
+        let history_load_progress_copy = history_load_progress.clone();
         let loading_history = Arc::new(Mutex::new(None));
         let loading_history_copy = loading_history.clone();
         let repaint_signal = Arc::new(Mutex::new(None));
         let repaint_signal_copy = repaint_signal.clone();
         spawn_future(async move {
-            *loading_history_copy.lock().unwrap() =
-                Some(History::open().await.map(|history| Some(history)));
+            *loading_history_copy.lock().unwrap() = Some(
+                History::open_with_progress(history_load_progress_copy)
+                    .await
+                    .map(|history| Some(history)),
+            );
 
             // Wake up UI thread now that history is loaded. If we beat the UI initialization, the
             // first frame will immediately recognize that it was complete.
@@ -143,6 +157,7 @@ impl Application {
             graph_widget: GraphWidget::new(),
             settings_widget: Settings::new(),
             history: None,
+            history_load_progress,
             loading_history,
             repaint_signal,
             framerate: None,
@@ -156,6 +171,9 @@ impl Application {
 
             bluetooth_icon,
             bluetooth_dialog_open: false,
+
+            #[cfg(target_arch = "wasm32")]
+            start_time: Instant::now(),
         })
     }
 
@@ -455,10 +473,72 @@ impl App for Application {
                     if let Some(error) = error {
                         ui.add(Label::new(format!("Error: {}", error)).text_color(Theme::Red));
                     } else {
-                        ui.add(Label::new("Loading solve history...").text_color(Theme::Disabled));
+                        let progress = *self.history_load_progress.lock().unwrap();
+
+                        match progress {
+                            HistoryLoadProgress::InitializeDatabase => {
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    let now = Instant::now();
+                                    if now - self.start_time > Duration::from_secs(2) {
+                                        ui.add(
+                                            Label::new(
+                                                "⚠ If you are using Safari, you may need to \
+                                                refresh the page to work around a bug in the \
+                                                browser.",
+                                            )
+                                            .wrap(true)
+                                            .text_color(Theme::Yellow),
+                                        );
+                                    }
+                                }
+
+                                ui.add(
+                                    Label::new("Initializing database...")
+                                        .text_color(Theme::Disabled),
+                                );
+                            }
+                            HistoryLoadProgress::ReadSyncedActions => {
+                                ui.add(
+                                    Label::new(format!(
+                                        "Reading synced solves... ({:.0}%)",
+                                        progress.approximate_percent_done()
+                                    ))
+                                    .text_color(Theme::Disabled),
+                                );
+                            }
+                            HistoryLoadProgress::ReadLocalActions => {
+                                ui.add(
+                                    Label::new(format!(
+                                        "Reading local solves... ({:.0}%)",
+                                        progress.approximate_percent_done()
+                                    ))
+                                    .text_color(Theme::Disabled),
+                                );
+                            }
+                            HistoryLoadProgress::ResolveDeltas(_, _) => {
+                                ui.add(
+                                    Label::new(format!(
+                                        "Resolving deltas... ({:.0}%)",
+                                        progress.approximate_percent_done()
+                                    ))
+                                    .text_color(Theme::Disabled),
+                                );
+                            }
+                        }
                     }
                 })
             });
+
+            // Run loading indicator at 10 FPS to update the progress percentage
+            let framerate = if let Some(framerate) = &mut self.framerate {
+                framerate
+            } else {
+                self.framerate = Some(Framerate::new(frame.repaint_signal().clone()));
+                self.framerate.as_mut().unwrap()
+            };
+            framerate.request(Some(10));
+            framerate.commit();
         }
     }
 

@@ -8,8 +8,9 @@ use gl_matrix::{
     common::{to_radian, Mat4},
     mat4, vec3,
 };
+use instant::Instant;
 use num_traits::FloatConst;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tpscube_core::{Cube, Cube3x3x3, Face, Move};
 
 const FACE_COLORS: [[f32; 3]; 6] = [
@@ -62,11 +63,7 @@ pub struct VertexRange {
 }
 
 struct Animation {
-    #[cfg(target_arch = "wasm32")]
-    start: f64,
-    #[cfg(not(target_arch = "wasm32"))]
     start: Instant,
-
     length: Duration,
     face: Face,
     angle: f32,
@@ -559,10 +556,7 @@ impl CubeRenderer {
             let face = mv.face();
             let angle = -90.0 * mv.rotation() as f32;
 
-            #[cfg(not(target_arch = "wasm32"))]
             let start = Instant::now();
-            #[cfg(target_arch = "wasm32")]
-            let start = egui_web::now_sec();
 
             self.animation = Some(Animation {
                 start,
@@ -595,16 +589,8 @@ impl CubeRenderer {
         let mut anim_done = None;
         if let Some(animation) = &mut self.animation {
             // Animation present, calculate fraction complete
-            #[cfg(not(target_arch = "wasm32"))]
             let now = Instant::now();
-            #[cfg(not(target_arch = "wasm32"))]
             let elapsed = (now - animation.start).as_secs_f32();
-
-            #[cfg(target_arch = "wasm32")]
-            let now = egui_web::now_sec();
-            #[cfg(target_arch = "wasm32")]
-            let elapsed = (now - animation.start) as f32;
-
             let frac = elapsed / animation.length.as_secs_f32();
             let frac = if frac >= 1.0 {
                 anim_done = Some(animation.move_);

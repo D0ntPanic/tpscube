@@ -10,6 +10,14 @@ use std::path::Path;
 
 #[cfg(feature = "web-storage")]
 use anyhow::anyhow;
+#[cfg(feature = "web-storage")]
+use js_sys::{Function, Promise, Uint8Array};
+#[cfg(feature = "web-storage")]
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+#[cfg(feature = "web-storage")]
+use wasm_bindgen_futures::JsFuture;
+#[cfg(feature = "web-storage")]
+use web_sys::{IdbDatabase, IdbTransactionMode};
 
 #[cfg(feature = "native-storage")]
 pub(crate) struct Storage {
@@ -17,7 +25,9 @@ pub(crate) struct Storage {
 }
 
 #[cfg(feature = "web-storage")]
-pub(crate) struct Storage;
+pub(crate) struct Storage {
+    db: IdbDatabase,
+}
 
 pub(crate) struct DeferredStorage {
     error: Arc<Mutex<Option<String>>>,
@@ -64,39 +74,214 @@ impl Storage {
 }
 
 #[cfg(feature = "web-storage")]
-fn local_storage() -> Result<web_sys::Storage> {
-    web_sys::window()
-        .ok_or_else(|| anyhow!("No window"))?
-        .local_storage()
-        .map_err(|_| anyhow!("Failed to access local storage"))?
-        .ok_or_else(|| anyhow!("No local storage"))
-}
-
-#[cfg(feature = "web-storage")]
 impl Storage {
+    pub async fn new() -> Result<Self> {
+        // Create database open request
+        let open_request = web_sys::window()
+            .ok_or_else(|| anyhow!("No window"))?
+            .indexed_db()
+            .map_err(|_| anyhow!("Failed to access IndexedDB"))?
+            .ok_or_else(|| anyhow!("No IndexedDB found"))?
+            .open("tpscube")
+            .map_err(|_| anyhow!("Failed to create IndexedDB open request"))?;
+
+        // Create a `Promise` object for the request so that we can obtain a future
+        let open_request_copy = open_request.clone();
+        let mut promise = move |resolve: Function, reject: Function| {
+            let resolve_request = open_request_copy.clone();
+            let resolve = move || {
+                resolve
+                    .call1(&resolve_request, &resolve_request.result().unwrap())
+                    .unwrap();
+            };
+            let resolve = Closure::wrap(Box::new(resolve) as Box<dyn FnMut()>);
+
+            let blocked_request = open_request_copy.clone();
+            let reject_copy = reject.clone();
+            let blocked = move || {
+                reject_copy
+                    .call1(&blocked_request, &blocked_request.error().unwrap().unwrap())
+                    .unwrap();
+            };
+            let blocked = Closure::wrap(Box::new(blocked) as Box<dyn FnMut()>);
+
+            let reject_request = open_request_copy.clone();
+            let reject = move || {
+                reject
+                    .call1(&reject_request, &reject_request.error().unwrap().unwrap())
+                    .unwrap();
+            };
+            let reject = Closure::wrap(Box::new(reject) as Box<dyn FnMut()>);
+
+            open_request_copy.set_onsuccess(Some(&resolve.into_js_value().dyn_into().unwrap()));
+            open_request_copy.set_onerror(Some(&reject.into_js_value().dyn_into().unwrap()));
+            open_request_copy.set_onblocked(Some(&blocked.into_js_value().dyn_into().unwrap()));
+        };
+        let promise = Promise::new(&mut promise);
+
+        // Create closure for "upgrade needed" event, which will only be fired when
+        // initially creating the database.
+        let open_request_copy = open_request.clone();
+        let on_upgrade_needed = move || {
+            // Just create a default object store. We are using the database as a simple
+            // key-value store.
+            let db: web_sys::IdbDatabase = open_request_copy.result().unwrap().dyn_into().unwrap();
+            db.create_object_store("storage").unwrap();
+        };
+        let on_upgrade_needed = Closure::wrap(Box::new(on_upgrade_needed) as Box<dyn FnMut()>);
+        open_request
+            .set_onupgradeneeded(Some(&on_upgrade_needed.into_js_value().dyn_into().unwrap()));
+
+        // Wait for the database to finish opening
+        let db = JsFuture::from(promise)
+            .await
+            .map_err(|_| anyhow!("Failed to open IndexedDB"))?
+            .dyn_into()
+            .unwrap();
+
+        Ok(Self { db })
+    }
+
     pub async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        if let Some(string) = local_storage()?
-            .get_item(key)
-            .map_err(|_| anyhow!("Failed to fetch item from local storage"))?
-        {
-            Ok(base64::decode(string)
-                .map(|bytes| Some(bytes))
-                .unwrap_or(None))
-        } else {
-            Ok(None)
-        }
+        let transaction = self
+            .db
+            .transaction_with_str_and_mode("storage", IdbTransactionMode::Readonly)
+            .map_err(|_| anyhow!("Failed to start IndexedDB transaction"))?;
+        let store = transaction
+            .object_store("storage")
+            .map_err(|_| anyhow!("Transaction does not have object store"))?;
+        let request = store
+            .get(&JsValue::from_str(key))
+            .map_err(|_| anyhow!("Failed to request database read"))?;
+
+        // Create a `Promise` object for the request so that we can obtain a future
+        let request_copy = request.clone();
+        let mut promise = move |resolve: Function, reject: Function| {
+            let resolve_request = request_copy.clone();
+            let resolve = move || {
+                resolve
+                    .call1(&resolve_request, &resolve_request.result().unwrap())
+                    .unwrap();
+            };
+            let resolve = Closure::wrap(Box::new(resolve) as Box<dyn FnMut()>);
+
+            let reject_request = request_copy.clone();
+            let reject = move || {
+                reject
+                    .call1(&reject_request, &reject_request.error().unwrap().unwrap())
+                    .unwrap();
+            };
+            let reject = Closure::wrap(Box::new(reject) as Box<dyn FnMut()>);
+
+            request_copy.set_onsuccess(Some(&resolve.into_js_value().dyn_into().unwrap()));
+            request_copy.set_onerror(Some(&reject.into_js_value().dyn_into().unwrap()));
+        };
+        let promise = Promise::new(&mut promise);
+
+        // Wait for the read to finish and return None if the key can't be read
+        // (doesn't exist, invalid format, etc.)
+        let value: Uint8Array = match JsFuture::from(promise).await {
+            Ok(value) => {
+                let value = value.dyn_into();
+                match value {
+                    Ok(value) => value,
+                    Err(_) => return Ok(None),
+                }
+            }
+            Err(_) => return Err(anyhow!("Read from database failed")),
+        };
+
+        // Convert `Uint8Array` to Rust `Vec` and return contents to caller
+        let mut result = Vec::with_capacity(value.length() as usize);
+        result.resize(value.length() as usize, 0);
+        value.copy_to(&mut result[..]);
+        Ok(Some(result))
     }
 
     pub async fn put(&mut self, key: &str, value: &[u8]) -> Result<()> {
-        local_storage()?
-            .set_item(key, &base64::encode(value))
-            .map_err(|_| anyhow!("Failed to store item in local storage"))
+        let transaction = self
+            .db
+            .transaction_with_str_and_mode("storage", IdbTransactionMode::Readwrite)
+            .map_err(|_| anyhow!("Failed to start IndexedDB transaction"))?;
+        let store = transaction
+            .object_store("storage")
+            .map_err(|_| anyhow!("Transaction does not have object store"))?;
+        let value_buffer = Uint8Array::new_with_length(value.len() as u32);
+        value_buffer.copy_from(value);
+        let request = store
+            .put_with_key(&value_buffer, &JsValue::from_str(key))
+            .map_err(|_| anyhow!("Failed to request database write"))?;
+
+        // Create a `Promise` object for the request so that we can obtain a future
+        let request_copy = request.clone();
+        let mut promise = move |resolve: Function, reject: Function| {
+            let resolve_request = request_copy.clone();
+            let resolve = move || {
+                resolve.call0(&resolve_request).unwrap();
+            };
+            let resolve = Closure::wrap(Box::new(resolve) as Box<dyn FnMut()>);
+
+            let reject_request = request_copy.clone();
+            let reject = move || {
+                reject
+                    .call1(&reject_request, &reject_request.error().unwrap().unwrap())
+                    .unwrap();
+            };
+            let reject = Closure::wrap(Box::new(reject) as Box<dyn FnMut()>);
+
+            request_copy.set_onsuccess(Some(&resolve.into_js_value().dyn_into().unwrap()));
+            request_copy.set_onerror(Some(&reject.into_js_value().dyn_into().unwrap()));
+        };
+        let promise = Promise::new(&mut promise);
+
+        // Wait for the write to finish
+        JsFuture::from(promise)
+            .await
+            .map_err(|_| anyhow!("Write to database failed"))?;
+
+        Ok(())
     }
 
     pub async fn delete(&mut self, key: &str) -> Result<()> {
-        local_storage()?
-            .remove_item(key)
-            .map_err(|_| anyhow!("Failed to delete item from local storage"))
+        let transaction = self
+            .db
+            .transaction_with_str_and_mode("storage", IdbTransactionMode::Readwrite)
+            .map_err(|_| anyhow!("Failed to start IndexedDB transaction"))?;
+        let store = transaction
+            .object_store("storage")
+            .map_err(|_| anyhow!("Transaction does not have object store"))?;
+        let request = store
+            .delete(&JsValue::from_str(key))
+            .map_err(|_| anyhow!("Failed to request database item delete"))?;
+
+        // Create a `Promise` object for the request so that we can obtain a future
+        let request_copy = request.clone();
+        let mut promise = move |resolve: Function, reject: Function| {
+            let resolve_request = request_copy.clone();
+            let resolve = move || {
+                resolve.call0(&resolve_request).unwrap();
+            };
+            let resolve = Closure::wrap(Box::new(resolve) as Box<dyn FnMut()>);
+
+            let reject_request = request_copy.clone();
+            let reject = move || {
+                reject
+                    .call1(&reject_request, &reject_request.error().unwrap().unwrap())
+                    .unwrap();
+            };
+            let reject = Closure::wrap(Box::new(reject) as Box<dyn FnMut()>);
+
+            request_copy.set_onsuccess(Some(&resolve.into_js_value().dyn_into().unwrap()));
+            request_copy.set_onerror(Some(&reject.into_js_value().dyn_into().unwrap()));
+        };
+        let promise = Promise::new(&mut promise);
+
+        // Wait for the delete to finish
+        JsFuture::from(promise)
+            .await
+            .map_err(|_| anyhow!("Delete item from database failed"))?;
+
+        Ok(())
     }
 
     pub async fn flush(&self) {}

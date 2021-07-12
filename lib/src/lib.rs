@@ -44,7 +44,7 @@ pub use cube3x3x3::{
 pub use request::{SyncRequest, SyncResponse, SYNC_API_VERSION};
 
 #[cfg(feature = "storage")]
-pub use history::{History, Session};
+pub use history::{History, HistoryLoadProgress, Session};
 #[cfg(feature = "storage")]
 pub use sync::SyncStatus;
 
