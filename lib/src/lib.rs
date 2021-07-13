@@ -34,8 +34,8 @@ pub use analysis::{
     PartialAnalysisMethod, SolveAnalysis,
 };
 pub use common::{
-    parse_move_string, parse_timed_move_string, Average, BestSolve, Color, Cube, Face, Move,
-    MoveSequence, Penalty, RotationDirection, Solve, SolveList, SolveType, TimedMove,
+    parse_move_string, parse_timed_move_string, Average, BestSolve, Color, Cube, Face, ListAverage,
+    Move, MoveSequence, Penalty, RotationDirection, Solve, SolveList, SolveType, TimedMove,
 };
 pub use cube3x3x3::{
     Corner3x3x3, CornerPiece3x3x3, Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3,

@@ -32,6 +32,25 @@ pub fn solve_time_short_string(time: u32) -> String {
     }
 }
 
+pub fn short_day_string(time: &DateTime<Local>) -> String {
+    let now = Local::now();
+    let current_day = now.date();
+    let target_day = time.date();
+    let days = (current_day - target_day).num_days();
+    match days {
+        0..=364 => format!(
+            "{} {}",
+            target_day.format("%b"),
+            target_day.format("%e").to_string().trim(),
+        ),
+        _ => format!(
+            "{} {}",
+            target_day.format("%b"),
+            target_day.format("%e, %Y").to_string().trim(),
+        ),
+    }
+}
+
 pub fn date_string(time: &DateTime<Local>) -> String {
     let now = Local::now();
     let current_day = now.date();

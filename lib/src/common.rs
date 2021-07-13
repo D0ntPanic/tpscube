@@ -176,14 +176,17 @@ pub struct Average {
     pub time: u32,
 }
 
-pub trait SolveList {
+pub trait ListAverage {
     fn average(&self) -> Option<u32>;
+}
+
+pub trait SolveList: ListAverage {
     fn last_average(&self, count: usize) -> Option<u32>;
     fn best(&self) -> Option<BestSolve>;
     fn best_average(&self, count: usize) -> Option<Average>;
 }
 
-impl SolveList for &[Solve] {
+impl ListAverage for &[Option<u32>] {
     fn average(&self) -> Option<u32> {
         if self.len() <= 2 {
             return None;
@@ -191,10 +194,8 @@ impl SolveList for &[Solve] {
 
         // Sort solves by time, ensuring that DNF is considered the
         // maximum time.
-        let mut sorted = self.to_vec();
+        let mut sorted: Vec<Option<u32>> = self.to_vec();
         sorted.sort_unstable_by(|a, b| {
-            let a = a.final_time();
-            let b = b.final_time();
             if a.is_none() && b.is_none() {
                 Ordering::Equal
             } else if a.is_none() {
@@ -214,11 +215,10 @@ impl SolveList for &[Solve] {
 
         // Sum the solves that are not removed. If there is a DNF in this set, the
         // entire average is invalid.
-        let sum = solves.iter().fold(Some(0), |sum, solve| {
+        let sum = solves.iter().fold(Some(0), |sum, time| {
             if let Some(sum) = sum {
-                let time = solve.final_time();
                 if let Some(time) = time {
-                    Some(sum + time as u64)
+                    Some(sum + *time as u64)
                 } else {
                     None
                 }
@@ -234,7 +234,16 @@ impl SolveList for &[Solve] {
             None
         }
     }
+}
 
+impl ListAverage for &[Solve] {
+    fn average(&self) -> Option<u32> {
+        let times: Vec<Option<u32>> = self.iter().map(|solve| solve.final_time()).collect();
+        times.as_slice().average()
+    }
+}
+
+impl SolveList for &[Solve] {
     fn last_average(&self, count: usize) -> Option<u32> {
         if self.len() >= count {
             (&self[self.len() - count..]).average()

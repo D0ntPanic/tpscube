@@ -488,7 +488,7 @@ impl App for Application {
                                             // IndexedDB to hang on the initial visit. If we
                                             // are on the initialization phase for 2 seconds,
                                             // just reload the page to fix it.
-                                            web_sys::window().unwrap().location().reload();
+                                            let _ = web_sys::window().unwrap().location().reload();
                                         }
                                     }
                                 }

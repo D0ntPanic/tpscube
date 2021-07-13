@@ -6,7 +6,7 @@ use egui::{
     popup_below_widget, Align2, CtxRef, Label, Layout, ScrollArea, SelectableLabel, Sense,
     SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
 };
-use tpscube_core::{Average, BestSolve, History, Penalty, Solve, SolveList};
+use tpscube_core::{Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList};
 
 pub struct TimerSession {
     update_id: Option<u64>,
