@@ -974,25 +974,34 @@ impl HistoryWidget {
             ui.visuals_mut().widgets.active.bg_fill = Theme::Disabled.into();
             ScrollArea::auto_sized()
                 .id_source("history")
-                .show(ui, |ui| {
+                .show_viewport(ui, |ui, viewport| {
                     let (rect, _) = ui.allocate_at_least(
                         Vec2::new(ui.max_rect().width(), self.total_height),
                         Sense::hover(),
                     );
                     if let Some(region) = &self.all_time_best_region {
                         let height = region.height(ui, &solve_layout_metrics);
-                        region.paint(
-                            ui,
-                            Rect::from_min_size(
-                                Pos2::new(rect.left(), rect.top()),
-                                Vec2::new(rect.width(), height),
-                            ),
-                            &solve_layout_metrics,
-                            history,
-                            &None,
-                        );
+                        if height >= viewport.top() {
+                            region.paint(
+                                ui,
+                                Rect::from_min_size(
+                                    Pos2::new(rect.left(), rect.top()),
+                                    Vec2::new(rect.width(), height),
+                                ),
+                                &solve_layout_metrics,
+                                history,
+                                &None,
+                            );
+                        }
                     }
                     for region in &self.regions {
+                        if region.y > viewport.bottom() {
+                            break;
+                        }
+                        if region.y + region.height < viewport.top() {
+                            continue;
+                        }
+
                         region.region.paint(
                             ui,
                             Rect::from_min_size(
