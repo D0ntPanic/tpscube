@@ -1,6 +1,6 @@
 use crate::graph::plot::{Plot, SinglePlot, YAxis};
 use crate::theme::Theme;
-use tpscube_core::{Analysis, Cube, Cube3x3x3, CubeWithSolution, History, ListAverage};
+use tpscube_core::{Analysis, Cube, Cube3x3x3, CubeWithSolution, History, ListAverage, Solve};
 
 pub struct GraphData {
     statistic: Statistic,
@@ -8,19 +8,23 @@ pub struct GraphData {
     average_size: usize,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Statistic {
-    Time,
+    TotalTime,
+    RecognitionTime,
+    ExecutionTime,
     MoveCount,
+    TurnsPerSecond,
+    ExecutionTurnsPerSecond,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
     EntireSolve,
     CFOP(CFOPPhase),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CFOPPhase {
     Cross,
     F2L,
@@ -31,8 +35,11 @@ pub enum CFOPPhase {
 impl Statistic {
     fn y_axis(&self) -> YAxis {
         match self {
-            Statistic::Time => YAxis::Time,
+            Statistic::TotalTime | Statistic::RecognitionTime | Statistic::ExecutionTime => {
+                YAxis::Time
+            }
             Statistic::MoveCount => YAxis::MoveCount,
+            Statistic::TurnsPerSecond | Statistic::ExecutionTurnsPerSecond => YAxis::TurnsPerSecond,
         }
     }
 }
@@ -40,7 +47,7 @@ impl Statistic {
 impl GraphData {
     pub fn new() -> Self {
         Self {
-            statistic: Statistic::Time,
+            statistic: Statistic::TotalTime,
             phase: Phase::EntireSolve,
             average_size: 5,
         }
@@ -61,12 +68,227 @@ impl GraphData {
         self
     }
 
+    fn analyze(solve: &Solve) -> Option<Analysis> {
+        if let Some(solution) = &solve.moves {
+            let mut initial_state = Cube3x3x3::new();
+            initial_state.do_moves(&solve.scramble);
+            Some(Analysis::analyze(&CubeWithSolution {
+                initial_state,
+                solution: solution.clone(),
+            }))
+        } else {
+            None
+        }
+    }
+
+    fn data_point(solve: &Solve, statistic: Statistic, phase: Phase) -> Option<u32> {
+        match statistic {
+            Statistic::TurnsPerSecond => {
+                // Calculate TPS generically by fetching time and move stats
+                let time = Self::data_point(solve, Statistic::TotalTime, phase);
+                let moves = Self::data_point(solve, Statistic::MoveCount, phase);
+                if let Some(time) = time {
+                    if let Some(moves) = moves {
+                        if moves > 0 && time > 0 {
+                            Some((moves * 1000) / time)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            Statistic::ExecutionTurnsPerSecond => {
+                // Calculate TPS generically by fetching time and move stats
+                let time = Self::data_point(solve, Statistic::ExecutionTime, phase);
+                let moves = Self::data_point(solve, Statistic::MoveCount, phase);
+                if let Some(time) = time {
+                    if let Some(moves) = moves {
+                        if moves > 0 && time > 0 {
+                            Some((moves * 1000) / time)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            _ => match phase {
+                Phase::EntireSolve => match statistic {
+                    Statistic::TotalTime => solve.final_time(),
+                    Statistic::RecognitionTime => {
+                        if let Some(analysis) = Self::analyze(solve) {
+                            if let Analysis::CFOP(cfop) = analysis {
+                                // Total up recognition times from all phases
+                                Some(
+                                    cfop.f2l_pairs
+                                        .iter()
+                                        .fold(0, |sum, pair| sum + pair.recognition_time)
+                                        + cfop
+                                            .oll
+                                            .iter()
+                                            .fold(0, |sum, alg| sum + alg.recognition_time)
+                                        + cfop
+                                            .pll
+                                            .iter()
+                                            .fold(0, |sum, alg| sum + alg.recognition_time),
+                                )
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    Statistic::ExecutionTime => {
+                        if let Some(analysis) = Self::analyze(solve) {
+                            if let Analysis::CFOP(cfop) = analysis {
+                                // Total up execution times from all phases
+                                Some(
+                                    cfop.cross.time
+                                        + cfop
+                                            .f2l_pairs
+                                            .iter()
+                                            .fold(0, |sum, pair| sum + pair.execution_time)
+                                        + cfop
+                                            .oll
+                                            .iter()
+                                            .fold(0, |sum, alg| sum + alg.execution_time)
+                                        + cfop
+                                            .pll
+                                            .iter()
+                                            .fold(0, |sum, alg| sum + alg.execution_time)
+                                        + cfop.alignment.time,
+                                )
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    Statistic::MoveCount => {
+                        if let Some(solution) = &solve.moves {
+                            Some(solution.len() as u32 * 1000)
+                        } else {
+                            None
+                        }
+                    }
+                    Statistic::TurnsPerSecond | Statistic::ExecutionTurnsPerSecond => {
+                        unreachable!()
+                    }
+                },
+                Phase::CFOP(phase) => {
+                    if let Some(analysis) = Self::analyze(solve) {
+                        if let Analysis::CFOP(cfop) = analysis {
+                            match phase {
+                                CFOPPhase::Cross => match statistic {
+                                    Statistic::TotalTime => Some(cfop.cross.time),
+                                    Statistic::RecognitionTime => Some(0),
+                                    Statistic::ExecutionTime => Some(cfop.cross.time),
+                                    Statistic::MoveCount => {
+                                        Some(cfop.cross.moves.len() as u32 * 1000)
+                                    }
+                                    Statistic::TurnsPerSecond
+                                    | Statistic::ExecutionTurnsPerSecond => {
+                                        unreachable!()
+                                    }
+                                },
+                                CFOPPhase::F2L => Some(cfop.f2l_pairs.iter().fold(
+                                    0,
+                                    |sum, pair| match statistic {
+                                        Statistic::TotalTime => {
+                                            sum + pair.recognition_time + pair.execution_time
+                                        }
+                                        Statistic::RecognitionTime => sum + pair.recognition_time,
+                                        Statistic::ExecutionTime => sum + pair.execution_time,
+                                        Statistic::MoveCount => {
+                                            sum + pair.moves.len() as u32 * 1000
+                                        }
+                                        Statistic::TurnsPerSecond
+                                        | Statistic::ExecutionTurnsPerSecond => unreachable!(),
+                                    },
+                                )),
+                                CFOPPhase::OLL => {
+                                    if cfop.oll.len() == 0 {
+                                        // Don't include OLL skips in OLL timing
+                                        None
+                                    } else {
+                                        Some(cfop.oll.iter().fold(0, |sum, alg| match statistic {
+                                            Statistic::TotalTime => {
+                                                sum + alg.recognition_time + alg.execution_time
+                                            }
+                                            Statistic::RecognitionTime => {
+                                                sum + alg.recognition_time
+                                            }
+                                            Statistic::ExecutionTime => sum + alg.execution_time,
+                                            Statistic::MoveCount => {
+                                                sum + alg.moves.len() as u32 * 1000
+                                            }
+                                            Statistic::TurnsPerSecond
+                                            | Statistic::ExecutionTurnsPerSecond => unreachable!(),
+                                        }))
+                                    }
+                                }
+                                CFOPPhase::PLL => {
+                                    if cfop.pll.len() == 0 {
+                                        // Don't include PLL skips in PLL timing
+                                        None
+                                    } else {
+                                        Some(match statistic {
+                                            Statistic::TotalTime => {
+                                                cfop.pll.iter().fold(0, |sum, alg| {
+                                                    sum + alg.recognition_time + alg.execution_time
+                                                }) + cfop.alignment.time
+                                            }
+                                            Statistic::RecognitionTime => cfop
+                                                .pll
+                                                .iter()
+                                                .fold(0, |sum, alg| sum + alg.recognition_time),
+                                            Statistic::ExecutionTime => {
+                                                cfop.pll
+                                                    .iter()
+                                                    .fold(0, |sum, alg| sum + alg.execution_time)
+                                                    + cfop.alignment.time
+                                            }
+                                            Statistic::MoveCount => {
+                                                cfop.pll.iter().fold(0, |sum, alg| {
+                                                    sum + alg.moves.len() as u32 * 1000
+                                                }) + cfop.alignment.moves.len() as u32 * 1000
+                                            }
+                                            Statistic::TurnsPerSecond
+                                            | Statistic::ExecutionTurnsPerSecond => unreachable!(),
+                                        })
+                                    }
+                                }
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+            },
+        }
+    }
+
     pub fn build(self, history: &History) -> Plot {
         let title = format!(
             "{} for {}",
             match self.statistic {
-                Statistic::Time => "Time",
+                Statistic::TotalTime => "Time",
+                Statistic::RecognitionTime => "Recognition Time",
+                Statistic::ExecutionTime => "Execution Time",
                 Statistic::MoveCount => "Move Count",
+                Statistic::TurnsPerSecond => "Turns per Second",
+                Statistic::ExecutionTurnsPerSecond => "Execution TPS",
             },
             match self.phase {
                 Phase::EntireSolve => "Entire Solve",
@@ -91,83 +313,9 @@ impl GraphData {
 
         let mut window = Vec::new();
         for solve in history.iter() {
-            let data_point = match self.phase {
-                Phase::EntireSolve => match self.statistic {
-                    Statistic::Time => solve.final_time(),
-                    Statistic::MoveCount => {
-                        if let Some(solution) = &solve.moves {
-                            Some(solution.len() as u32 * 1000)
-                        } else {
-                            continue;
-                        }
-                    }
-                },
-                Phase::CFOP(phase) => {
-                    if let Some(solution) = &solve.moves {
-                        let mut initial_state = Cube3x3x3::new();
-                        initial_state.do_moves(&solve.scramble);
-                        let analysis = Analysis::analyze(&CubeWithSolution {
-                            initial_state,
-                            solution: solution.clone(),
-                        });
-                        if let Analysis::CFOP(cfop) = analysis {
-                            match phase {
-                                CFOPPhase::Cross => match self.statistic {
-                                    Statistic::Time => Some(cfop.cross.time),
-                                    Statistic::MoveCount => {
-                                        Some(cfop.cross.moves.len() as u32 * 1000)
-                                    }
-                                },
-                                CFOPPhase::F2L => {
-                                    Some(cfop.f2l_pairs.iter().fold(0, |sum, pair| {
-                                        match self.statistic {
-                                            Statistic::Time => {
-                                                sum + pair.recognition_time + pair.execution_time
-                                            }
-                                            Statistic::MoveCount => {
-                                                sum + pair.moves.len() as u32 * 1000
-                                            }
-                                        }
-                                    }))
-                                }
-                                CFOPPhase::OLL => {
-                                    if cfop.oll.len() == 0 {
-                                        // Don't include OLL skips in OLL timing
-                                        continue;
-                                    }
-                                    Some(cfop.oll.iter().fold(0, |sum, alg| match self.statistic {
-                                        Statistic::Time => {
-                                            sum + alg.recognition_time + alg.execution_time
-                                        }
-                                        Statistic::MoveCount => sum + alg.moves.len() as u32 * 1000,
-                                    }))
-                                }
-                                CFOPPhase::PLL => {
-                                    if cfop.pll.len() == 0 {
-                                        // Don't include PLL skips in PLL timing
-                                        continue;
-                                    }
-                                    Some(match self.statistic {
-                                        Statistic::Time => {
-                                            cfop.pll.iter().fold(0, |sum, alg| {
-                                                sum + alg.recognition_time + alg.execution_time
-                                            }) + cfop.alignment.time
-                                        }
-                                        Statistic::MoveCount => {
-                                            cfop.pll.iter().fold(0, |sum, alg| {
-                                                sum + alg.moves.len() as u32 * 1000
-                                            }) + cfop.alignment.moves.len() as u32 * 1000
-                                        }
-                                    })
-                                }
-                            }
-                        } else {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
-                }
+            let data_point = match Self::data_point(solve, self.statistic, self.phase) {
+                Some(value) => Some(value),
+                None => continue,
             };
 
             window.push(data_point);
@@ -181,7 +329,6 @@ impl GraphData {
             }
         }
 
-        plot.finalize();
         plot.into()
     }
 }

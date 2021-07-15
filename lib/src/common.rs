@@ -188,7 +188,7 @@ pub trait SolveList: ListAverage {
 
 impl ListAverage for &[Option<u32>] {
     fn average(&self) -> Option<u32> {
-        if self.len() <= 2 {
+        if self.len() == 0 {
             return None;
         }
 
@@ -209,8 +209,14 @@ impl ListAverage for &[Option<u32>] {
             }
         });
 
-        // Remove the best and worst time(s) as appropriate for the size of the set
-        let to_remove = (sorted.len() + 39) / 40;
+        // Remove the best and worst time(s) as appropriate for the size of the set.
+        // If there are less than 5 values, use an arithmetic mean and do not
+        // eliminate any values.
+        let to_remove = if sorted.len() >= 5 {
+            (sorted.len() + 39) / 40
+        } else {
+            0
+        };
         let solves = &sorted[to_remove..sorted.len() - to_remove];
 
         // Sum the solves that are not removed. If there is a DNF in this set, the

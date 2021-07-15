@@ -4,7 +4,7 @@ use crate::widgets::short_day_string;
 use chrono::{DateTime, Local};
 use egui::{
     epaint::{Mesh, TextureId, Vertex, WHITE_UV},
-    Color32, Pos2, Rect, Shape, Stroke, Ui, Vec2,
+    Color32, CtxRef, Pos2, Rect, Response, Shape, Stroke, Ui, Vec2,
 };
 
 const AXIS_PADDING: f32 = 16.0;
@@ -12,7 +12,10 @@ const AXIS_LABEL_PADDING_FACTOR: f32 = 2.0;
 const AXIS_LABEL_PADDING_WIDTH: f32 = 24.0;
 const AXIS_TICK_SIZE: f32 = 4.0;
 
-const MAX_POINTS: usize = 1000;
+const MAX_POINTS: usize = 512;
+const TARGET_MIN_POINTS: usize = 64;
+const EXP_ZOOM_DIVISOR: f32 = 256.0;
+const EPSILON: f32 = 0.0001;
 
 #[cfg(target_arch = "wasm32")]
 const MIN_ALPHA: u8 = 128;
@@ -33,12 +36,19 @@ pub struct SinglePlot {
     y_axis: YAxis,
     points: Vec<(DateTime<Local>, f32)>,
     color: Color32,
+    zoom: PlotZoom,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum YAxis {
     Time,
     MoveCount,
+    TurnsPerSecond,
+}
+
+struct PlotZoom {
+    zoom: f32,
+    start: f32,
 }
 
 impl Plot {
@@ -48,9 +58,15 @@ impl Plot {
         }
     }
 
-    pub fn draw(&self, ui: &mut Ui, rect: Rect) {
+    pub fn valid(&self) -> bool {
         match self {
-            Plot::Single(plot) => plot.draw(ui, rect),
+            Plot::Single(plot) => plot.valid(),
+        }
+    }
+
+    pub fn update(&mut self, ctxt: &CtxRef, ui: &mut Ui, rect: Rect, interact: Response) {
+        match self {
+            Plot::Single(plot) => plot.update(ctxt, ui, rect, interact),
         }
     }
 }
@@ -62,6 +78,10 @@ impl SinglePlot {
             y_axis,
             points: Vec::new(),
             color,
+            zoom: PlotZoom {
+                zoom: 1.0,
+                start: 0.0,
+            },
         }
     }
 
@@ -74,20 +94,70 @@ impl SinglePlot {
         &self.title
     }
 
-    pub fn finalize(&mut self) {
-        // Ensure the number of points is reasonable
-        while self.points.len() > MAX_POINTS {
-            let mut folded = Vec::new();
-            for pair in self.points.as_slice().windows(2) {
-                folded.push((pair[1].0, (pair[0].1 + pair[1].1) / 2.0));
-            }
-            self.points = folded;
-        }
+    pub fn valid(&self) -> bool {
+        self.points.len() >= 2
     }
 
-    pub fn draw(&self, ui: &mut Ui, rect: Rect) {
+    fn update_zoom(&mut self, ctxt: &CtxRef, ui: &Ui, x_delta: f32, y_delta: f32, rect: &Rect) {
+        if x_delta.abs() < EPSILON && y_delta.abs() < EPSILON {
+            // Don't do anything if no scrolling
+            return;
+        }
+
+        // Compute where on a x axis the pointer is. This will be used to try and keep whatever
+        // is under the cursor at the same position when zooming.
+        let pointer_frac = if let Some(pos) = ui.input().pointer.interact_pos() {
+            (pos.x - rect.left()) / rect.width()
+        } else {
+            0.5
+        };
+
+        if x_delta.abs() > y_delta.abs() {
+            // Horizontal scroll, ignore vertical component in the case of trackpads
+            let frac = x_delta * self.zoom.zoom / rect.width();
+            self.zoom.start = (self.zoom.start - frac).max(0.0).min(1.0 - self.zoom.zoom);
+        } else {
+            // Vertical scroll for zoom, ignore horizontal component in the case of trackpads
+            let min_zoom = (TARGET_MIN_POINTS as f32 / self.points.len() as f32).min(1.0);
+            let new_zoom = 2.0f32
+                .powf(self.zoom.zoom.log2() + y_delta / EXP_ZOOM_DIVISOR)
+                .max(min_zoom)
+                .min(1.0);
+            let old_pointer_pos = self.zoom.start + pointer_frac * self.zoom.zoom;
+            let new_start = old_pointer_pos - pointer_frac * new_zoom;
+            self.zoom.zoom = new_zoom;
+            self.zoom.start = new_start.max(0.0).min(1.0 - self.zoom.zoom);
+        }
+
+        // Repaint to update graph after scroll
+        ctxt.request_repaint();
+    }
+
+    pub fn update(&mut self, ctxt: &CtxRef, ui: &mut Ui, rect: Rect, interact: Response) {
         let painter = ui.painter();
         let max_value = self.points.iter().fold(0.0, |max, value| value.1.max(max));
+
+        let points_to_show = (self.points.len() as f32 * self.zoom.zoom) as usize;
+
+        // If there are too many points to show, combine points. Always divide the
+        // points by a power of two for easy combining and minimal jitter.
+        let mut combined_points = 1;
+        while points_to_show / combined_points > MAX_POINTS {
+            combined_points *= 2;
+        }
+
+        // Get index of first point in plot according to the current scroll. Always pick an
+        // index that is a multiple of `combined_points` to avoid jitter.
+        let first_point = (self.points.len() as f32 * self.zoom.start / combined_points as f32)
+            as usize
+            * combined_points;
+        if first_point >= self.points.len() {
+            return;
+        }
+
+        // Get number of points to plot based on zoom
+        let points_to_show = points_to_show.min(self.points.len() - first_point);
+        let end_point = first_point + points_to_show;
 
         // Subtract out x axis labels from plot area
         let axis_label_height = ui.fonts().row_height(FontSize::Normal.into());
@@ -172,7 +242,11 @@ impl SinglePlot {
         let mut last_day = None;
         let mut min_x = plot_area.left();
         let max_x = plot_area.right();
-        for (idx, value) in self.points.iter().enumerate() {
+        for (idx, value) in (&self.points[first_point..end_point])
+            .chunks(combined_points)
+            .enumerate()
+        {
+            let value = value.last().unwrap();
             let day = short_day_string(&value.0);
             if Some(day.clone()) != last_day {
                 let galley = ui
@@ -180,8 +254,8 @@ impl SinglePlot {
                     .layout_single_line(FontSize::Normal.into(), day.clone());
                 let width = galley.size.x;
 
-                let x =
-                    plot_area.left() + plot_area.width() * idx as f32 / self.points.len() as f32;
+                let x = plot_area.left()
+                    + plot_area.width() * idx as f32 / (points_to_show / combined_points) as f32;
                 let left = x - width / 2.0;
                 let right = x + width / 2.0;
 
@@ -212,13 +286,26 @@ impl SinglePlot {
 
         // Compute locations of each plot point
         let mut points = Vec::new();
-        for (idx, value) in self.points.iter().enumerate() {
+        for (idx, value) in (&self.points[first_point..end_point])
+            .chunks(combined_points)
+            .enumerate()
+        {
+            if value.len() < combined_points {
+                // Don't show trailing data as it isn't averaged and often causes
+                // jitter at the end of the graph.
+                continue;
+            }
+
+            let sum = value.iter().fold(0.0, |sum, value| sum + value.1);
+            let value = sum / value.len() as f32;
             points.push((
                 Pos2::new(
-                    plot_area.left() + plot_area.width() * idx as f32 / self.points.len() as f32,
-                    plot_area.top() + plot_area.height() * (1.0 - value.1 / max_value),
+                    plot_area.left()
+                        + plot_area.width() * idx as f32
+                            / (points_to_show / combined_points) as f32,
+                    plot_area.top() + plot_area.height() * (1.0 - value / max_value),
                 ),
-                value.1 / max_value,
+                value / max_value,
             ));
         }
 
@@ -340,6 +427,19 @@ impl SinglePlot {
                     color: self.color,
                 },
             )
+        }
+
+        if interact.dragged() {
+            self.update_zoom(
+                ctxt,
+                ui,
+                ui.input().pointer.delta().x,
+                ui.input().pointer.delta().y,
+                &plot_area,
+            );
+        } else if ui.rect_contains_pointer(rect) {
+            let scroll_delta = ctxt.input().scroll_delta;
+            self.update_zoom(ctxt, ui, scroll_delta.x, scroll_delta.y, &plot_area);
         }
     }
 }

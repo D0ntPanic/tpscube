@@ -5,6 +5,7 @@ use egui::{widgets::Label, Pos2, Response, Sense, Stroke, Ui, Vec2};
 
 pub trait CustomWidgets {
     fn header_label(&mut self, icon: &str, text: &str, landscape: bool, active: bool) -> Response;
+    fn mode_label(&mut self, text: &str, active: bool) -> Response;
     fn section(&mut self, text: &str);
     fn section_separator(&mut self);
 }
@@ -135,6 +136,19 @@ impl CustomWidgets for Ui {
 
             response
         }
+    }
+
+    fn mode_label(&mut self, text: &str, active: bool) -> Response {
+        self.add(
+            if active {
+                Label::new(format!("{}", text))
+                    .text_color(Theme::Green)
+                    .wrap(false)
+            } else {
+                Label::new(format!("{}", text)).wrap(false)
+            }
+            .sense(Sense::click()),
+        )
     }
 
     fn section(&mut self, text: &str) {
