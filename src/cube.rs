@@ -249,10 +249,6 @@ impl CubeRenderer {
         self.update_colors();
     }
 
-    pub fn set_max_queued_moves(&mut self, count: usize) {
-        self.max_queued_moves = count;
-    }
-
     pub fn do_move(&mut self, mv: Move) {
         self.do_moves(&[mv]);
     }

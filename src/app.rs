@@ -1,3 +1,4 @@
+use crate::details::solve::SolveDetailsWindow;
 use crate::font::{font_definitions, ScreenSize};
 use crate::framerate::Framerate;
 use crate::future::spawn_future;
@@ -11,14 +12,14 @@ use crate::timer::TimerWidget;
 use crate::widgets::CustomWidgets;
 use anyhow::Result;
 use egui::{
-    widgets::Label, CentralPanel, Color32, CtxRef, Layout, Rect, Rgba, Sense, Stroke, TextureId,
-    TopBottomPanel, Vec2,
+    widgets::Label, CentralPanel, Color32, CtxRef, Key, Layout, Rect, Rgba, Sense, Stroke,
+    TextureId, TopBottomPanel, Vec2,
 };
 use epi::RepaintSignal;
 use image::GenericImageView;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
-use tpscube_core::{History, HistoryLoadProgress, SyncStatus};
+use tpscube_core::{History, HistoryLoadProgress, Solve, SyncStatus};
 
 #[cfg(target_arch = "wasm32")]
 use crate::is_safari;
@@ -51,6 +52,8 @@ pub struct Application {
     framerate: Option<Framerate>,
     timer_cube_rect: Option<Rect>,
     bluetooth_cube_rect: Option<Rect>,
+    solve_details: Option<SolveDetailsWindow>,
+    solve_details_cube_rect: Option<Rect>,
     first_frame: bool,
     screen_size: ScreenSize,
 
@@ -86,6 +89,11 @@ struct Icon {
     hover: Image,
     active: Image,
     state: IconState,
+}
+
+pub enum SolveDetails {
+    IndividualSolve(Solve),
+    AverageOfSolves(Vec<Solve>),
 }
 
 pub trait App {
@@ -165,6 +173,8 @@ impl Application {
             framerate: None,
             timer_cube_rect: None,
             bluetooth_cube_rect: None,
+            solve_details: None,
+            solve_details_cube_rect: None,
             first_frame: true,
             screen_size: ScreenSize::Normal,
 
@@ -373,11 +383,13 @@ impl App for Application {
 
             self.timer_cube_rect = None;
             self.bluetooth_cube_rect = None;
+            self.solve_details_cube_rect = None;
 
             if self.history.as_ref().unwrap().sync_in_progress() {
                 framerate.request(Some(10));
             }
 
+            let mut details = None;
             match self.mode {
                 Mode::Timer => {
                     #[cfg(target_arch = "wasm32")]
@@ -403,12 +415,16 @@ impl App for Application {
                         bluetooth_name,
                         framerate,
                         &mut self.timer_cube_rect,
+                        &mut details,
+                        self.solve_details.is_none(),
                     )
                 }
-                Mode::History => {
-                    self.history_widget
-                        .update(ctxt, frame, self.history.as_mut().unwrap())
-                }
+                Mode::History => self.history_widget.update(
+                    ctxt,
+                    frame,
+                    self.history.as_mut().unwrap(),
+                    &mut details,
+                ),
                 Mode::Graphs => {
                     self.graph_widget
                         .update(ctxt, frame, self.history.as_mut().unwrap())
@@ -416,6 +432,27 @@ impl App for Application {
                 Mode::Settings => {
                     self.settings_widget
                         .update(ctxt, frame, self.history.as_mut().unwrap())
+                }
+            }
+
+            match details {
+                Some(SolveDetails::IndividualSolve(solve)) => {
+                    self.solve_details = Some(SolveDetailsWindow::new(solve));
+                }
+                _ => (),
+            }
+
+            if let Some(solve_details) = &mut self.solve_details {
+                let mut open = true;
+                solve_details.update(
+                    ctxt,
+                    frame,
+                    framerate,
+                    &mut self.solve_details_cube_rect,
+                    &mut open,
+                );
+                if !open || ctxt.input().key_down(Key::Escape) {
+                    self.solve_details = None;
                 }
             }
 
@@ -429,7 +466,7 @@ impl App for Application {
                     &mut self.bluetooth_cube_rect,
                     &mut open,
                 );
-                if !open {
+                if !open || ctxt.input().key_down(Key::Escape) {
                     self.bluetooth_dialog_open = false;
                     self.bluetooth.close();
                 }
@@ -545,7 +582,11 @@ impl App for Application {
     #[cfg(target_arch = "wasm32")]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
         if !self.bluetooth_dialog_open {
-            if let Some(rect) = &self.timer_cube_rect {
+            if let Some(rect) = &self.solve_details_cube_rect {
+                if let Some(solve_details) = &mut self.solve_details {
+                    solve_details.paint_cube(ctxt, gl, rect).unwrap();
+                }
+            } else if let Some(rect) = &self.timer_cube_rect {
                 self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }
         } else {
@@ -559,7 +600,11 @@ impl App for Application {
     #[cfg(not(target_arch = "wasm32"))]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
         if !self.bluetooth_dialog_open {
-            if let Some(rect) = &self.timer_cube_rect {
+            if let Some(rect) = &self.solve_details_cube_rect {
+                if let Some(solve_details) = &mut self.solve_details {
+                    solve_details.paint_cube(ctxt, gl, rect).unwrap();
+                }
+            } else if let Some(rect) = &self.timer_cube_rect {
                 self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }
         } else {

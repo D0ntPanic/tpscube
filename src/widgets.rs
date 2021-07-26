@@ -1,7 +1,11 @@
 use crate::font::{FontSize, LabelFontSize};
 use crate::theme::Theme;
 use chrono::{DateTime, Local};
-use egui::{widgets::Label, Pos2, Response, Sense, Stroke, Ui, Vec2};
+use egui::{widgets::Label, Color32, Pos2, Response, Sense, Stroke, Ui, Vec2};
+use tpscube_core::Move;
+
+const MIN_SCRAMBLE_LINES: usize = 2;
+const MAX_SCRAMBLE_LINES: usize = 5;
 
 pub trait CustomWidgets {
     fn header_label(&mut self, icon: &str, text: &str, landscape: bool, active: bool) -> Response;
@@ -84,6 +88,57 @@ pub fn date_string(time: &DateTime<Local>) -> String {
             time.time().format("%l:%M %P").to_string().trim()
         ),
     }
+}
+
+fn scramble_lines(scramble: &[Move], line_count: usize) -> Vec<Vec<Move>> {
+    let per_line = (scramble.len() + line_count - 1) / line_count;
+    let mut lines = Vec::new();
+    for chunks in scramble.chunks(per_line) {
+        lines.push(chunks.to_vec());
+    }
+    lines
+}
+
+pub fn fit_scramble(ui: &Ui, font: FontSize, scramble: &[Move], width: f32) -> Vec<Vec<Move>> {
+    for line_count in MIN_SCRAMBLE_LINES..MAX_SCRAMBLE_LINES {
+        let lines = scramble_lines(scramble, line_count);
+        if !lines.iter().any(|line| {
+            ui.fonts()
+                .layout_single_line(
+                    font.into(),
+                    line.iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join("  "),
+                )
+                .size
+                .x
+                > width
+        }) {
+            return lines;
+        }
+    }
+    scramble_lines(scramble, MAX_SCRAMBLE_LINES)
+}
+
+pub fn color_for_step_index(idx: usize) -> Color32 {
+    match idx % 4 {
+        0 => Theme::Red.into(),
+        1 => Theme::Blue.into(),
+        2 => Theme::Yellow.into(),
+        3 => Theme::Green.into(),
+        4 => Theme::Cyan.into(),
+        5 => Theme::Magenta.into(),
+        _ => unreachable!(),
+    }
+}
+
+pub fn color_for_recognition_step_index(idx: usize) -> Color32 {
+    // Don't make darker with alpha channel directly, as WebGL
+    // does not blend it properly. Compute linear space mulitplier
+    // and set alpha to opaque.
+    let color = color_for_step_index(idx).linear_multiply(0.4);
+    Color32::from_rgb(color.r(), color.g(), color.b())
 }
 
 impl CustomWidgets for Ui {

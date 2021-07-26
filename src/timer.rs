@@ -4,6 +4,7 @@ mod session;
 mod solve;
 mod state;
 
+use crate::app::SolveDetails;
 use crate::framerate::Framerate;
 use crate::gl::GlContext;
 use crate::settings::Settings;
@@ -130,6 +131,7 @@ impl TimerWidget {
         history: &mut History,
         mut bluetooth_moves: Vec<TimedMove>,
         bluetooth_name: Option<String>,
+        accept_keyboard: bool,
     ) -> Response {
         let id = ui.make_persistent_id("timer_input");
 
@@ -148,7 +150,7 @@ impl TimerWidget {
             && (interact.is_pointer_button_down_on() || interact.dragged());
         match self.state.clone() {
             TimerState::Inactive(time, analysis) => {
-                if ctxt.input().keys_down.contains(&Key::Space) || touching {
+                if accept_keyboard && (ctxt.input().keys_down.contains(&Key::Space) || touching) {
                     self.state = TimerState::Preparing(Instant::now(), time, analysis);
                 } else {
                     if self
@@ -279,6 +281,8 @@ impl TimerWidget {
         bluetooth_name: Option<String>,
         framerate: &mut Framerate,
         cube_rect: &mut Option<Rect>,
+        details: &mut Option<SolveDetails>,
+        accept_keyboard: bool,
     ) {
         self.cube.check_for_new_scramble();
         self.cube
@@ -290,7 +294,7 @@ impl TimerWidget {
         let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
         if aspect >= 1.0 {
             // Landscape mode. Session details to the left.
-            self.session.landscape_sidebar(ctxt, history);
+            self.session.landscape_sidebar(ctxt, history, details);
         } else {
             // Portrait mode. Session details at the top.
             self.session.portrait_top_bar(ctxt, history);
@@ -328,6 +332,7 @@ impl TimerWidget {
                         history,
                         bluetooth_moves,
                         bluetooth_name,
+                        accept_keyboard,
                     );
 
                     if is_solving {

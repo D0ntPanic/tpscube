@@ -1,7 +1,7 @@
 use crate::font::FontSize;
 use crate::theme::Theme;
-use crate::widgets::solve_time_string;
-use egui::{Color32, Pos2, Rect, Ui, Vec2};
+use crate::widgets::{color_for_recognition_step_index, color_for_step_index, solve_time_string};
+use egui::{Pos2, Rect, Ui, Vec2};
 use tpscube_core::{AnalysisStepSummary, AnalysisSubstepTime};
 
 const MIN_GRAPH_WIDTH: f32 = 200.0;
@@ -53,18 +53,6 @@ impl TimerPostAnalysis {
         self.steps
             .iter()
             .fold(0, |total, step| total + step.move_count)
-    }
-
-    fn color_for_step_index(idx: usize) -> Color32 {
-        match idx % 4 {
-            0 => Theme::Red.into(),
-            1 => Theme::Blue.into(),
-            2 => Theme::Yellow.into(),
-            3 => Theme::Green.into(),
-            4 => Theme::Cyan.into(),
-            5 => Theme::Magenta.into(),
-            _ => unreachable!(),
-        }
     }
 
     pub fn render(&self, ui: &mut Ui, rect: Rect) {
@@ -182,19 +170,13 @@ impl TimerPostAnalysis {
                 // Render bars with darker color for the recognition parts of the step
                 for substep in &step.substeps {
                     let (time, color) = match substep {
-                        AnalysisSubstepTime::Recognition(time) => {
-                            // Don't make darker with alpha channel directly, as WebGL
-                            // does not blend it properly. Compute linear space mulitplier
-                            // and set alpha to opaque.
-                            let color: Color32 =
-                                Self::color_for_step_index(step.major_step_index).into();
-                            let color = color.linear_multiply(0.4);
-                            (time, Color32::from_rgb(color.r(), color.g(), color.b()))
-                        }
-                        AnalysisSubstepTime::Execution(time) => (
+                        AnalysisSubstepTime::Recognition(time) => (
                             time,
-                            Self::color_for_step_index(step.major_step_index).into(),
+                            color_for_recognition_step_index(step.major_step_index),
                         ),
+                        AnalysisSubstepTime::Execution(time) => {
+                            (time, color_for_step_index(step.major_step_index))
+                        }
                     };
                     let time_bar_frac = *time as f32 / max_time as f32;
                     ui.painter().rect_filled(
@@ -218,7 +200,7 @@ impl TimerPostAnalysis {
             ui.painter().galley(
                 Pos2::new(x + offset, y),
                 galley,
-                Self::color_for_step_index(step.major_step_index),
+                color_for_step_index(step.major_step_index),
             );
             offset += width;
 
@@ -231,7 +213,7 @@ impl TimerPostAnalysis {
                             - ui.fonts().row_height(FontSize::Small.into())),
                     ),
                     move_galleys.remove(0),
-                    Self::color_for_step_index(step.major_step_index),
+                    color_for_step_index(step.major_step_index),
                 );
             }
 

@@ -950,9 +950,11 @@ impl<T: CFOPAnalysisStages> AnalysisSummary for T {
 
         // Add final alignment into PLL stage timing
         if let Some(alignment) = self.alignment() {
-            pll_execution_time += alignment.time;
-            pll_move_count += alignment.moves.len();
-            substeps.push(AnalysisSubstepTime::Execution(alignment.time));
+            if alignment.time > 0 {
+                pll_execution_time += alignment.time;
+                pll_move_count += alignment.moves.len();
+                substeps.push(AnalysisSubstepTime::Execution(alignment.time));
+            }
         }
 
         if pll_algorithms.len() > 0 {
@@ -1056,16 +1058,18 @@ impl<T: CFOPAnalysisStages> AnalysisSummary for T {
             });
         }
         if let Some(alignment) = self.alignment() {
-            result.push(AnalysisStepSummary {
-                name: "Alignment".into(),
-                short_name: "Align".into(),
-                major_step_index: 3,
-                algorithm: None,
-                recognition_time: 0,
-                execution_time: alignment.time,
-                substeps: vec![AnalysisSubstepTime::Execution(alignment.time)],
-                move_count: alignment.moves.len(),
-            });
+            if alignment.time > 0 {
+                result.push(AnalysisStepSummary {
+                    name: "Alignment".into(),
+                    short_name: "Align".into(),
+                    major_step_index: 3,
+                    algorithm: None,
+                    recognition_time: 0,
+                    execution_time: alignment.time,
+                    substeps: vec![AnalysisSubstepTime::Execution(alignment.time)],
+                    move_count: alignment.moves.len(),
+                });
+            }
         }
 
         result

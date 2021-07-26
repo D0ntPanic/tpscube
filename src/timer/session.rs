@@ -1,10 +1,11 @@
+use crate::app::SolveDetails;
 use crate::font::{FontSize, LabelFontSize};
 use crate::theme::Theme;
 use crate::widgets::{solve_time_string, CustomWidgets};
 use chrono::{DateTime, Local};
 use egui::{
-    popup_below_widget, Align2, CtxRef, Label, Layout, ScrollArea, SelectableLabel, Sense,
-    SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
+    popup_below_widget, Align2, CtxRef, CursorIcon, Label, Layout, ScrollArea, SelectableLabel,
+    Sense, SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
 };
 use tpscube_core::{Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList};
 
@@ -88,7 +89,13 @@ impl TimerSession {
         });
     }
 
-    fn add_solve(ui: &mut Ui, idx: usize, solve: &Solve, history: &mut History) {
+    fn add_solve(
+        ui: &mut Ui,
+        idx: usize,
+        solve: &Solve,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
         // Change window theme so that popup menu stands out
         let old_visuals = ui.ctx().style().visuals.clone();
         ui.ctx().set_visuals(crate::style::popup_visuals());
@@ -184,10 +191,31 @@ impl TimerSession {
                     );
                 }
 
-                if let Some(time) = solve.final_time() {
-                    ui.label(solve_time_string(time));
+                ui.visuals_mut().widgets.inactive.fg_stroke = Stroke {
+                    width: 1.0,
+                    color: Theme::Content.into(),
+                };
+                ui.visuals_mut().widgets.hovered.fg_stroke = Stroke {
+                    width: 1.0,
+                    color: Theme::Blue.into(),
+                };
+                ui.visuals_mut().widgets.active.fg_stroke = Stroke {
+                    width: 1.0,
+                    color: Theme::Blue.into(),
+                };
+                let response = if let Some(time) = solve.final_time() {
+                    ui.add(Label::new(solve_time_string(time)).sense(Sense::click()))
                 } else {
-                    ui.add(Label::new("DNF").text_color(Theme::Red));
+                    ui.add(
+                        Label::new("DNF")
+                            .text_color(Theme::Red)
+                            .sense(Sense::click()),
+                    )
+                };
+
+                // Check for click on solve time
+                if response.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::IndividualSolve(solve.clone()));
                 }
             });
         });
@@ -196,7 +224,12 @@ impl TimerSession {
         ui.ctx().set_visuals(old_visuals);
     }
 
-    pub fn landscape_sidebar(&mut self, ctxt: &CtxRef, history: &mut History) {
+    pub fn landscape_sidebar(
+        &mut self,
+        ctxt: &CtxRef,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
         SidePanel::left("left_timer")
             .default_width(175.0)
             .resizable(false)
@@ -259,7 +292,7 @@ impl TimerSession {
                     .show(ui, |ui| {
                         let mut has_solves = false;
                         for (idx, solve) in self.solves.iter().enumerate().rev() {
-                            Self::add_solve(ui, idx, solve, history);
+                            Self::add_solve(ui, idx, solve, history, details);
                             has_solves = true;
                         }
                         if !has_solves {

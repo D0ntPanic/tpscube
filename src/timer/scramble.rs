@@ -5,6 +5,7 @@ use crate::gl::GlContext;
 use crate::theme::Theme;
 use crate::timer::analysis::TimerPostAnalysis;
 use crate::timer::state::TimerState;
+use crate::widgets::fit_scramble;
 use anyhow::Result;
 use egui::{CtxRef, Pos2, Rect, Response, Sense, Ui, Vec2};
 use tpscube_core::{scramble_3x3x3, Cube, Cube3x3x3, Move, MoveSequence, TimedMove};
@@ -12,9 +13,6 @@ use tpscube_core::{scramble_3x3x3, Cube, Cube3x3x3, Move, MoveSequence, TimedMov
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
 const TARGET_ANALYSIS_SCRAMBLE_FRACTION: f32 = 0.15;
 const TARGET_TIMER_FRACTION: f32 = 0.2;
-
-const MIN_SCRAMBLE_LINES: usize = 2;
-const MAX_SCRAMBLE_LINES: usize = 5;
 
 const NEW_SCRAMBLE_PADDING: f32 = 4.0;
 
@@ -334,37 +332,6 @@ impl TimerCube {
         *center = rect.center();
     }
 
-    fn scramble_lines(scramble: &[Move], line_count: usize) -> Vec<Vec<Move>> {
-        let per_line = (scramble.len() + line_count - 1) / line_count;
-        let mut lines = Vec::new();
-        for chunks in scramble.chunks(per_line) {
-            lines.push(chunks.to_vec());
-        }
-        lines
-    }
-
-    fn fit_scramble(ui: &Ui, scramble: &[Move], width: f32) -> Vec<Vec<Move>> {
-        for line_count in MIN_SCRAMBLE_LINES..MAX_SCRAMBLE_LINES {
-            let lines = Self::scramble_lines(scramble, line_count);
-            if !lines.iter().any(|line| {
-                ui.fonts()
-                    .layout_single_line(
-                        FontSize::Scramble.into(),
-                        line.iter()
-                            .map(|mv| mv.to_string())
-                            .collect::<Vec<String>>()
-                            .join("  "),
-                    )
-                    .size
-                    .x
-                    > width
-            }) {
-                return lines;
-            }
-        }
-        Self::scramble_lines(scramble, MAX_SCRAMBLE_LINES)
-    }
-
     pub fn scramble_ui(
         &mut self,
         ui: &mut Ui,
@@ -411,7 +378,12 @@ impl TimerCube {
         } else {
             (
                 false,
-                Self::fit_scramble(ui, &self.displayed_scramble, rect.width()),
+                fit_scramble(
+                    ui,
+                    FontSize::Scramble,
+                    &self.displayed_scramble,
+                    rect.width(),
+                ),
             )
         };
 

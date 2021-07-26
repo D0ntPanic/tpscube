@@ -276,7 +276,7 @@ impl GlRenderer {
         let (_, screen_height) = gl.display.get_framebuffer_dimensions();
         self.viewport = glium::Rect {
             left: (rect.left() * ctxt.pixels_per_point()) as u32,
-            bottom: screen_height - (rect.bottom() * ctxt.pixels_per_point()) as u32,
+            bottom: screen_height.saturating_sub((rect.bottom() * ctxt.pixels_per_point()) as u32),
             width: (rect.width() * ctxt.pixels_per_point()) as u32,
             height: (rect.height() * ctxt.pixels_per_point()) as u32,
         };

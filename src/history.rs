@@ -1,10 +1,11 @@
+use crate::app::SolveDetails;
 use crate::font::FontSize;
 use crate::style::content_visuals;
 use crate::theme::Theme;
 use crate::widgets::{date_string, solve_time_string};
 use egui::{
-    containers::ScrollArea, popup_below_widget, Align2, CentralPanel, CtxRef, Pos2, Rect,
-    SelectableLabel, Sense, Stroke, Ui, Vec2,
+    containers::ScrollArea, popup_below_widget, Align2, CentralPanel, CtxRef, CursorIcon, Pos2,
+    Rect, SelectableLabel, Sense, Stroke, Ui, Vec2,
 };
 use tpscube_core::{Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList};
 
@@ -24,6 +25,7 @@ trait HistoryRegion {
         layout_metrics: &SolveLayoutMetrics,
         history: &mut History,
         all_time_best: &Option<AllTimeBestRegion>,
+        details: &mut Option<SolveDetails>,
     );
 }
 
@@ -86,6 +88,7 @@ impl HistoryRegion for NoSolvesRegion {
         _layout_metrics: &SolveLayoutMetrics,
         _history: &mut History,
         _all_time_best: &Option<AllTimeBestRegion>,
+        _details: &mut Option<SolveDetails>,
     ) {
         let galley = ui.fonts().layout_multiline(
             FontSize::Section.into(),
@@ -138,6 +141,7 @@ impl HistoryRegion for AllTimeBestRegion {
         layout_metrics: &SolveLayoutMetrics,
         _history: &mut History,
         _all_time_best: &Option<AllTimeBestRegion>,
+        details: &mut Option<SolveDetails>,
     ) {
         let mut best_count = self.columns();
         let mut row_columns_left = if best_count <= layout_metrics.best_columns {
@@ -173,14 +177,29 @@ impl HistoryRegion for AllTimeBestRegion {
             let galley = ui
                 .fonts()
                 .layout_single_line(FontSize::BestTime.into(), solve_time_string(solve.time));
-            ui.painter().galley(
+            let rect = Rect::from_min_size(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
                     y + ui.fonts().row_height(FontSize::Normal.into()),
                 ),
-                galley,
-                Theme::Orange.into(),
+                galley.size,
             );
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                galley,
+                if interact.hovered() {
+                    Theme::Yellow.into()
+                } else {
+                    Theme::Orange.into()
+                },
+            );
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::IndividualSolve(solve.solve.clone()));
+            }
+
             x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
             best_count -= 1;
             row_columns_left -= 1;
@@ -352,6 +371,7 @@ impl HistoryRegion for SessionRegion {
         layout_metrics: &SolveLayoutMetrics,
         history: &mut History,
         all_time_best: &Option<AllTimeBestRegion>,
+        details: &mut Option<SolveDetails>,
     ) {
         let (all_time_best_solve, all_time_best_ao5, all_time_best_ao12) = match all_time_best {
             Some(region) => (
@@ -448,8 +468,7 @@ impl HistoryRegion for SessionRegion {
                     },
                 );
 
-                // Draw solve time
-                ui.painter().galley(
+                let solve_time_rect = Rect::from_min_size(
                     Pos2::new(
                         content_area.left()
                             + col as f32 * col_width
@@ -458,20 +477,36 @@ impl HistoryRegion for SessionRegion {
                             - galley.size.x,
                         y + row as f32 * row_height,
                     ),
+                    galley.size,
+                );
+
+                // Draw solve time
+                let interact = ui.allocate_rect(solve_time_rect, Sense::click());
+                ui.painter().galley(
+                    solve_time_rect.left_top(),
                     galley,
-                    match time {
-                        Some(_) => {
-                            if time == all_time_best_solve {
-                                Theme::Orange.into()
-                            } else if time == self.best_solve.as_ref().map(|best| best.time) {
-                                Theme::Green.into()
-                            } else {
-                                Theme::Content.into()
+                    if interact.hovered() {
+                        Theme::Blue.into()
+                    } else {
+                        match time {
+                            Some(_) => {
+                                if time == all_time_best_solve {
+                                    Theme::Orange.into()
+                                } else if time == self.best_solve.as_ref().map(|best| best.time) {
+                                    Theme::Green.into()
+                                } else {
+                                    Theme::Content.into()
+                                }
                             }
+                            None => Theme::Red.into(),
                         }
-                        None => Theme::Red.into(),
                     },
                 );
+
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::IndividualSolve(self.solves[i].clone()));
+                }
 
                 if let Penalty::Time(penalty) = self.solves[i].penalty {
                     // Draw penalty
@@ -913,7 +948,13 @@ impl HistoryWidget {
         self.total_height = y;
     }
 
-    pub fn update(&mut self, ctxt: &CtxRef, _frame: &mut epi::Frame<'_>, history: &mut History) {
+    pub fn update(
+        &mut self,
+        ctxt: &CtxRef,
+        _frame: &mut epi::Frame<'_>,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
         ctxt.set_visuals(content_visuals());
         CentralPanel::default().show(ctxt, |ui| {
             let number_galley = ui
@@ -991,6 +1032,7 @@ impl HistoryWidget {
                                 &solve_layout_metrics,
                                 history,
                                 &None,
+                                details,
                             );
                         }
                     }
@@ -1011,6 +1053,7 @@ impl HistoryWidget {
                             &solve_layout_metrics,
                             history,
                             &self.all_time_best_region,
+                            details,
                         );
                     }
                 });

@@ -67,6 +67,19 @@ impl Analysis {
             Analysis::Unsuccessful
         }
     }
+
+    pub fn successful(&self) -> bool {
+        match self {
+            Analysis::Unsuccessful => false,
+            _ => true,
+        }
+    }
+}
+
+impl Default for Analysis {
+    fn default() -> Self {
+        Analysis::Unsuccessful
+    }
 }
 
 impl PartialAnalysis {
