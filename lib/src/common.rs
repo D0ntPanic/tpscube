@@ -181,7 +181,7 @@ pub trait ListAverage {
 }
 
 pub trait SolveList: ListAverage {
-    fn last_average(&self, count: usize) -> Option<u32>;
+    fn last_average(&self, count: usize) -> Option<Average>;
     fn best(&self) -> Option<BestSolve>;
     fn best_average(&self, count: usize) -> Option<Average>;
 }
@@ -250,9 +250,14 @@ impl ListAverage for &[Solve] {
 }
 
 impl SolveList for &[Solve] {
-    fn last_average(&self, count: usize) -> Option<u32> {
+    fn last_average(&self, count: usize) -> Option<Average> {
         if self.len() >= count {
-            (&self[self.len() - count..]).average()
+            let solves = self[self.len() - count..].to_vec();
+            if let Some(time) = solves.as_slice().average() {
+                Some(Average { solves, time })
+            } else {
+                None
+            }
         } else {
             None
         }

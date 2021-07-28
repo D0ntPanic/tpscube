@@ -1,4 +1,5 @@
 use crate::cube::CubeRenderer;
+use crate::details::bar::SolveBar;
 use crate::font::FontSize;
 use crate::framerate::Framerate;
 use crate::gl::GlContext;
@@ -21,10 +22,6 @@ use tpscube_core::{
 const TARGET_MIN_WIDTH: f32 = 280.0;
 const TARGET_MAX_WIDTH: f32 = 400.0;
 const STEP_COLUMN_PADDING: f32 = 8.0;
-
-const SOLVE_BAR_HEIGHT: f32 = 4.0;
-const SOLVE_STEP_SEPARATOR_HEIGHT: f32 = 10.0;
-const REPLAY_CURSOR_HEIGHT: f32 = 16.0;
 
 pub struct SolveDetailsWindow {
     solve: Solve,
@@ -322,118 +319,14 @@ impl SolveDetailsWindow {
     fn solve_bar(&mut self, ctxt: &CtxRef, ui: &mut Ui) {
         let (id, rect) = ui.allocate_space(Vec2::new(ui.available_width(), 16.0));
         let response = ui.interact(rect, id, Sense::click_and_drag());
-
-        let mut start = 0.0;
-        let mut last_index = 0;
-        let total = self.solve.moves.as_ref().unwrap().last().unwrap().time() as f32 / 1000.0;
-        let mut separators = Vec::new();
-        for step in &self.summary {
-            if step.major_step_index != last_index {
-                // Queue up stage separators and draw them after the bars.
-                // This prevents artifacts from drawing over the lines.
-                separators.push((
-                    [
-                        Pos2::new(
-                            rect.width() * start / total + rect.left(),
-                            rect.center().y - SOLVE_STEP_SEPARATOR_HEIGHT / 2.0,
-                        ),
-                        Pos2::new(
-                            rect.width() * start / total + rect.left(),
-                            rect.center().y + SOLVE_STEP_SEPARATOR_HEIGHT / 2.0,
-                        ),
-                    ],
-                    Stroke {
-                        width: 1.0,
-                        color: color_for_step_index(last_index),
-                    },
-                ));
-            }
-
-            // Draw recognition portion
-            ui.painter().rect_filled(
-                Rect::from_min_size(
-                    Pos2::new(
-                        rect.width() * start / total + rect.left(),
-                        rect.center().y - SOLVE_BAR_HEIGHT / 2.0,
-                    ),
-                    Vec2::new(
-                        rect.width() * step.recognition_time as f32 / 1000.0 / total,
-                        SOLVE_BAR_HEIGHT,
-                    ),
-                ),
-                0.0,
-                color_for_recognition_step_index(step.major_step_index),
-            );
-            start += step.recognition_time as f32 / 1000.0;
-
-            // Draw execution portion
-            ui.painter().rect_filled(
-                Rect::from_min_size(
-                    Pos2::new(
-                        rect.width() * start / total + rect.left(),
-                        rect.center().y - SOLVE_BAR_HEIGHT / 2.0,
-                    ),
-                    Vec2::new(
-                        rect.width() * step.execution_time as f32 / 1000.0 / total,
-                        SOLVE_BAR_HEIGHT,
-                    ),
-                ),
-                0.0,
-                color_for_step_index(step.major_step_index),
-            );
-            start += step.execution_time as f32 / 1000.0;
-
-            last_index = step.major_step_index;
-        }
-
-        // Add separator for final stage at end
-        separators.push((
-            [
-                Pos2::new(
-                    rect.width() + rect.left(),
-                    rect.center().y - SOLVE_STEP_SEPARATOR_HEIGHT / 2.0,
-                ),
-                Pos2::new(
-                    rect.width() + rect.left(),
-                    rect.center().y + SOLVE_STEP_SEPARATOR_HEIGHT / 2.0,
-                ),
-            ],
-            Stroke {
-                width: 1.0,
-                color: color_for_step_index(last_index),
-            },
-        ));
-
-        // Draw solve stage separators
-        for line in separators {
-            ui.painter().line_segment(line.0, line.1);
-        }
-
-        // Draw indicator of replay position
-        ui.painter().line_segment(
-            [
-                Pos2::new(
-                    rect.width() * self.replay_time / total + rect.left(),
-                    rect.center().y - REPLAY_CURSOR_HEIGHT / 2.0,
-                ),
-                Pos2::new(
-                    rect.width() * self.replay_time / total + rect.left(),
-                    rect.center().y + REPLAY_CURSOR_HEIGHT / 2.0,
-                ),
-            ],
-            Stroke {
-                width: 2.0,
-                color: Theme::Content.into(),
-            },
+        let bar = SolveBar::new(
+            &self.solve,
+            &self.summary,
+            self.solve.moves.as_ref().unwrap().last().unwrap().time(),
+            Some(self.replay_time),
         );
-
-        // Check for click on solve bar and scrub to that location
-        if response.clicked() || response.dragged() {
-            if let Some(pos) = ctxt.input().pointer.interact_pos() {
-                let frac = (pos.x - rect.left()) / rect.width();
-                let frac = frac.min(1.0).max(0.0);
-                self.go_to_time(total * frac);
-            }
+        if let Some(navigate_time) = bar.interactive(ctxt, ui, rect, response) {
+            self.go_to_time(navigate_time);
         }
     }
 
@@ -827,7 +720,6 @@ impl SolveDetailsWindow {
     pub fn update(
         &mut self,
         ctxt: &CtxRef,
-        _frame: &mut epi::Frame<'_>,
         framerate: &mut Framerate,
         cube_rect: &mut Option<Rect>,
         open: &mut bool,

@@ -297,7 +297,7 @@ impl TimerWidget {
             self.session.landscape_sidebar(ctxt, history, details);
         } else {
             // Portrait mode. Session details at the top.
-            self.session.portrait_top_bar(ctxt, history);
+            self.session.portrait_top_bar(ctxt, history, details);
         }
 
         ctxt.set_visuals(content_visuals());

@@ -12,12 +12,18 @@ use tpscube_core::{Average, BestSolve, History, ListAverage, Penalty, Solve, Sol
 pub struct TimerSession {
     update_id: Option<u64>,
     solves: Vec<Solve>,
-    last_ao5: Option<u32>,
-    last_ao12: Option<u32>,
+    last_ao5: Option<Average>,
+    last_ao12: Option<Average>,
     session_avg: Option<u32>,
     best_solve: Option<BestSolve>,
     best_ao5: Option<Average>,
     best_ao12: Option<Average>,
+}
+
+enum SessionTime {
+    BestSolve(BestSolve),
+    AverageOfN(Average),
+    SessionAverage(u32),
 }
 
 impl TimerSession {
@@ -72,7 +78,13 @@ impl TimerSession {
         }
     }
 
-    fn session_time(ui: &mut Ui, name: &str, small: bool, time: Option<u32>) {
+    fn session_time(
+        ui: &mut Ui,
+        name: &str,
+        small: bool,
+        time: Option<SessionTime>,
+        details: &mut Option<SolveDetails>,
+    ) {
         ui.horizontal(|ui| {
             if small {
                 ui.add(Label::new(format!("{}:", name)).small());
@@ -80,8 +92,52 @@ impl TimerSession {
                 ui.label(format!("{}:", name));
             }
             ui.with_layout(Layout::right_to_left(), |ui| {
+                ui.visuals_mut().widgets.noninteractive.fg_stroke = Stroke {
+                    width: 1.0,
+                    color: Theme::Content.into(),
+                };
+                ui.visuals_mut().widgets.inactive.fg_stroke = Stroke {
+                    width: 1.0,
+                    color: Theme::Content.into(),
+                };
+                ui.visuals_mut().widgets.active.fg_stroke = Stroke {
+                    width: 1.0,
+                    color: Theme::Blue.into(),
+                };
+                ui.visuals_mut().widgets.hovered.fg_stroke = Stroke {
+                    width: 1.0,
+                    color: Theme::Blue.into(),
+                };
+
                 if let Some(time) = time {
-                    ui.label(solve_time_string(time));
+                    match time {
+                        SessionTime::AverageOfN(average) => {
+                            if ui
+                                .add(
+                                    Label::new(solve_time_string(average.time))
+                                        .sense(Sense::click()),
+                                )
+                                .on_hover_cursor(CursorIcon::PointingHand)
+                                .clicked()
+                            {
+                                *details = Some(SolveDetails::AverageOfSolves(average.solves));
+                            }
+                        }
+                        SessionTime::SessionAverage(time) => {
+                            ui.label(solve_time_string(time));
+                        }
+                        SessionTime::BestSolve(solve) => {
+                            if ui
+                                .add(
+                                    Label::new(solve_time_string(solve.time)).sense(Sense::click()),
+                                )
+                                .on_hover_cursor(CursorIcon::PointingHand)
+                                .clicked()
+                            {
+                                *details = Some(SolveDetails::IndividualSolve(solve.solve));
+                            }
+                        }
+                    }
                 } else {
                     ui.label("-");
                 }
@@ -239,26 +295,57 @@ impl TimerSession {
                 self.update(history);
 
                 ui.vertical(|ui| {
-                    Self::session_time(ui, "Last ao5", false, self.last_ao5);
-                    Self::session_time(ui, "Last ao12", false, self.last_ao12);
-                    Self::session_time(ui, "Session avg", false, self.session_avg);
+                    Self::session_time(
+                        ui,
+                        "Last ao5",
+                        false,
+                        self.last_ao5
+                            .clone()
+                            .map(|avg| SessionTime::AverageOfN(avg)),
+                        details,
+                    );
+                    Self::session_time(
+                        ui,
+                        "Last ao12",
+                        false,
+                        self.last_ao12
+                            .clone()
+                            .map(|avg| SessionTime::AverageOfN(avg)),
+                        details,
+                    );
+                    Self::session_time(
+                        ui,
+                        "Session avg",
+                        false,
+                        self.session_avg.map(|avg| SessionTime::SessionAverage(avg)),
+                        details,
+                    );
                     Self::session_time(
                         ui,
                         "Best solve",
                         false,
-                        self.best_solve.as_ref().map(|best| best.time),
+                        self.best_solve
+                            .clone()
+                            .map(|best| SessionTime::BestSolve(best)),
+                        details,
                     );
                     Self::session_time(
                         ui,
                         "Best ao5",
                         false,
-                        self.best_ao5.as_ref().map(|best| best.time),
+                        self.best_ao5
+                            .clone()
+                            .map(|avg| SessionTime::AverageOfN(avg)),
+                        details,
                     );
                     Self::session_time(
                         ui,
                         "Best ao12",
                         false,
-                        self.best_ao12.as_ref().map(|best| best.time),
+                        self.best_ao12
+                            .clone()
+                            .map(|avg| SessionTime::AverageOfN(avg)),
+                        details,
                     );
 
                     ui.add_space(8.0);
@@ -304,7 +391,12 @@ impl TimerSession {
             });
     }
 
-    pub fn portrait_top_bar(&mut self, ctxt: &CtxRef, history: &mut History) {
+    pub fn portrait_top_bar(
+        &mut self,
+        ctxt: &CtxRef,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
         TopBottomPanel::top("top_timer").show(ctxt, |ui| {
             // Session header with embedded new session button.
             ui.horizontal(|ui| {
@@ -347,9 +439,31 @@ impl TimerSession {
                     ),
                     |ui| {
                         ui.vertical(|ui| {
-                            Self::session_time(ui, "Last ao5", true, self.last_ao5);
-                            Self::session_time(ui, "Last ao12", true, self.last_ao12);
-                            Self::session_time(ui, "Session avg", true, self.session_avg);
+                            Self::session_time(
+                                ui,
+                                "Last ao5",
+                                true,
+                                self.last_ao5
+                                    .clone()
+                                    .map(|avg| SessionTime::AverageOfN(avg)),
+                                details,
+                            );
+                            Self::session_time(
+                                ui,
+                                "Last ao12",
+                                true,
+                                self.last_ao12
+                                    .clone()
+                                    .map(|avg| SessionTime::AverageOfN(avg)),
+                                details,
+                            );
+                            Self::session_time(
+                                ui,
+                                "Session avg",
+                                true,
+                                self.session_avg.map(|avg| SessionTime::SessionAverage(avg)),
+                                details,
+                            );
                         });
                     },
                 );
@@ -373,19 +487,28 @@ impl TimerSession {
                                     ui,
                                     "Best solve",
                                     true,
-                                    self.best_solve.as_ref().map(|best| best.time),
+                                    self.best_solve
+                                        .clone()
+                                        .map(|best| SessionTime::BestSolve(best)),
+                                    details,
                                 );
                                 Self::session_time(
                                     ui,
                                     "Best ao5",
                                     true,
-                                    self.best_ao5.as_ref().map(|best| best.time),
+                                    self.best_ao5
+                                        .clone()
+                                        .map(|avg| SessionTime::AverageOfN(avg)),
+                                    details,
                                 );
                                 Self::session_time(
                                     ui,
                                     "Best ao12",
                                     true,
-                                    self.best_ao12.as_ref().map(|best| best.time),
+                                    self.best_ao12
+                                        .clone()
+                                        .map(|avg| SessionTime::AverageOfN(avg)),
+                                    details,
                                 );
                             });
                         },

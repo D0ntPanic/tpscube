@@ -234,14 +234,29 @@ impl HistoryRegion for AllTimeBestRegion {
             let galley = ui
                 .fonts()
                 .layout_single_line(FontSize::BestTime.into(), solve_time_string(average.time));
-            ui.painter().galley(
+            let rect = Rect::from_min_size(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
                     y + ui.fonts().row_height(FontSize::Normal.into()),
                 ),
-                galley,
-                Theme::Orange.into(),
+                galley.size,
             );
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                galley,
+                if interact.hovered() {
+                    Theme::Yellow.into()
+                } else {
+                    Theme::Orange.into()
+                },
+            );
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+            }
+
             x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
             best_count -= 1;
             row_columns_left -= 1;
@@ -276,14 +291,28 @@ impl HistoryRegion for AllTimeBestRegion {
             let galley = ui
                 .fonts()
                 .layout_single_line(FontSize::BestTime.into(), solve_time_string(average.time));
-            ui.painter().galley(
+            let rect = Rect::from_min_size(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
                     y + ui.fonts().row_height(FontSize::Normal.into()),
                 ),
-                galley,
-                Theme::Orange.into(),
+                galley.size,
             );
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                galley,
+                if interact.hovered() {
+                    Theme::Yellow.into()
+                } else {
+                    Theme::Orange.into()
+                },
+            );
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+            }
         }
     }
 }
@@ -710,16 +739,25 @@ impl HistoryRegion for SessionRegion {
                 .fonts()
                 .layout_single_line(FontSize::Normal.into(), solve_time_string(best_solve.time));
             let width = galley.size.x;
+            let rect = Rect::from_min_size(Pos2::new(x, y), galley.size);
+            let interact = ui.allocate_rect(rect, Sense::click());
             ui.painter().galley(
-                Pos2::new(x, y),
+                rect.left_top(),
                 galley,
-                if Some(best_solve.time) == all_time_best_solve {
+                if interact.hovered() {
+                    Theme::Blue.into()
+                } else if Some(best_solve.time) == all_time_best_solve {
                     Theme::Orange.into()
                 } else {
                     Theme::Content.into()
                 },
             );
             x += width + SESSION_BEST_PADDING;
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::IndividualSolve(best_solve.solve.clone()));
+            }
         }
 
         // Draw best average of 5
@@ -741,16 +779,25 @@ impl HistoryRegion for SessionRegion {
 
             ui.painter()
                 .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+            let interact = ui.allocate_rect(rect, Sense::click());
             ui.painter().galley(
-                Pos2::new(x + label_width, y),
+                rect.left_top(),
                 time_galley,
-                if Some(best_ao5.time) == all_time_best_ao5 {
+                if interact.hovered() {
+                    Theme::Blue.into()
+                } else if Some(best_ao5.time) == all_time_best_ao5 {
                     Theme::Orange.into()
                 } else {
                     Theme::Content.into()
                 },
             );
             x += width;
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(best_ao5.solves.clone()));
+            }
         }
 
         // Draw best average of 12
@@ -772,16 +819,25 @@ impl HistoryRegion for SessionRegion {
 
             ui.painter()
                 .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+            let interact = ui.allocate_rect(rect, Sense::click());
             ui.painter().galley(
-                Pos2::new(x + label_width, y),
+                rect.left_top(),
                 time_galley,
-                if Some(best_ao12.time) == all_time_best_ao12 {
+                if interact.hovered() {
+                    Theme::Blue.into()
+                } else if Some(best_ao12.time) == all_time_best_ao12 {
                     Theme::Orange.into()
                 } else {
                     Theme::Content.into()
                 },
             );
             x += width;
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(best_ao12.solves.clone()));
+            }
         }
 
         // Draw session average

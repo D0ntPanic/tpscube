@@ -1,3 +1,4 @@
+use crate::details::average::AverageDetailsWindow;
 use crate::details::solve::SolveDetailsWindow;
 use crate::font::{font_definitions, ScreenSize};
 use crate::framerate::Framerate;
@@ -12,7 +13,7 @@ use crate::timer::TimerWidget;
 use crate::widgets::CustomWidgets;
 use anyhow::Result;
 use egui::{
-    widgets::Label, CentralPanel, Color32, CtxRef, Key, Layout, Rect, Rgba, Sense, Stroke,
+    widgets::Label, CentralPanel, Color32, CtxRef, Event, Key, Layout, Rect, Rgba, Sense, Stroke,
     TextureId, TopBottomPanel, Vec2,
 };
 use epi::RepaintSignal;
@@ -54,6 +55,7 @@ pub struct Application {
     bluetooth_cube_rect: Option<Rect>,
     solve_details: Option<SolveDetailsWindow>,
     solve_details_cube_rect: Option<Rect>,
+    average_details: Option<AverageDetailsWindow>,
     first_frame: bool,
     screen_size: ScreenSize,
 
@@ -175,6 +177,7 @@ impl Application {
             bluetooth_cube_rect: None,
             solve_details: None,
             solve_details_cube_rect: None,
+            average_details: None,
             first_frame: true,
             screen_size: ScreenSize::Normal,
 
@@ -439,20 +442,51 @@ impl App for Application {
                 Some(SolveDetails::IndividualSolve(solve)) => {
                     self.solve_details = Some(SolveDetailsWindow::new(solve));
                 }
-                _ => (),
+                Some(SolveDetails::AverageOfSolves(solves)) => {
+                    self.average_details = Some(AverageDetailsWindow::new(solves));
+                }
+                None => (),
+            }
+
+            let mut escape_down = false;
+            for event in &ctxt.input().events {
+                match event {
+                    Event::Key { key, pressed, .. } => {
+                        if *pressed {
+                            match key {
+                                Key::Escape => escape_down = true,
+                                _ => (),
+                            }
+                        }
+                    }
+                    _ => (),
+                }
             }
 
             if let Some(solve_details) = &mut self.solve_details {
                 let mut open = true;
                 solve_details.update(
                     ctxt,
-                    frame,
                     framerate,
                     &mut self.solve_details_cube_rect,
                     &mut open,
                 );
-                if !open || ctxt.input().key_down(Key::Escape) {
+                if !open || escape_down {
                     self.solve_details = None;
+                }
+            } else if let Some(average_details) = &mut self.average_details {
+                let mut open = true;
+                let mut details = None;
+                average_details.update(ctxt, &mut open, &mut details);
+                if !open || escape_down {
+                    self.average_details = None;
+                }
+
+                match details {
+                    Some(SolveDetails::IndividualSolve(solve)) => {
+                        self.solve_details = Some(SolveDetailsWindow::new(solve));
+                    }
+                    _ => (),
                 }
             }
 
@@ -466,7 +500,7 @@ impl App for Application {
                     &mut self.bluetooth_cube_rect,
                     &mut open,
                 );
-                if !open || ctxt.input().key_down(Key::Escape) {
+                if !open || escape_down {
                     self.bluetooth_dialog_open = false;
                     self.bluetooth.close();
                 }
@@ -581,36 +615,40 @@ impl App for Application {
 
     #[cfg(target_arch = "wasm32")]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
-        if !self.bluetooth_dialog_open {
+        if self.bluetooth_dialog_open {
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(rect) = &self.bluetooth_cube_rect {
+                self.bluetooth.paint_cube(ctxt, gl, rect).unwrap();
+            }
+        } else if self.solve_details.is_some() {
             if let Some(rect) = &self.solve_details_cube_rect {
                 if let Some(solve_details) = &mut self.solve_details {
                     solve_details.paint_cube(ctxt, gl, rect).unwrap();
                 }
-            } else if let Some(rect) = &self.timer_cube_rect {
-                self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }
-        } else {
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(rect) = &self.bluetooth_cube_rect {
-                self.bluetooth.paint_cube(ctxt, gl, rect).unwrap();
+        } else if self.average_details.is_none() {
+            if let Some(rect) = &self.timer_cube_rect {
+                self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn update_gl(&mut self, ctxt: &CtxRef, gl: &mut GlContext<'_, '_>) {
-        if !self.bluetooth_dialog_open {
+        if self.bluetooth_dialog_open {
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(rect) = &self.bluetooth_cube_rect {
+                self.bluetooth.paint_cube(ctxt, gl, rect).unwrap();
+            }
+        } else if self.solve_details.is_some() {
             if let Some(rect) = &self.solve_details_cube_rect {
                 if let Some(solve_details) = &mut self.solve_details {
                     solve_details.paint_cube(ctxt, gl, rect).unwrap();
                 }
-            } else if let Some(rect) = &self.timer_cube_rect {
-                self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }
-        } else {
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(rect) = &self.bluetooth_cube_rect {
-                self.bluetooth.paint_cube(ctxt, gl, rect).unwrap();
+        } else if self.average_details.is_none() {
+            if let Some(rect) = &self.timer_cube_rect {
+                self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }
         }
     }
