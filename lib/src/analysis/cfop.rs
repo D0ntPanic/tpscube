@@ -87,7 +87,7 @@ pub struct OLLAnalysis {
 
 /// OLL algorithm used during solve. Two-look algorithms are named and
 /// others use their standard number.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum OLLAlgorithm {
     H,
     Pi,
@@ -123,7 +123,7 @@ pub struct PLLAnalysis {
 }
 
 /// PLL algorithm used during solve.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PLLAlgorithm {
     Aa,
     Ab,
@@ -370,7 +370,7 @@ impl PLLAlgorithm {
         }
     }
 
-    fn to_str(&self) -> &'static str {
+    pub fn to_str(&self) -> &'static str {
         match self {
             PLLAlgorithm::Aa => "Aa",
             PLLAlgorithm::Ab => "Ab",

@@ -1,3 +1,4 @@
+mod algorithms;
 pub mod app;
 mod center_generated;
 mod corner_generated;

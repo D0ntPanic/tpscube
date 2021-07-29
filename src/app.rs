@@ -1,3 +1,4 @@
+use crate::algorithms::AlgorithmsWidget;
 use crate::details::average::AverageDetailsWindow;
 use crate::details::solve::SolveDetailsWindow;
 use crate::font::{font_definitions, ScreenSize};
@@ -37,6 +38,7 @@ enum Mode {
     Timer,
     History,
     Graphs,
+    Algorithms,
     Settings,
 }
 
@@ -45,6 +47,7 @@ pub struct Application {
     timer_widget: TimerWidget,
     history_widget: HistoryWidget,
     graph_widget: GraphWidget,
+    algorithms_widget: AlgorithmsWidget,
     settings_widget: Settings,
     history: Option<History>,
     history_load_progress: Arc<Mutex<HistoryLoadProgress>>,
@@ -167,6 +170,7 @@ impl Application {
             timer_widget: TimerWidget::new(),
             history_widget: HistoryWidget::new(),
             graph_widget: GraphWidget::new(),
+            algorithms_widget: AlgorithmsWidget::new(),
             settings_widget: Settings::new(),
             history: None,
             history_load_progress,
@@ -263,6 +267,18 @@ impl App for Application {
                             .clicked()
                         {
                             self.mode = Mode::Graphs;
+                        }
+
+                        if ui
+                            .header_label(
+                                "♞",
+                                "Algorithms",
+                                landscape,
+                                self.mode == Mode::Algorithms,
+                            )
+                            .clicked()
+                        {
+                            self.mode = Mode::Algorithms;
                         }
 
                         if ui
@@ -430,6 +446,10 @@ impl App for Application {
                 ),
                 Mode::Graphs => {
                     self.graph_widget
+                        .update(ctxt, frame, self.history.as_mut().unwrap())
+                }
+                Mode::Algorithms => {
+                    self.algorithms_widget
                         .update(ctxt, frame, self.history.as_mut().unwrap())
                 }
                 Mode::Settings => {
