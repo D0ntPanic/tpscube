@@ -1,6 +1,7 @@
 mod gan;
 mod giiker;
 mod gocube;
+mod moyu;
 
 use crate::common::TimedMove;
 use crate::cube3x3x3::Cube3x3x3;
@@ -9,6 +10,7 @@ use btleplug::api::{BDAddr, Central, Peripheral};
 use gan::gan_cube_connect;
 use giiker::giiker_connect;
 use gocube::gocube_connect;
+use moyu::moyu_connect;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -51,6 +53,7 @@ pub enum BluetoothCubeType {
     GAN,
     GoCube,
     Giiker,
+    MoYu,
 }
 
 impl BluetoothCubeType {
@@ -61,6 +64,8 @@ impl BluetoothCubeType {
             Some(BluetoothCubeType::GoCube)
         } else if name.starts_with("Gi") || name.starts_with("Mi Smart") {
             Some(BluetoothCubeType::Giiker)
+        } else if name.starts_with("MHC-") {
+            Some(BluetoothCubeType::MoYu)
         } else {
             None
         }
@@ -351,6 +356,7 @@ impl BluetoothCube {
             BluetoothCubeType::GAN => gan_cube_connect(peripheral, move_listener)?,
             BluetoothCubeType::GoCube => gocube_connect(peripheral, move_listener)?,
             BluetoothCubeType::Giiker => giiker_connect(peripheral, move_listener)?,
+            BluetoothCubeType::MoYu => moyu_connect(peripheral, move_listener)?,
         };
 
         init(cube.as_ref());
