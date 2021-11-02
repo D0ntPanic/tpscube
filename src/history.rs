@@ -35,6 +35,8 @@ struct AllTimeBestRegion {
     best_solve: Option<BestSolve>,
     best_ao5: Option<Average>,
     best_ao12: Option<Average>,
+    best_ao50: Option<Average>,
+    best_ao100: Option<Average>,
 }
 
 struct SessionRegion {
@@ -46,6 +48,8 @@ struct SessionRegion {
     best_solve: Option<BestSolve>,
     best_ao5: Option<Average>,
     best_ao12: Option<Average>,
+    best_ao50: Option<Average>,
+    best_ao100: Option<Average>,
     average: Option<u32>,
 }
 
@@ -118,6 +122,12 @@ impl AllTimeBestRegion {
             best_count += 1;
         }
         if self.best_ao12.is_some() {
+            best_count += 1;
+        }
+        if self.best_ao50.is_some() {
+            best_count += 1;
+        }
+        if self.best_ao100.is_some() {
             best_count += 1;
         }
         best_count
@@ -313,6 +323,121 @@ impl HistoryRegion for AllTimeBestRegion {
             if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
                 *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
             }
+
+            x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
+            best_count -= 1;
+            row_columns_left -= 1;
+        }
+
+        if row_columns_left == 0 {
+            row_columns_left = best_count.min(layout_metrics.best_columns);
+            x = rect.center().x
+                - (row_columns_left as f32
+                    * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
+                    - BEST_TIME_COL_PADDING)
+                    / 2.0;
+            y += ui.fonts().row_height(FontSize::Normal.into())
+                + ui.fonts().row_height(FontSize::BestTime.into())
+                + BEST_TIME_ROW_PADDING;
+        }
+
+        // Draw best average of 50
+        if let Some(average) = &self.best_ao50 {
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Best avg of 50".into());
+            ui.painter().galley(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y,
+                ),
+                galley,
+                Theme::Content.into(),
+            );
+
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::BestTime.into(), solve_time_string(average.time));
+            let rect = Rect::from_min_size(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y + ui.fonts().row_height(FontSize::Normal.into()),
+                ),
+                galley.size,
+            );
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                galley,
+                if interact.hovered() {
+                    Theme::Yellow.into()
+                } else {
+                    Theme::Orange.into()
+                },
+            );
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+            }
+
+            x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
+            best_count -= 1;
+            row_columns_left -= 1;
+        }
+
+        if row_columns_left == 0 {
+            row_columns_left = best_count.min(layout_metrics.best_columns);
+            x = rect.center().x
+                - (row_columns_left as f32
+                    * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
+                    - BEST_TIME_COL_PADDING)
+                    / 2.0;
+            y += ui.fonts().row_height(FontSize::Normal.into())
+                + ui.fonts().row_height(FontSize::BestTime.into())
+                + BEST_TIME_ROW_PADDING;
+        }
+
+
+        // Draw best average of 100
+        if let Some(average) = &self.best_ao100 {
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Best avg of 100".into());
+            ui.painter().galley(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y,
+                ),
+                galley,
+                Theme::Content.into(),
+            );
+
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::BestTime.into(), solve_time_string(average.time));
+            let rect = Rect::from_min_size(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y + ui.fonts().row_height(FontSize::Normal.into()),
+                ),
+                galley.size,
+            );
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                galley,
+                if interact.hovered() {
+                    Theme::Yellow.into()
+                } else {
+                    Theme::Orange.into()
+                },
+            );
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+            }
         }
     }
 }
@@ -372,6 +497,42 @@ impl HistoryRegion for SessionRegion {
             x += width;
         }
 
+        if let Some(best_ao50) = &self.best_ao50 {
+            let width = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Best avg of 50: ".into())
+                .size
+                .x
+                + ui.fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao50.time))
+                    .size
+                    .x
+                + SESSION_BEST_PADDING;
+            if (x + width) > layout_metrics.solve_content_width {
+                x = 0.0;
+                lines += 1;
+            }
+            x += width;
+        }
+
+        if let Some(best_ao100) = &self.best_ao100 {
+            let width = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Best avg of 100: ".into())
+                .size
+                .x
+                + ui.fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao100.time))
+                    .size
+                    .x
+                + SESSION_BEST_PADDING;
+            if (x + width) > layout_metrics.solve_content_width {
+                x = 0.0;
+                lines += 1;
+            }
+            x += width;
+        }
+
         if let Some(average) = &self.average {
             let width = ui
                 .fonts()
@@ -402,13 +563,15 @@ impl HistoryRegion for SessionRegion {
         all_time_best: &Option<AllTimeBestRegion>,
         details: &mut Option<SolveDetails>,
     ) {
-        let (all_time_best_solve, all_time_best_ao5, all_time_best_ao12) = match all_time_best {
+        let (all_time_best_solve, all_time_best_ao5, all_time_best_ao12, all_time_best_ao50, all_time_best_ao100) = match all_time_best {
             Some(region) => (
                 region.best_solve.as_ref().map(|best| best.time),
                 region.best_ao5.as_ref().map(|best| best.time),
                 region.best_ao12.as_ref().map(|best| best.time),
+                region.best_ao50.as_ref().map(|best| best.time),
+                region.best_ao100.as_ref().map(|best| best.time),
             ),
-            None => (None, None, None),
+            None => (None, None, None, None, None),
         };
 
         // Draw session background
@@ -840,6 +1003,86 @@ impl HistoryRegion for SessionRegion {
             }
         }
 
+        // Draw best average of 50
+        if let Some(best_ao50) = &self.best_ao50 {
+            let label_galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Best avg of 50: ".into());
+            let time_galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao50.time));
+            let label_width = label_galley.size.x;
+            let time_width = time_galley.size.x;
+            let width = label_width + time_width + SESSION_BEST_PADDING;
+
+            if (x + width) > max_x {
+                x = content_area.left();
+                y += ui.fonts().row_height(FontSize::Normal.into());
+            }
+
+            ui.painter()
+                .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                time_galley,
+                if interact.hovered() {
+                    Theme::Blue.into()
+                } else if Some(best_ao50.time) == all_time_best_ao50 {
+                    Theme::Orange.into()
+                } else {
+                    Theme::Content.into()
+                },
+            );
+            x += width;
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(best_ao50.solves.clone()));
+            }
+        }
+
+        // Draw best average of 100
+        if let Some(best_ao100) = &self.best_ao100 {
+            let label_galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Best avg of 100: ".into());
+            let time_galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao100.time));
+            let label_width = label_galley.size.x;
+            let time_width = time_galley.size.x;
+            let width = label_width + time_width + SESSION_BEST_PADDING;
+
+            if (x + width) > max_x {
+                x = content_area.left();
+                y += ui.fonts().row_height(FontSize::Normal.into());
+            }
+
+            ui.painter()
+                .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                time_galley,
+                if interact.hovered() {
+                    Theme::Blue.into()
+                } else if Some(best_ao100.time) == all_time_best_ao100 {
+                    Theme::Orange.into()
+                } else {
+                    Theme::Content.into()
+                },
+            );
+            x += width;
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(best_ao100.solves.clone()));
+            }
+        }
+
         // Draw session average
         if let Some(average) = &self.average {
             let label_galley = ui
@@ -889,6 +1132,8 @@ impl HistoryWidget {
         let mut all_time_best_solve: Option<BestSolve> = None;
         let mut all_time_best_ao5: Option<Average> = None;
         let mut all_time_best_ao12: Option<Average> = None;
+        let mut all_time_best_ao50: Option<Average> = None;
+        let mut all_time_best_ao100: Option<Average> = None;
 
         // Go through sessions, gather data about them, and create regions for them
         let mut session_regions = Vec::new();
@@ -906,6 +1151,8 @@ impl HistoryWidget {
             let best_solve = solves.as_slice().best();
             let best_ao5 = solves.as_slice().best_average(5);
             let best_ao12 = solves.as_slice().best_average(12);
+            let best_ao50 = solves.as_slice().best_average(50);
+            let best_ao100 = solves.as_slice().best_average(100);
 
             // Check for all time best solve
             if let Some(current_best) = &all_time_best_solve {
@@ -940,6 +1187,28 @@ impl HistoryWidget {
                 all_time_best_ao12 = best_ao12.clone();
             }
 
+            // Check for all time best average of 50
+            if let Some(current_best) = &all_time_best_ao50 {
+                if let Some(session_best) = &best_ao50 {
+                    if session_best.time < current_best.time {
+                        all_time_best_ao50 = best_ao50.clone();
+                    }
+                }
+            } else {
+                all_time_best_ao50 = best_ao50.clone();
+            }
+
+            // Check for all time best average of 100
+            if let Some(current_best) = &all_time_best_ao100 {
+                if let Some(session_best) = &best_ao100 {
+                    if session_best.time < current_best.time {
+                        all_time_best_ao100 = best_ao100.clone();
+                    }
+                }
+            } else {
+                all_time_best_ao100 = best_ao100.clone();
+            }
+
             // Calculate number of rows based on number of columns
             let rows =
                 (solves.len() + layout_metrics.solve_columns - 1) / layout_metrics.solve_columns;
@@ -960,6 +1229,8 @@ impl HistoryWidget {
                 best_solve,
                 best_ao5,
                 best_ao12,
+                best_ao50,
+                best_ao100,
                 average,
             });
         }
@@ -986,6 +1257,8 @@ impl HistoryWidget {
                 best_solve: all_time_best_solve,
                 best_ao5: all_time_best_ao5,
                 best_ao12: all_time_best_ao12,
+                best_ao50: all_time_best_ao50,
+                best_ao100: all_time_best_ao100,
             });
         }
 

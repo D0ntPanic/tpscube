@@ -112,6 +112,7 @@ impl AverageDetailsWindow {
         ))
         .collapsible(false)
         .resizable(false)
+        .scroll(true)
         .open(open)
         .show(ctxt, |ui| {
             ui.vertical_centered(|ui| {
