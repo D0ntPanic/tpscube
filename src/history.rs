@@ -149,6 +149,9 @@ impl HistoryRegion for AllTimeBestRegion {
         let rows = (self.columns() + layout_metrics.best_columns - 1) / layout_metrics.best_columns;
         rows as f32
             * (ui.fonts().row_height(FontSize::Normal.into())
+                // + ui.fonts().row_height(FontSize::Normal.into())
+                // + ui.fonts().row_height(FontSize::Normal.into())
+                + ui.fonts().row_height(FontSize::Section.into())
                 + ui.fonts().row_height(FontSize::BestTime.into())
                 + BEST_TIME_ROW_PADDING)
             - BEST_TIME_ROW_PADDING
@@ -452,6 +455,7 @@ impl HistoryRegion for AllTimeBestRegion {
             best_count -= 1;
             row_columns_left -= 1;
         }
+
         if row_columns_left == 0 {
             row_columns_left = best_count.min(layout_metrics.best_columns);
             x = rect.center().x
@@ -468,7 +472,7 @@ impl HistoryRegion for AllTimeBestRegion {
         if let Some(average) = &self.running_best_ao50 {
             let galley = ui
                 .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Running best ao50".into());
+                .layout_single_line(FontSize::Normal.into(), "Running ao50".into());
             ui.painter().galley(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
@@ -478,9 +482,10 @@ impl HistoryRegion for AllTimeBestRegion {
                 Theme::Content.into(),
             );
 
+            let line = format!("Best  {}", solve_time_string(average.time));
             let galley = ui
                 .fonts()
-                .layout_single_line(FontSize::Section.into(), solve_time_string(average.time));
+                .layout_single_line(FontSize::Section.into(), line);
             let rect = Rect::from_min_size(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
@@ -506,9 +511,10 @@ impl HistoryRegion for AllTimeBestRegion {
 
             // Draw running last average of 50
             if let Some(average) = &self.running_last_ao50 {
+                let line = format!("Last  {}", solve_time_string(average.time));
                 let galley = ui
                     .fonts()
-                    .layout_single_line(FontSize::Section.into(), solve_time_string(average.time));
+                    .layout_single_line(FontSize::Section.into(), line);
                 let rect = Rect::from_min_size(
                     Pos2::new(
                         x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
@@ -546,17 +552,23 @@ impl HistoryRegion for AllTimeBestRegion {
                     * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
                     - BEST_TIME_COL_PADDING)
                     / 2.0;
-            y += ui.fonts().row_height(FontSize::Normal.into())
-                // + ui.fonts().row_height(FontSize::Section.into())
-                + ui.fonts().row_height(FontSize::BestTime.into())
-                + BEST_TIME_ROW_PADDING;
+            if row_columns_left == 1 {
+                y += ui.fonts().row_height(FontSize::Normal.into())
+                    + ui.fonts().row_height(FontSize::BestTime.into())
+                    + BEST_TIME_ROW_PADDING;
+            } else {
+                y += ui.fonts().row_height(FontSize::Normal.into())
+                    + ui.fonts().row_height(FontSize::Section.into())
+                    + ui.fonts().row_height(FontSize::BestTime.into())
+                    + BEST_TIME_ROW_PADDING;
+            }
         }
 
         // Draw running best average of 100
         if let Some(average) = &self.running_best_ao100 {
             let galley = ui
                 .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Running best ao100".into());
+                .layout_single_line(FontSize::Normal.into(), "Running ao100".into());
             ui.painter().galley(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
@@ -565,10 +577,10 @@ impl HistoryRegion for AllTimeBestRegion {
                 galley,
                 Theme::Content.into(),
             );
-
+            let line = format!("Best  {}", solve_time_string(average.time));
             let galley = ui
                 .fonts()
-                .layout_single_line(FontSize::Section.into(), solve_time_string(average.time));
+                .layout_single_line(FontSize::Section.into(), line);
             let rect = Rect::from_min_size(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
@@ -594,9 +606,10 @@ impl HistoryRegion for AllTimeBestRegion {
 
             // Draw running last average of 100
             if let Some(average) = &self.running_last_ao100 {
+                let line = format!("Last  {}", solve_time_string(average.time));
                 let galley = ui
                     .fonts()
-                    .layout_single_line(FontSize::Section.into(), solve_time_string(average.time));
+                    .layout_single_line(FontSize::Section.into(), line);
                 let rect = Rect::from_min_size(
                     Pos2::new(
                         x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
@@ -1344,14 +1357,7 @@ impl HistoryWidget {
                 // Skip empty sessions
                 continue;
             }
-            println!("+all_solves({}) solves({})", all_solves.len(), solves.len());
             all_solves.extend_from_slice(solves.as_slice());
-            // println!(
-            //     "=all_solves({}) solves({}): {}",
-            //     all_solves.len(),
-            //     solves.len(),
-            //     all_solves.as_slice().average_ignore_dnf().unwrap()
-            // );
 
             let last_solve = solves.last().unwrap().clone();
 
