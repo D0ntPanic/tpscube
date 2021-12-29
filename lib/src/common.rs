@@ -293,7 +293,11 @@ impl ListAverage for &[Option<u32>] {
 
         // Compute final average
         if let Some(sum) = sum {
-            Some(((sum + (solves.len() as u64 / 2)) / (solves.len() as u64)) as u32)
+            if solves.len() > 0 {
+                Some(((sum + (solves.len() as u64 / 2)) / (solves.len() as u64)) as u32)
+            } else {
+                None
+            }
         } else {
             None
         }
