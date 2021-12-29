@@ -37,6 +37,10 @@ struct AllTimeBestRegion {
     best_ao12: Option<Average>,
     best_ao50: Option<Average>,
     best_ao100: Option<Average>,
+    running_best_ao50: Option<Average>,
+    running_best_ao100: Option<Average>,
+    running_last_ao50: Option<Average>,
+    running_last_ao100: Option<Average>,
 }
 
 struct SessionRegion {
@@ -128,6 +132,12 @@ impl AllTimeBestRegion {
             best_count += 1;
         }
         if self.best_ao100.is_some() {
+            best_count += 1;
+        }
+        if self.running_best_ao50.is_some() {
+            best_count += 1;
+        }
+        if self.running_best_ao100.is_some() {
             best_count += 1;
         }
         best_count
@@ -398,7 +408,6 @@ impl HistoryRegion for AllTimeBestRegion {
                 + BEST_TIME_ROW_PADDING;
         }
 
-
         // Draw best average of 100
         if let Some(average) = &self.best_ao100 {
             let galley = ui
@@ -437,6 +446,178 @@ impl HistoryRegion for AllTimeBestRegion {
             // Check for click on solve time
             if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
                 *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+            }
+
+            x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
+            best_count -= 1;
+            row_columns_left -= 1;
+        }
+        if row_columns_left == 0 {
+            row_columns_left = best_count.min(layout_metrics.best_columns);
+            x = rect.center().x
+                - (row_columns_left as f32
+                    * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
+                    - BEST_TIME_COL_PADDING)
+                    / 2.0;
+            y += ui.fonts().row_height(FontSize::Normal.into())
+                + ui.fonts().row_height(FontSize::BestTime.into())
+                + BEST_TIME_ROW_PADDING;
+        }
+
+        // Draw running best average of 50
+        if let Some(average) = &self.running_best_ao50 {
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Running best ao50".into());
+            ui.painter().galley(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y,
+                ),
+                galley,
+                Theme::Content.into(),
+            );
+
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), solve_time_string(average.time));
+            let rect = Rect::from_min_size(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y + ui.fonts().row_height(FontSize::Normal.into()),
+                ),
+                galley.size,
+            );
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                galley,
+                if interact.hovered() {
+                    Theme::Yellow.into()
+                } else {
+                    Theme::Orange.into()
+                },
+            );
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+            }
+
+            // Draw running last average of 50
+            if let Some(average) = &self.running_last_ao50 {
+                let galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(average.time));
+                let rect = Rect::from_min_size(
+                    Pos2::new(
+                        x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                        y + 2.0 * ui.fonts().row_height(FontSize::Normal.into()),
+                    ),
+                    galley.size,
+                );
+                let interact = ui.allocate_rect(rect, Sense::click());
+                ui.painter().galley(
+                    rect.left_top(),
+                    galley,
+                    if interact.hovered() {
+                        Theme::Yellow.into()
+                    } else {
+                        Theme::Orange.into()
+                    },
+                );
+
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+                }
+            }
+
+            x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
+            best_count -= 1;
+            row_columns_left -= 1;
+        }
+
+        if row_columns_left == 0 {
+            row_columns_left = best_count.min(layout_metrics.best_columns);
+            x = rect.center().x
+                - (row_columns_left as f32
+                    * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
+                    - BEST_TIME_COL_PADDING)
+                    / 2.0;
+            y += ui.fonts().row_height(FontSize::Normal.into())
+                + ui.fonts().row_height(FontSize::Normal.into())
+                + ui.fonts().row_height(FontSize::Normal.into())
+                + BEST_TIME_ROW_PADDING;
+        }
+
+        // Draw running best average of 100
+        if let Some(average) = &self.running_best_ao100 {
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "Running best ao100".into());
+            ui.painter().galley(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y,
+                ),
+                galley,
+                Theme::Content.into(),
+            );
+
+            let galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), solve_time_string(average.time));
+            let rect = Rect::from_min_size(
+                Pos2::new(
+                    x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    y + ui.fonts().row_height(FontSize::Normal.into()),
+                ),
+                galley.size,
+            );
+            let interact = ui.allocate_rect(rect, Sense::click());
+            ui.painter().galley(
+                rect.left_top(),
+                galley,
+                if interact.hovered() {
+                    Theme::Yellow.into()
+                } else {
+                    Theme::Orange.into()
+                },
+            );
+
+            // Check for click on solve time
+            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+            }
+
+            // Draw running last average of 100
+            if let Some(average) = &self.running_last_ao100 {
+                let galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(average.time));
+                let rect = Rect::from_min_size(
+                    Pos2::new(
+                        x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                        y + 2.0 * ui.fonts().row_height(FontSize::Normal.into()),
+                    ),
+                    galley.size,
+                );
+                let interact = ui.allocate_rect(rect, Sense::click());
+                ui.painter().galley(
+                    rect.left_top(),
+                    galley,
+                    if interact.hovered() {
+                        Theme::Yellow.into()
+                    } else {
+                        Theme::Orange.into()
+                    },
+                );
+
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::AverageOfSolves(average.solves.clone()));
+                }
             }
         }
     }
@@ -563,7 +744,13 @@ impl HistoryRegion for SessionRegion {
         all_time_best: &Option<AllTimeBestRegion>,
         details: &mut Option<SolveDetails>,
     ) {
-        let (all_time_best_solve, all_time_best_ao5, all_time_best_ao12, all_time_best_ao50, all_time_best_ao100) = match all_time_best {
+        let (
+            all_time_best_solve,
+            all_time_best_ao5,
+            all_time_best_ao12,
+            all_time_best_ao50,
+            all_time_best_ao100,
+        ) = match all_time_best {
             Some(region) => (
                 region.best_solve.as_ref().map(|best| best.time),
                 region.best_ao5.as_ref().map(|best| best.time),
@@ -652,10 +839,17 @@ impl HistoryRegion for SessionRegion {
 
                 // Layout solve time for right alignment
                 let time = self.solves[i].final_time();
+                let tps = if let Some(moves) = &self.solves[i].moves {
+                    let time = (time.unwrap() + 5) / 10;
+                    let tps = moves.len() as u32 * 1000 / time;
+                    format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
+                } else {
+                    format!("")
+                };
                 let galley = ui.fonts().layout_single_line(
                     FontSize::Normal.into(),
                     match time {
-                        Some(time) => solve_time_string(time),
+                        Some(time) => format!("{}{}", solve_time_string(time), tps),
                         None => "DNF".into(),
                     },
                 );
@@ -1134,15 +1328,28 @@ impl HistoryWidget {
         let mut all_time_best_ao12: Option<Average> = None;
         let mut all_time_best_ao50: Option<Average> = None;
         let mut all_time_best_ao100: Option<Average> = None;
+        let mut running_best_ao50: Option<Average> = None;
+        let mut running_best_ao100: Option<Average> = None;
+        let mut running_last_ao50: Option<Average> = None;
+        let mut running_last_ao100: Option<Average> = None;
 
         // Go through sessions, gather data about them, and create regions for them
         let mut session_regions = Vec::new();
+        let mut all_solves: Vec<Solve> = Vec::new();
         for session in history.sessions().values() {
             let solves: Vec<Solve> = session.to_vec(history);
             if solves.len() == 0 {
                 // Skip empty sessions
                 continue;
             }
+            println!("+all_solves({}) solves({})", all_solves.len(), solves.len());
+            all_solves.extend_from_slice(solves.as_slice());
+            println!(
+                "=all_solves({}) solves({}): {}",
+                all_solves.len(),
+                solves.len(),
+                all_solves.as_slice().average_ignore_dnf().unwrap()
+            );
 
             let last_solve = solves.last().unwrap().clone();
 
@@ -1235,6 +1442,19 @@ impl HistoryWidget {
             });
         }
 
+        all_solves.sort_by_key(|solve| solve.created);
+
+        // println!(
+        //     "all_solves({}): {} {}",
+        //     all_solves.len(),
+        //     all_solves.as_slice().average_ignore_dnf().unwrap(),
+        //     all_solves.as_slice().last_average_ignore_dnf(50).unwrap().time,
+        // );
+        running_best_ao50 = all_solves.as_slice().best_average_ignore_dnf(50);
+        running_last_ao50 = all_solves.as_slice().last_average_ignore_dnf(50);
+        running_best_ao100 = all_solves.as_slice().best_average_ignore_dnf(100);
+        running_last_ao100 = all_solves.as_slice().last_average_ignore_dnf(100);
+
         // Sort regions by solve time in descending order
         session_regions.sort_unstable_by(|a, b| b.last_solve.cmp(&a.last_solve));
 
@@ -1259,6 +1479,10 @@ impl HistoryWidget {
                 best_ao12: all_time_best_ao12,
                 best_ao50: all_time_best_ao50,
                 best_ao100: all_time_best_ao100,
+                running_best_ao50: running_best_ao50,
+                running_best_ao100: running_best_ao100,
+                running_last_ao50: running_last_ao50,
+                running_last_ao100: running_last_ao100,
             });
         }
 
@@ -1291,7 +1515,7 @@ impl HistoryWidget {
                 .layout_single_line(FontSize::Normal.into(), "9999.".into());
             let solve_time_galley = ui
                 .fonts()
-                .layout_single_line(FontSize::Normal.into(), "9:59.99".into());
+                .layout_single_line(FontSize::Normal.into(), "9:59.99 (999/9.9)".into());
             let solve_penalty_galley = ui
                 .fonts()
                 .layout_single_line(FontSize::Small.into(), " (+2) ".into());

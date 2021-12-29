@@ -25,6 +25,27 @@ impl TimerState {
         }
     }
 
+    pub fn current_time(&self) -> u32 {
+        match self {
+            TimerState::Inactive(time, _) | TimerState::SolveComplete(time, _) => {
+                *time
+            }
+            TimerState::Preparing(_, time, _) => {
+                if self.is_solving() {
+                    0
+                } else {
+                    *time
+                }
+            }
+            TimerState::Ready
+            | TimerState::BluetoothReady
+            | TimerState::BluetoothPreparing(_, _, _) => 0,
+            TimerState::Solving(start) | TimerState::BluetoothSolving(start, _, _) => {
+                (Instant::now() - *start).as_millis() as u32
+            }
+        }
+    }
+
     pub fn current_time_string(&self) -> String {
         match self {
             TimerState::Inactive(time, _) | TimerState::SolveComplete(time, _) => {
