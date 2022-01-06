@@ -410,6 +410,9 @@ impl SolveDetailsWindow {
             let move_count_header = ui
                 .fonts()
                 .layout_single_line(FontSize::Small.into(), "Moves".into());
+            let tps_header = ui
+                .fonts()
+                .layout_single_line(FontSize::Small.into(), "eTPS / TPS".into());
 
             // Go through all steps and lay out each to determine column widths
             let mut step_names = Vec::new();
@@ -417,6 +420,7 @@ impl SolveDetailsWindow {
             let mut recognitions = Vec::new();
             let mut executions = Vec::new();
             let mut move_counts = Vec::new();
+            let mut tpses = Vec::new();
             let mut step_name_width: f32 = step_name_header.size.x;
             let mut recognition_width: f32 = if target_width > 320.0 {
                 recognition_header.size.x
@@ -425,6 +429,7 @@ impl SolveDetailsWindow {
             };
             let mut execution_width: f32 = execution_header.size.x;
             let mut move_count_width: f32 = move_count_header.size.x;
+            let mut tps_width: f32 = tps_header.size.x;
             let mut max_step_time = 0;
             let mut total_recognition_time = 0;
             let mut total_execution_time = 0;
@@ -480,6 +485,32 @@ impl SolveDetailsWindow {
                 move_count_width = move_count_width.max(move_count.size.x);
                 move_counts.push(move_count);
 
+                // Lay out tps column
+                let etps_value: i32 = if step.execution_time != 0 {
+                    let time = (step.execution_time + 5) / 10;
+                    step.move_count as i32 * 1000 / time as i32
+                } else {
+                    -1
+                };
+                let tps_value: i32 = if step.execution_time != 0 {
+                    let time = (step.execution_time + step.recognition_time + 5) / 10;
+                    step.move_count as i32 * 1000 / time as i32
+                } else {
+                    -1
+                };
+                let tps = ui.fonts().layout_single_line(
+                    FontSize::Normal.into(),
+                    format!(
+                        "{}.{} / {}.{}",
+                        etps_value / 10,
+                        etps_value % 10,
+                        tps_value / 10,
+                        tps_value % 10,
+                    ),
+                );
+                tps_width = tps_width.max(tps.size.x);
+                tpses.push(tps);
+
                 max_step_time = max_step_time.max(step.recognition_time + step.execution_time);
 
                 total_recognition_time += step.recognition_time;
@@ -488,36 +519,63 @@ impl SolveDetailsWindow {
             }
 
             // Lay out total times and move counts
-            let total_recognition_time = ui.fonts().layout_single_line(
+            let total_recognition_time_ui = ui.fonts().layout_single_line(
                 FontSize::Normal.into(),
                 solve_time_string(total_recognition_time),
             );
-            let total_execution_time = ui.fonts().layout_single_line(
+            let total_execution_time_ui = ui.fonts().layout_single_line(
                 FontSize::Normal.into(),
                 solve_time_string(total_execution_time),
             );
-            let total_move_count = ui
+            let total_move_count_ui = ui
                 .fonts()
                 .layout_single_line(FontSize::Normal.into(), format!("{}", total_move_count));
-            recognition_width = recognition_width.max(total_recognition_time.size.x);
-            execution_width = execution_width.max(total_execution_time.size.x);
-            move_count_width = move_count_width.max(total_move_count.size.x);
+            let total_etps_value = if total_execution_time != 0 {
+                let time = (total_execution_time + 5) / 10;
+                total_move_count as i32 * 1000 / time as i32
+            } else {
+                -1
+            };
+            let total_tps_value = if total_execution_time != 0 {
+                let time = (total_execution_time + total_recognition_time + 5) / 10;
+                total_move_count as i32 * 1000 / time as i32
+            } else {
+                -1
+            };
+            let total_tps_ui = ui.fonts().layout_single_line(
+                FontSize::Normal.into(),
+                // format!("{}.{}", total_tps_value / 10, total_tps_value % 10),
+                format!(
+                    "{}.{} / {}.{}",
+                    total_etps_value / 10,
+                    total_etps_value % 10,
+                    total_tps_value / 10,
+                    total_tps_value % 10,
+                ),
+            );
+            recognition_width = recognition_width.max(total_recognition_time_ui.size.x);
+            execution_width = execution_width.max(total_execution_time_ui.size.x);
+            move_count_width = move_count_width.max(total_move_count_ui.size.x);
+            tps_width = tps_width.max(total_tps_ui.size.x);
 
             // Add padding to columns and compute size of graph column
             step_name_width += STEP_COLUMN_PADDING;
             recognition_width += STEP_COLUMN_PADDING;
             execution_width += STEP_COLUMN_PADDING;
             move_count_width += STEP_COLUMN_PADDING;
+            tps_width += STEP_COLUMN_PADDING;
             let graph_width = target_width
                 - step_name_width
                 - recognition_width
                 - execution_width
-                - move_count_width;
+                - move_count_width
+                - tps_width;
 
             // Get column offsets
             let step_offset = 0.0;
             let graph_offset = step_name_width;
-            let move_count_offset = target_width;
+            let tps_offset = target_width;
+            let move_count_offset = tps_offset - tps_width;
             let execution_offset = move_count_offset - move_count_width;
             let recognition_offset = execution_offset - execution_width;
 
@@ -553,6 +611,11 @@ impl SolveDetailsWindow {
                     rect.top(),
                 ),
                 move_count_header,
+                Theme::Disabled.into(),
+            );
+            ui.painter().galley(
+                Pos2::new(rect.left() + tps_offset - tps_header.size.x, rect.top()),
+                tps_header,
                 Theme::Disabled.into(),
             );
 
@@ -629,6 +692,16 @@ impl SolveDetailsWindow {
                     color,
                 );
 
+                // Draw tps
+                ui.painter().galley(
+                    Pos2::new(
+                        rect.left() + tps_offset - tpses[i].size.x,
+                        rect.top(),
+                    ),
+                    tpses[i].clone(),
+                    color,
+                );
+
                 // Draw graph
                 let recognize_width =
                     graph_width * step.recognition_time as f32 / max_step_time as f32;
@@ -686,30 +759,40 @@ impl SolveDetailsWindow {
             // Draw total recognition time
             ui.painter().galley(
                 Pos2::new(
-                    rect.left() + recognition_offset - total_recognition_time.size.x,
+                    rect.left() + recognition_offset - total_recognition_time_ui.size.x,
                     rect.top(),
                 ),
-                total_recognition_time,
+                total_recognition_time_ui,
                 Theme::Content.into(),
             );
 
             // Draw total execution time
             ui.painter().galley(
                 Pos2::new(
-                    rect.left() + execution_offset - total_execution_time.size.x,
+                    rect.left() + execution_offset - total_execution_time_ui.size.x,
                     rect.top(),
                 ),
-                total_execution_time,
+                total_execution_time_ui,
                 Theme::Content.into(),
             );
 
             // Draw total move count
             ui.painter().galley(
                 Pos2::new(
-                    rect.left() + move_count_offset - total_move_count.size.x,
+                    rect.left() + move_count_offset - total_move_count_ui.size.x,
                     rect.top(),
                 ),
-                total_move_count,
+                total_move_count_ui,
+                Theme::Content.into(),
+            );
+
+            // Draw total tps
+            ui.painter().galley(
+                Pos2::new(
+                    rect.left() + tps_offset - total_tps_ui.size.x,
+                    rect.top(),
+                ),
+                total_tps_ui,
                 Theme::Content.into(),
             );
 
