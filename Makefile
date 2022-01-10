@@ -9,6 +9,7 @@ mac: native
 	cp Info.plist TPS\ Cube.app/Contents/
 	cp target/release/tpscube TPS\ Cube.app/Contents/MacOS/
 	cp images/icon.icns TPS\ Cube.app/Contents/Resources/
+	codesign -f -o runtime --timestamp -s - TPS\ Cube.app
 
 web:
 	RUSTFLAGS=--cfg=web_sys_unstable_apis cargo build --release --lib --target wasm32-unknown-unknown --no-default-features --features wasm
