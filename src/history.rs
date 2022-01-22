@@ -149,8 +149,6 @@ impl HistoryRegion for AllTimeBestRegion {
         let rows = (self.columns() + layout_metrics.best_columns - 1) / layout_metrics.best_columns;
         rows as f32
             * (ui.fonts().row_height(FontSize::Normal.into())
-                // + ui.fonts().row_height(FontSize::Normal.into())
-                // + ui.fonts().row_height(FontSize::Normal.into())
                 + ui.fonts().row_height(FontSize::Section.into())
                 + ui.fonts().row_height(FontSize::BestTime.into())
                 + BEST_TIME_ROW_PADDING)
@@ -489,6 +487,7 @@ impl HistoryRegion for AllTimeBestRegion {
             let rect = Rect::from_min_size(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    // Use smaller font to fit in two rows for running best and last averages
                     y + ui.fonts().row_height(FontSize::Section.into()),
                 ),
                 galley.size,
@@ -519,6 +518,7 @@ impl HistoryRegion for AllTimeBestRegion {
                     Pos2::new(
                         x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
                         y + ui.fonts().row_height(FontSize::Normal.into())
+                            // Use smaller font to fit in two rows for running best and last averages
                             + ui.fonts().row_height(FontSize::Section.into()),
                     ),
                     galley.size,
@@ -584,6 +584,7 @@ impl HistoryRegion for AllTimeBestRegion {
             let rect = Rect::from_min_size(
                 Pos2::new(
                     x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
+                    // Use smaller font to fit in two rows for running best and last averages
                     y + ui.fonts().row_height(FontSize::Section.into()),
                 ),
                 galley.size,
@@ -614,6 +615,7 @@ impl HistoryRegion for AllTimeBestRegion {
                     Pos2::new(
                         x + layout_metrics.best_solve_width / 2.0 - galley.size.x / 2.0,
                         y + ui.fonts().row_height(FontSize::Normal.into())
+                            // Use smaller font to fit in two rows for running best and last averages
                             + ui.fonts().row_height(FontSize::Section.into()),
                     ),
                     galley.size,
@@ -857,7 +859,6 @@ impl HistoryRegion for SessionRegion {
                 let galley = ui.fonts().layout_single_line(
                     FontSize::Normal.into(),
                     match time {
-                        // Some(time) => format!("{}{}", solve_time_string(time), tps),
                         Some(time) => format!(
                             "{}{}",
                             solve_time_string(time),
@@ -1347,10 +1348,6 @@ impl HistoryWidget {
         let mut all_time_best_ao12: Option<Average> = None;
         let mut all_time_best_ao50: Option<Average> = None;
         let mut all_time_best_ao100: Option<Average> = None;
-        let mut running_best_ao50: Option<Average> = None;
-        let mut running_best_ao100: Option<Average> = None;
-        let mut running_last_ao50: Option<Average> = None;
-        let mut running_last_ao100: Option<Average> = None;
 
         // Go through sessions, gather data about them, and create regions for them
         let mut session_regions = Vec::new();
@@ -1456,17 +1453,6 @@ impl HistoryWidget {
 
         all_solves.sort_by_key(|solve| solve.created);
 
-        // Ignore all DNFs when computing the running averages
-        // running_best_ao50 = all_solves.as_slice().best_average_ignore_dnf(50);
-        // running_last_ao50 = all_solves.as_slice().last_average_ignore_dnf(50);
-        // running_best_ao100 = all_solves.as_slice().best_average_ignore_dnf(100);
-        // running_last_ao100 = all_solves.as_slice().last_average_ignore_dnf(100);
-
-        running_best_ao50 = all_solves.as_slice().best_average(50);
-        running_last_ao50 = all_solves.as_slice().last_average(50);
-        running_best_ao100 = all_solves.as_slice().best_average(100);
-        running_last_ao100 = all_solves.as_slice().last_average(100);
-
         // Sort regions by solve time in descending order
         session_regions.sort_unstable_by(|a, b| b.last_solve.cmp(&a.last_solve));
 
@@ -1484,6 +1470,11 @@ impl HistoryWidget {
             regions.push(Box::new(NoSolvesRegion));
             self.all_time_best_region = None;
         } else {
+            let running_best_ao50 = all_solves.as_slice().best_average(50);
+            let running_last_ao50 = all_solves.as_slice().last_average(50);
+            let running_best_ao100 = all_solves.as_slice().best_average(100);
+            let running_last_ao100 = all_solves.as_slice().last_average(100);
+
             // Add an all-time best region at the top
             self.all_time_best_region = Some(AllTimeBestRegion {
                 best_solve: all_time_best_solve,
