@@ -854,17 +854,21 @@ impl HistoryRegion for SessionRegion {
 
                 // Layout solve time for right alignment
                 let time = self.solves[i].final_time();
-                let tps = if let Some(moves) = &self.solves[i].moves {
-                    let time = (time.unwrap() + 5) / 10;
-                    let tps = moves.len() as u32 * 1000 / time;
-                    format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
-                } else {
-                    format!("")
-                };
                 let galley = ui.fonts().layout_single_line(
                     FontSize::Normal.into(),
                     match time {
-                        Some(time) => format!("{}{}", solve_time_string(time), tps),
+                        // Some(time) => format!("{}{}", solve_time_string(time), tps),
+                        Some(time) => format!(
+                            "{}{}",
+                            solve_time_string(time),
+                            if let Some(moves) = &self.solves[i].moves {
+                                let time = (time + 5) / 10;
+                                let tps = moves.len() as u32 * 1000 / time;
+                                format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
+                            } else {
+                                format!("")
+                            }
+                        ),
                         None => "DNF".into(),
                     },
                 );
