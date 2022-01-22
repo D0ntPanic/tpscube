@@ -1452,16 +1452,16 @@ impl HistoryWidget {
 
         all_solves.sort_by_key(|solve| solve.created);
 
-        // println!(
-        //     "all_solves({}): {} {}",
-        //     all_solves.len(),
-        //     all_solves.as_slice().average_ignore_dnf().unwrap(),
-        //     all_solves.as_slice().last_average_ignore_dnf(50).unwrap().time,
-        // );
-        running_best_ao50 = all_solves.as_slice().best_average_ignore_dnf(50);
-        running_last_ao50 = all_solves.as_slice().last_average_ignore_dnf(50);
-        running_best_ao100 = all_solves.as_slice().best_average_ignore_dnf(100);
-        running_last_ao100 = all_solves.as_slice().last_average_ignore_dnf(100);
+        // Ignore all DNFs when computing the running averages
+        // running_best_ao50 = all_solves.as_slice().best_average_ignore_dnf(50);
+        // running_last_ao50 = all_solves.as_slice().last_average_ignore_dnf(50);
+        // running_best_ao100 = all_solves.as_slice().best_average_ignore_dnf(100);
+        // running_last_ao100 = all_solves.as_slice().last_average_ignore_dnf(100);
+
+        running_best_ao50 = all_solves.as_slice().best_average(50);
+        running_last_ao50 = all_solves.as_slice().last_average(50);
+        running_best_ao100 = all_solves.as_slice().best_average(100);
+        running_last_ao100 = all_solves.as_slice().last_average(100);
 
         // Sort regions by solve time in descending order
         session_regions.sort_unstable_by(|a, b| b.last_solve.cmp(&a.last_solve));
