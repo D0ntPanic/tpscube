@@ -488,13 +488,21 @@ impl SolveDetailsWindow {
                 // Lay out tps column
                 let etps_value: i32 = if step.execution_time != 0 {
                     let time = (step.execution_time + 5) / 10;
-                    step.move_count as i32 * 1000 / time as i32
+                    if time == 0 {
+                        0
+                    } else {
+                        step.move_count as i32 * 1000 / time as i32
+                    }
                 } else {
                     -1
                 };
                 let tps_value: i32 = if step.execution_time != 0 {
                     let time = (step.execution_time + step.recognition_time + 5) / 10;
-                    step.move_count as i32 * 1000 / time as i32
+                    if time == 0 {
+                        0
+                    } else {
+                        step.move_count as i32 * 1000 / time as i32
+                    }
                 } else {
                     -1
                 };
@@ -532,13 +540,21 @@ impl SolveDetailsWindow {
                 .layout_single_line(FontSize::Normal.into(), format!("{}", total_move_count));
             let total_etps_value = if total_execution_time != 0 {
                 let time = (total_execution_time + 5) / 10;
-                total_move_count as i32 * 1000 / time as i32
+                if time == 0 {
+                    0
+                } else {
+                    total_move_count as i32 * 1000 / time as i32
+                }
             } else {
                 -1
             };
             let total_tps_value = if total_execution_time != 0 {
                 let time = (total_execution_time + total_recognition_time + 5) / 10;
-                total_move_count as i32 * 1000 / time as i32
+                if time == 0 {
+                    0
+                } else {
+                    total_move_count as i32 * 1000 / time as i32
+                }
             } else {
                 -1
             };
@@ -694,10 +710,7 @@ impl SolveDetailsWindow {
 
                 // Draw tps
                 ui.painter().galley(
-                    Pos2::new(
-                        rect.left() + tps_offset - tpses[i].size.x,
-                        rect.top(),
-                    ),
+                    Pos2::new(rect.left() + tps_offset - tpses[i].size.x, rect.top()),
                     tpses[i].clone(),
                     color,
                 );
@@ -788,10 +801,7 @@ impl SolveDetailsWindow {
 
             // Draw total tps
             ui.painter().galley(
-                Pos2::new(
-                    rect.left() + tps_offset - total_tps_ui.size.x,
-                    rect.top(),
-                ),
+                Pos2::new(rect.left() + tps_offset - total_tps_ui.size.x, rect.top()),
                 total_tps_ui,
                 Theme::Content.into(),
             );
