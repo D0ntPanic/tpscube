@@ -1,9 +1,8 @@
-use crate::bluetooth::BluetoothCubeDevice;
+use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
 use crate::common::{Color, Cube, Face, Move, TimedMove};
 use crate::cube3x3x3::{Cube3x3x3, Cube3x3x3Faces};
 use anyhow::{anyhow, Result};
 use btleplug::api::{Characteristic, Peripheral, WriteType};
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -33,7 +32,7 @@ impl<P: Peripheral + 'static> GoCube<P> {
         device: P,
         read: Characteristic,
         write: Characteristic,
-        move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+        move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
     ) -> Result<Self> {
         let state = Arc::new(Mutex::new(Cube3x3x3::new()));
         let state_set = Arc::new(Mutex::new(false));
@@ -104,7 +103,10 @@ impl<P: Peripheral + 'static> GoCube<P> {
                     }
 
                     // Let clients know there is a new move
-                    move_listener(&timed_moves, state_copy.lock().unwrap().deref());
+                    move_listener(BluetoothCubeEvent::Move(
+                        timed_moves,
+                        state_copy.lock().unwrap().clone(),
+                    ));
                 }
                 Self::STATE_MESSAGE => {
                     if value.value.len() < 64 {
@@ -258,7 +260,7 @@ impl<P: Peripheral> BluetoothCubeDevice for GoCube<P> {
 
 pub(crate) fn gocube_connect<P: Peripheral + 'static>(
     device: P,
-    move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+    move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
 ) -> Result<Box<dyn BluetoothCubeDevice>> {
     let characteristics = device.discover_characteristics()?;
 

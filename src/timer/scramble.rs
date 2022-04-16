@@ -5,10 +5,11 @@ use crate::gl::GlContext;
 use crate::theme::Theme;
 use crate::timer::analysis::TimerPostAnalysis;
 use crate::timer::state::TimerState;
+use crate::timer::BluetoothEvent;
 use crate::widgets::fit_scramble;
 use anyhow::Result;
 use egui::{CtxRef, Pos2, Rect, Response, Sense, Ui, Vec2};
-use tpscube_core::{scramble_3x3x3, Cube, Cube3x3x3, Move, MoveSequence, TimedMove};
+use tpscube_core::{scramble_3x3x3, Cube, Cube3x3x3, Move, MoveSequence};
 
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
 const TARGET_ANALYSIS_SCRAMBLE_FRACTION: f32 = 0.15;
@@ -188,40 +189,42 @@ impl TimerCube {
         self.scramble_fix_moves.push(mv.inverse());
     }
 
-    pub fn apply_bluetooth_moves_for_scramble(&mut self, moves: &[TimedMove]) {
-        for mv in moves {
-            if self.scramble_fix_moves.len() > 0 {
-                // There are moves needed to fix a bad scramble. Verify them.
-                match self.apply_bluetooth_move_for_expected_move(
-                    mv.move_(),
-                    *self.scramble_fix_moves.last().unwrap(),
-                ) {
-                    ScrambleMoveResult::Good => {
-                        self.scramble_fix_moves.pop();
-                    }
-                    ScrambleMoveResult::Bad => self.bad_bluetooth_move(mv.move_()),
-                    ScrambleMoveResult::BadWithPending(pending) => {
-                        self.bad_bluetooth_move(pending);
-                        self.bad_bluetooth_move(mv.move_());
-                    }
-                    ScrambleMoveResult::Pending => (),
-                }
-            } else if let Some(index) = self.scramble_move_index {
-                if index >= self.displayed_scramble.len() {
-                    // Extra moves when already done with scramble but timer hasn't
-                    // started yet, go into fix mode to undo them.
-                    self.bad_bluetooth_move(mv.move_());
-                } else {
-                    // Verify scramble step
-                    let expected = self.displayed_scramble[index];
-                    match self.apply_bluetooth_move_for_expected_move(mv.move_(), expected) {
-                        ScrambleMoveResult::Good => self.scramble_move_index = Some(index + 1),
+    pub fn apply_bluetooth_moves_for_scramble(&mut self, events: &[BluetoothEvent]) {
+        for event in events {
+            if let BluetoothEvent::Move(mv) = event {
+                if self.scramble_fix_moves.len() > 0 {
+                    // There are moves needed to fix a bad scramble. Verify them.
+                    match self.apply_bluetooth_move_for_expected_move(
+                        mv.move_(),
+                        *self.scramble_fix_moves.last().unwrap(),
+                    ) {
+                        ScrambleMoveResult::Good => {
+                            self.scramble_fix_moves.pop();
+                        }
                         ScrambleMoveResult::Bad => self.bad_bluetooth_move(mv.move_()),
                         ScrambleMoveResult::BadWithPending(pending) => {
                             self.bad_bluetooth_move(pending);
                             self.bad_bluetooth_move(mv.move_());
                         }
                         ScrambleMoveResult::Pending => (),
+                    }
+                } else if let Some(index) = self.scramble_move_index {
+                    if index >= self.displayed_scramble.len() {
+                        // Extra moves when already done with scramble but timer hasn't
+                        // started yet, go into fix mode to undo them.
+                        self.bad_bluetooth_move(mv.move_());
+                    } else {
+                        // Verify scramble step
+                        let expected = self.displayed_scramble[index];
+                        match self.apply_bluetooth_move_for_expected_move(mv.move_(), expected) {
+                            ScrambleMoveResult::Good => self.scramble_move_index = Some(index + 1),
+                            ScrambleMoveResult::Bad => self.bad_bluetooth_move(mv.move_()),
+                            ScrambleMoveResult::BadWithPending(pending) => {
+                                self.bad_bluetooth_move(pending);
+                                self.bad_bluetooth_move(mv.move_());
+                            }
+                            ScrambleMoveResult::Pending => (),
+                        }
                     }
                 }
             }
@@ -245,12 +248,14 @@ impl TimerCube {
     pub fn update_bluetooth_state(
         &mut self,
         bluetooth_state: &Option<Cube3x3x3>,
-        bluetooth_moves: &[TimedMove],
+        bluetooth_events: &[BluetoothEvent],
     ) {
         if let Some(state) = bluetooth_state {
             if self.bluetooth_active {
-                for mv in bluetooth_moves {
-                    self.renderer.do_move(mv.move_());
+                for event in bluetooth_events {
+                    if let BluetoothEvent::Move(mv) = event {
+                        self.renderer.do_move(mv.move_());
+                    }
                 }
             } else {
                 self.bluetooth_started(state);
@@ -264,10 +269,10 @@ impl TimerCube {
 
     pub fn update_bluetooth_scramble_and_check_finish(
         &mut self,
-        bluetooth_moves: &[TimedMove],
+        bluetooth_events: &[BluetoothEvent],
     ) -> bool {
         if self.bluetooth_active {
-            self.apply_bluetooth_moves_for_scramble(bluetooth_moves);
+            self.apply_bluetooth_moves_for_scramble(bluetooth_events);
             if let Some(move_index) = self.scramble_move_index {
                 if move_index >= self.displayed_scramble.len() && self.scramble_fix_moves.len() == 0
                 {

@@ -412,15 +412,27 @@ impl App for Application {
             match self.mode {
                 Mode::Timer => {
                     #[cfg(target_arch = "wasm32")]
-                    let (bluetooth_state, bluetooth_moves, bluetooth_name) =
+                    let (bluetooth_state, bluetooth_events, bluetooth_name) =
                         (None, Vec::new(), None);
                     #[cfg(not(target_arch = "wasm32"))]
-                    let (bluetooth_state, bluetooth_moves, bluetooth_name) =
+                    let (bluetooth_state, bluetooth_events, bluetooth_name) =
                         if !self.bluetooth_dialog_open && self.bluetooth.ready() {
-                            let moves = self.bluetooth.new_moves();
-                            let state = self.bluetooth.cube_state();
-                            let name = self.bluetooth.name();
-                            (Some(state), moves, name)
+                            if self.bluetooth.timer_only() {
+                                let events = self.bluetooth.new_events();
+                                let name = self
+                                    .bluetooth
+                                    .name()
+                                    .unwrap_or("Bluetooth Smart Timer".to_string());
+                                (None, events, Some(name))
+                            } else {
+                                let events = self.bluetooth.new_events();
+                                let state = self.bluetooth.cube_state();
+                                let name = self
+                                    .bluetooth
+                                    .name()
+                                    .unwrap_or("Bluetooth Cube".to_string());
+                                (Some(state), events, Some(name))
+                            }
                         } else {
                             (None, Vec::new(), None)
                         };
@@ -430,7 +442,7 @@ impl App for Application {
                         frame,
                         self.history.as_mut().unwrap(),
                         bluetooth_state,
-                        bluetooth_moves,
+                        bluetooth_events,
                         bluetooth_name,
                         framerate,
                         &mut self.timer_cube_rect,

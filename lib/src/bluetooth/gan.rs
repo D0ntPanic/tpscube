@@ -1,4 +1,4 @@
-use crate::bluetooth::BluetoothCubeDevice;
+use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
 use crate::common::{Color, Cube, Face, Move, TimedMove};
 use crate::cube3x3x3::{
     Corner3x3x3, CornerPiece3x3x3, Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3,
@@ -13,7 +13,6 @@ use btleplug::api::{Characteristic, Peripheral, WriteType};
 use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::iter::FromIterator;
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -37,7 +36,7 @@ struct GANCubeVersion1<P: Peripheral + 'static> {
     last_move_count: Mutex<u8>,
     characteristics: GANCubeVersion1Characteristics,
     cipher: GANCubeVersion1Cipher,
-    move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+    move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
 }
 
 struct GANCubeVersion1Cipher {
@@ -60,6 +59,10 @@ struct GANCubeVersion2Cipher {
     device_iv: [u8; 16],
 }
 
+struct GANSmartTimer<P: Peripheral + 'static> {
+    device: P,
+}
+
 impl<P: Peripheral> GANCubeVersion1<P> {
     const LAST_MOVE_COUNT_OFFSET: usize = 12;
     const LAST_MOVE_LIST_OFFSET: usize = 13;
@@ -67,23 +70,9 @@ impl<P: Peripheral> GANCubeVersion1<P> {
     pub fn new(
         device: P,
         characteristics: GANCubeVersion1Characteristics,
-        move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+        move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
+        minor_version: u8,
     ) -> Result<Self> {
-        // Detect cube version
-        let version = device.read(&characteristics.version)?;
-        if version.len() < 3 {
-            return Err(anyhow!("Device version invalid"));
-        }
-        let major = version[0];
-        let minor = version[1];
-        if major != 1 || minor > 1 {
-            return Err(anyhow!(
-                "GAN cube version {}.{} not supported",
-                major,
-                minor
-            ));
-        }
-
         // Read device identifier, this is used to derive the key
         let device_id = device.read(&characteristics.hardware)?;
         if device_id.len() < 6 {
@@ -101,7 +90,7 @@ impl<P: Peripheral> GANCubeVersion1<P> {
                 0x01, 0xf1,
             ],
         ];
-        let mut key = GAN_V1_KEYS[minor as usize].clone();
+        let mut key = GAN_V1_KEYS[minor_version as usize].clone();
         for i in 0..6 {
             key[i] = key[i].wrapping_add(device_id[5 - i]);
         }
@@ -281,7 +270,10 @@ impl<P: Peripheral> GANCubeVersion1<P> {
         if moves.len() != 0 {
             // Let clients know there is a new move
             let move_listener = self.move_listener.as_ref();
-            move_listener(&moves, self.state.lock().unwrap().deref());
+            move_listener(BluetoothCubeEvent::Move(
+                moves,
+                self.state.lock().unwrap().clone(),
+            ));
         }
 
         Ok(())
@@ -383,7 +375,7 @@ impl<P: Peripheral> GANCubeVersion2<P> {
         device: P,
         read: Characteristic,
         write: Characteristic,
-        move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+        move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
     ) -> Result<Self> {
         // Derive keys. These are based on a 6 byte device identifier found in the
         // manufacturer data.
@@ -501,7 +493,10 @@ impl<P: Peripheral> GANCubeVersion2<P> {
 
                             if moves.len() != 0 {
                                 // Let clients know there is a new move
-                                move_listener(&moves, state_copy.lock().unwrap().deref());
+                                move_listener(BluetoothCubeEvent::Move(
+                                    moves,
+                                    state_copy.lock().unwrap().clone(),
+                                ));
                             }
                         }
                     }
@@ -764,9 +759,71 @@ impl<P: Peripheral> BluetoothCubeDevice for GANCubeVersion2<P> {
     }
 }
 
+impl<P: Peripheral> GANSmartTimer<P> {
+    pub fn new(
+        device: P,
+        updates: Characteristic,
+        move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
+    ) -> Result<Self> {
+        device.on_notification(Box::new(move |value| {
+            if value.value.len() >= 4 {
+                match value.value[3] {
+                    1 => move_listener(BluetoothCubeEvent::TimerReady),
+                    2 => move_listener(BluetoothCubeEvent::TimerStartCancel),
+                    3 => move_listener(BluetoothCubeEvent::TimerStarted),
+                    4 => {
+                        if value.value.len() >= 8 {
+                            let min = value.value[4] as u32;
+                            let sec = value.value[5] as u32;
+                            let msec = ((value.value[7] as u32) << 8) | (value.value[6] as u32);
+                            move_listener(BluetoothCubeEvent::TimerFinished(
+                                min * 60000 + sec * 1000 + msec,
+                            ));
+                        }
+                    }
+                    6 => move_listener(BluetoothCubeEvent::HandsOnTimer),
+                    _ => (),
+                }
+            }
+        }));
+        device.subscribe(&updates)?;
+
+        Ok(GANSmartTimer { device })
+    }
+}
+
+impl<P: Peripheral> BluetoothCubeDevice for GANSmartTimer<P> {
+    fn timer_only(&self) -> bool {
+        true
+    }
+
+    fn cube_state(&self) -> Cube3x3x3 {
+        Cube3x3x3::new()
+    }
+
+    fn battery_percentage(&self) -> Option<u32> {
+        None
+    }
+
+    fn battery_charging(&self) -> Option<bool> {
+        None
+    }
+
+    fn reset_cube_state(&self) {}
+    fn update(&self) {}
+
+    fn synced(&self) -> bool {
+        true
+    }
+
+    fn disconnect(&self) {
+        let _ = self.device.disconnect();
+    }
+}
+
 pub(crate) fn gan_cube_connect<P: Peripheral + 'static>(
     device: P,
-    move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+    move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
 ) -> Result<Box<dyn BluetoothCubeDevice>> {
     let characteristics = device.discover_characteristics()?;
 
@@ -830,11 +887,34 @@ pub(crate) fn gan_cube_connect<P: Peripheral + 'static>(
             timing: v1_timing.unwrap(),
             battery: v1_battery.unwrap(),
         };
-        Ok(Box::new(GANCubeVersion1::new(
-            device,
-            characteristics,
-            move_listener,
-        )?))
+
+        // Detect cube version
+        let version = device.read(&characteristics.version)?;
+        if version.len() < 3 {
+            return Err(anyhow!("Device version invalid"));
+        }
+        let major = version[0];
+        let minor = version[1];
+        if major == 1 && minor <= 1 {
+            Ok(Box::new(GANCubeVersion1::new(
+                device,
+                characteristics,
+                move_listener,
+                minor,
+            )?))
+        } else if major == 2 && minor == 0 {
+            Ok(Box::new(GANSmartTimer::new(
+                device,
+                characteristics.last_moves,
+                move_listener,
+            )?))
+        } else {
+            Err(anyhow!(
+                "GAN cube version {}.{} not supported",
+                major,
+                minor
+            ))
+        }
     } else if v2_read.is_some() && v2_write.is_some() {
         Ok(Box::new(GANCubeVersion2::new(
             device,

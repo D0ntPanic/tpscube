@@ -4,13 +4,14 @@ use crate::framerate::Framerate;
 use crate::gl::GlContext;
 use crate::style::dialog_visuals;
 use crate::theme::Theme;
+use crate::timer::BluetoothEvent;
 use anyhow::{anyhow, Result};
 use egui::{
     Color32, CtxRef, Direction, Label, Layout, Rect, ScrollArea, Sense, Stroke, Ui, Vec2, Window,
 };
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
-use tpscube_core::{BluetoothCube, BluetoothCubeState, Cube, Cube3x3x3, TimedMove};
+use tpscube_core::{BluetoothCube, BluetoothCubeEvent, BluetoothCubeState, Cube, Cube3x3x3};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum BluetoothMode {
@@ -27,8 +28,9 @@ pub struct BluetoothState {
     cube: Option<BluetoothCube>,
     error: Option<String>,
     renderer: CubeRenderer,
-    move_queue: Arc<Mutex<Vec<(Vec<TimedMove>, Cube3x3x3)>>>,
+    move_queue: Arc<Mutex<Vec<BluetoothCubeEvent>>>,
     cube_state: Cube3x3x3,
+    timer_only: bool,
 }
 
 impl BluetoothState {
@@ -40,6 +42,7 @@ impl BluetoothState {
             renderer: CubeRenderer::new(),
             move_queue: Arc::new(Mutex::new(Vec::new())),
             cube_state: Cube3x3x3::new(),
+            timer_only: false,
         }
     }
 
@@ -53,6 +56,10 @@ impl BluetoothState {
         } else {
             false
         }
+    }
+
+    pub fn timer_only(&self) -> bool {
+        self.timer_only
     }
 
     pub fn status(&self) -> String {
@@ -122,14 +129,27 @@ impl BluetoothState {
         }
     }
 
-    pub fn new_moves(&mut self) -> Vec<TimedMove> {
+    pub fn new_events(&mut self) -> Vec<BluetoothEvent> {
         let mut move_queue = self.move_queue.lock().unwrap();
         let mut result = Vec::new();
-        for (moves, state) in move_queue.deref() {
-            for mv in moves {
-                result.push(mv.clone());
+        for event in move_queue.deref() {
+            match event {
+                BluetoothCubeEvent::Move(moves, state) => {
+                    for mv in moves {
+                        result.push(BluetoothEvent::Move(mv.clone()));
+                    }
+                    self.cube_state = state.clone();
+                }
+                BluetoothCubeEvent::HandsOnTimer => result.push(BluetoothEvent::HandsOnTimer),
+                BluetoothCubeEvent::TimerStartCancel => {
+                    result.push(BluetoothEvent::TimerStartCancel)
+                }
+                BluetoothCubeEvent::TimerReady => result.push(BluetoothEvent::TimerReady),
+                BluetoothCubeEvent::TimerStarted => result.push(BluetoothEvent::TimerStarted),
+                BluetoothCubeEvent::TimerFinished(time) => {
+                    result.push(BluetoothEvent::TimerFinished(*time))
+                }
             }
-            self.cube_state = state.clone();
         }
         move_queue.clear();
         result
@@ -149,11 +169,8 @@ impl BluetoothState {
 
             let repaint_signal = frame.repaint_signal();
             let move_queue = self.move_queue.clone();
-            cube.register_move_listener(move |moves, state| {
-                move_queue
-                    .lock()
-                    .unwrap()
-                    .push((moves.to_vec(), state.clone()));
+            cube.register_move_listener(move |event| {
+                move_queue.lock().unwrap().push(event);
                 repaint_signal.request_repaint();
             });
 
@@ -239,9 +256,15 @@ impl BluetoothState {
         match cube.state()? {
             BluetoothCubeState::Connected => {
                 let state = cube.cube_state()?;
+                let timer_only = cube.timer_only()?;
                 self.cube_state = state.clone();
+                self.timer_only = timer_only;
                 self.renderer.set_cube_state(state);
-                self.mode = BluetoothMode::CheckState;
+                if timer_only {
+                    self.mode = BluetoothMode::Finished;
+                } else {
+                    self.mode = BluetoothMode::CheckState;
+                }
             }
             BluetoothCubeState::Desynced => {
                 self.mode = BluetoothMode::Error;
@@ -332,12 +355,17 @@ impl BluetoothState {
             }
         });
 
-        for (moves, state) in self.move_queue.lock().unwrap().deref_mut().drain(..) {
-            for mv in moves {
-                self.renderer.do_move(mv.move_());
+        for event in self.move_queue.lock().unwrap().deref_mut().drain(..) {
+            match event {
+                BluetoothCubeEvent::Move(moves, state) => {
+                    for mv in moves {
+                        self.renderer.do_move(mv.move_());
+                    }
+                    self.cube_state = state.clone();
+                    self.renderer.verify_state(state);
+                }
+                _ => (), // This code is only reached for cubes, not timers
             }
-            self.cube_state = state.clone();
-            self.renderer.verify_state(state);
         }
 
         let cube = self.cube.as_ref().unwrap();

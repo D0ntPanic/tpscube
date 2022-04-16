@@ -1,9 +1,8 @@
-use crate::bluetooth::BluetoothCubeDevice;
+use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
 use crate::common::{Cube, Face, Move, TimedMove};
 use crate::cube3x3x3::Cube3x3x3;
 use anyhow::{anyhow, Result};
 use btleplug::api::{Characteristic, Peripheral};
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -29,7 +28,7 @@ impl<P: Peripheral + 'static> MoYuCube<P> {
         turn: Characteristic,
         gyro: Characteristic,
         read: Characteristic,
-        move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+        move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
     ) -> Result<Self> {
         let state = Arc::new(Mutex::new(Cube3x3x3::new()));
         let synced = Arc::new(Mutex::new(true));
@@ -90,10 +89,10 @@ impl<P: Peripheral + 'static> MoYuCube<P> {
 
                         // Report the new move
                         state_copy.lock().unwrap().do_move(mv);
-                        move_listener(
-                            &[TimedMove::new(mv, time_passed_ms)],
-                            state_copy.lock().unwrap().deref(),
-                        );
+                        move_listener(BluetoothCubeEvent::Move(
+                            vec![TimedMove::new(mv, time_passed_ms)],
+                            state_copy.lock().unwrap().clone(),
+                        ));
                     }
                 }
             }
@@ -141,7 +140,7 @@ impl<P: Peripheral> BluetoothCubeDevice for MoYuCube<P> {
 
 pub(crate) fn moyu_connect<P: Peripheral + 'static>(
     device: P,
-    move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+    move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
 ) -> Result<Box<dyn BluetoothCubeDevice>> {
     let characteristics = device.discover_characteristics()?;
 

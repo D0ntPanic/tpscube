@@ -32,6 +32,9 @@ pub(crate) trait BluetoothCubeDevice: Send {
     fn synced(&self) -> bool;
     fn update(&self) {}
     fn disconnect(&self);
+    fn timer_only(&self) -> bool {
+        false
+    }
 
     fn estimated_clock_ratio(&self) -> f64 {
         1.0
@@ -81,6 +84,16 @@ pub enum BluetoothCubeState {
     Error,
 }
 
+#[derive(Clone)]
+pub enum BluetoothCubeEvent {
+    Move(Vec<TimedMove>, Cube3x3x3),
+    HandsOnTimer,
+    TimerStartCancel,
+    TimerReady,
+    TimerStarted,
+    TimerFinished(u32),
+}
+
 pub struct BluetoothCube {
     discovered_devices: Arc<Mutex<Vec<AvailableDevice>>>,
     to_connect: Arc<Mutex<Option<BDAddr>>>,
@@ -88,8 +101,7 @@ pub struct BluetoothCube {
     connected_device: Arc<Mutex<Option<Box<dyn BluetoothCubeDevice>>>>,
     connected_name: Arc<Mutex<Option<String>>>,
     battery: Arc<Mutex<(Option<u32>, Option<bool>)>>,
-    listeners:
-        Arc<Mutex<HashMap<MoveListenerHandle, Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send>>>>,
+    listeners: Arc<Mutex<HashMap<MoveListenerHandle, Box<dyn Fn(BluetoothCubeEvent) + Send>>>>,
     next_listener_id: AtomicU64,
     error: Arc<Mutex<Option<String>>>,
 }
@@ -156,9 +168,7 @@ impl BluetoothCube {
         connected_device: Arc<Mutex<Option<Box<dyn BluetoothCubeDevice>>>>,
         connected_name: Arc<Mutex<Option<String>>>,
         battery: Arc<Mutex<(Option<u32>, Option<bool>)>>,
-        listeners: Arc<
-            Mutex<HashMap<MoveListenerHandle, Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send>>>,
-        >,
+        listeners: Arc<Mutex<HashMap<MoveListenerHandle, Box<dyn Fn(BluetoothCubeEvent) + Send>>>>,
     ) -> Result<()> {
         let manager = Manager::new()?;
         let adapter = manager.adapters()?;
@@ -210,92 +220,118 @@ impl BluetoothCube {
                                 init_calibration_state.lock().unwrap().clock_ratio_range =
                                     cube.clock_ratio_range();
                             }),
-                            Box::new(move |moves, state| {
-                                // We can't use the move timing data directly. Some cubes have very
-                                // uncalibrated clocks and we must adjust the timing to match real
-                                // time, with the host device as the reference source.
-                                let mut calibration_state = calibration_state.lock().unwrap();
-                                let now = Instant::now();
-                                let mut last_duration = calibration_state.current_duration;
+                            Box::new(move |event| {
+                                match event {
+                                    BluetoothCubeEvent::Move(moves, state) => {
+                                        // We can't use the move timing data directly. Some cubes have very
+                                        // uncalibrated clocks and we must adjust the timing to match real
+                                        // time, with the host device as the reference source.
+                                        let mut calibration_state =
+                                            calibration_state.lock().unwrap();
+                                        let now = Instant::now();
+                                        let mut last_duration = calibration_state.current_duration;
 
-                                // Check length of time since last move
-                                let mut calibration_reset = false;
-                                if let Some(last_move_time) = calibration_state.last_move_time {
-                                    let delta = now - last_move_time;
-                                    if delta.as_secs() > 30 {
-                                        // More than 30 seconds between moves, don't adjust clock ratio to
-                                        // avoid issues with the range of the encodings of some cubes.
-                                        // Adjust timestamp using real time.
-                                        calibration_reset = true;
-                                        calibration_state.current_duration += delta;
+                                        // Check length of time since last move
+                                        let mut calibration_reset = false;
+                                        if let Some(last_move_time) =
+                                            calibration_state.last_move_time
+                                        {
+                                            let delta = now - last_move_time;
+                                            if delta.as_secs() > 30 {
+                                                // More than 30 seconds between moves, don't adjust clock ratio to
+                                                // avoid issues with the range of the encodings of some cubes.
+                                                // Adjust timestamp using real time.
+                                                calibration_reset = true;
+                                                calibration_state.current_duration += delta;
+                                            }
+                                        }
+
+                                        // Go through the move list and adjust the timing information
+                                        let mut adjusted_moves = Vec::new();
+                                        let mut new_raw_ticks = 0;
+                                        for raw_move in moves {
+                                            let mv = raw_move.move_();
+                                            let raw_time = raw_move.time();
+
+                                            if !calibration_reset {
+                                                new_raw_ticks += raw_time;
+
+                                                // Adjust delta using clock ratio. This will be adjusted
+                                                // over time to be calibrated to real time.
+                                                let adjusted_delta = Duration::from_nanos(
+                                                    ((raw_time as u64 * 1_000_000) as f64
+                                                        / calibration_state.clock_ratio)
+                                                        as u64,
+                                                );
+                                                calibration_state.current_duration +=
+                                                    adjusted_delta;
+                                            }
+
+                                            // Add adjusted timing information to new move list
+                                            let adjusted_time =
+                                                (calibration_state.current_duration).as_millis()
+                                                    - last_duration.as_millis();
+                                            last_duration = calibration_state.current_duration;
+                                            adjusted_moves
+                                                .push(TimedMove::new(mv, adjusted_time as u32));
+                                        }
+
+                                        // Update calibration state
+                                        if let Some(start_time_deref) = calibration_state.start_time
+                                        {
+                                            if calibration_reset {
+                                                // Calibration is being reset because of too much time
+                                                // between moves. Measure from this move forward.
+                                                calibration_state.start_time = Some(now);
+                                                calibration_state.total_raw_ticks = 0;
+                                                calibration_state.total_real_ticks = 0;
+                                            } else {
+                                                // Update the calibration with the number of milliseconds
+                                                // reported in the raw data and the number of milliseconds
+                                                // that have actually passed.
+                                                calibration_state.total_raw_ticks +=
+                                                    new_raw_ticks as u64;
+                                                calibration_state.total_real_ticks =
+                                                    (now - start_time_deref).as_millis() as u64;
+
+                                                // Compute ratio between raw time and real time
+                                                let computed_clock_ratio = (calibration_state
+                                                    .total_raw_ticks
+                                                    as f64)
+                                                    / (calibration_state.total_real_ticks as f64);
+
+                                                // Clamp ratio to a range for sanity check
+                                                calibration_state.clock_ratio =
+                                                    computed_clock_ratio
+                                                        .max(
+                                                            (calibration_state.clock_ratio_range).0,
+                                                        )
+                                                        .min(
+                                                            (calibration_state.clock_ratio_range).1,
+                                                        );
+                                            }
+                                        } else {
+                                            // First move, record start time
+                                            calibration_state.start_time = Some(now);
+                                        }
+
+                                        // Keep track of last move's real time
+                                        calibration_state.last_move_time = Some(now);
+
+                                        // Notify clients of the move information
+                                        for listener in listeners_copy.lock().unwrap().iter() {
+                                            listener.1(BluetoothCubeEvent::Move(
+                                                adjusted_moves.clone(),
+                                                state.clone(),
+                                            ));
+                                        }
                                     }
-                                }
-
-                                // Go through the move list and adjust the timing information
-                                let mut adjusted_moves = Vec::new();
-                                let mut new_raw_ticks = 0;
-                                for raw_move in moves {
-                                    let mv = raw_move.move_();
-                                    let raw_time = raw_move.time();
-
-                                    if !calibration_reset {
-                                        new_raw_ticks += raw_time;
-
-                                        // Adjust delta using clock ratio. This will be adjusted
-                                        // over time to be calibrated to real time.
-                                        let adjusted_delta = Duration::from_nanos(
-                                            ((raw_time as u64 * 1_000_000) as f64
-                                                / calibration_state.clock_ratio)
-                                                as u64,
-                                        );
-                                        calibration_state.current_duration += adjusted_delta;
+                                    event => {
+                                        // Notify clients of the event
+                                        for listener in listeners_copy.lock().unwrap().iter() {
+                                            listener.1(event.clone());
+                                        }
                                     }
-
-                                    // Add adjusted timing information to new move list
-                                    let adjusted_time = (calibration_state.current_duration)
-                                        .as_millis()
-                                        - last_duration.as_millis();
-                                    last_duration = calibration_state.current_duration;
-                                    adjusted_moves.push(TimedMove::new(mv, adjusted_time as u32));
-                                }
-
-                                // Update calibration state
-                                if let Some(start_time_deref) = calibration_state.start_time {
-                                    if calibration_reset {
-                                        // Calibration is being reset because of too much time
-                                        // between moves. Measure from this move forward.
-                                        calibration_state.start_time = Some(now);
-                                        calibration_state.total_raw_ticks = 0;
-                                        calibration_state.total_real_ticks = 0;
-                                    } else {
-                                        // Update the calibration with the number of milliseconds
-                                        // reported in the raw data and the number of milliseconds
-                                        // that have actually passed.
-                                        calibration_state.total_raw_ticks += new_raw_ticks as u64;
-                                        calibration_state.total_real_ticks =
-                                            (now - start_time_deref).as_millis() as u64;
-
-                                        // Compute ratio between raw time and real time
-                                        let computed_clock_ratio =
-                                            (calibration_state.total_raw_ticks as f64)
-                                                / (calibration_state.total_real_ticks as f64);
-
-                                        // Clamp ratio to a range for sanity check
-                                        calibration_state.clock_ratio = computed_clock_ratio
-                                            .max((calibration_state.clock_ratio_range).0)
-                                            .min((calibration_state.clock_ratio_range).1);
-                                    }
-                                } else {
-                                    // First move, record start time
-                                    calibration_state.start_time = Some(now);
-                                }
-
-                                // Keep track of last move's real time
-                                calibration_state.last_move_time = Some(now);
-
-                                // Notify clients of the move information
-                                for listener in listeners_copy.lock().unwrap().iter() {
-                                    listener.1(&adjusted_moves, state);
                                 }
                             }),
                         );
@@ -334,7 +370,7 @@ impl BluetoothCube {
         battery: Arc<Mutex<(Option<u32>, Option<bool>)>>,
         peripheral: P,
         init: Box<dyn Fn(&dyn BluetoothCubeDevice) + Send + 'static>,
-        move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+        move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
     ) -> Result<()> {
         // Determine cube type
         let name = peripheral.properties().local_name.clone();
@@ -425,6 +461,14 @@ impl BluetoothCube {
         Ok(self.connected_name.lock().unwrap().clone())
     }
 
+    pub fn timer_only(&self) -> Result<bool> {
+        self.check_for_error()?;
+        match self.connected_device.lock().unwrap().deref() {
+            Some(device) => Ok(device.timer_only()),
+            None => Err(anyhow!("Cube not connected")),
+        }
+    }
+
     pub fn cube_state(&self) -> Result<Cube3x3x3> {
         self.check_for_error()?;
         match self.connected_device.lock().unwrap().deref() {
@@ -459,7 +503,7 @@ impl BluetoothCube {
         Ok(*self.state.lock().unwrap() == BluetoothCubeState::Connected)
     }
 
-    pub fn register_move_listener<F: Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>(
+    pub fn register_move_listener<F: Fn(BluetoothCubeEvent) + Send + 'static>(
         &self,
         func: F,
     ) -> MoveListenerHandle {

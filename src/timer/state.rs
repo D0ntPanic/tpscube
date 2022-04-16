@@ -9,10 +9,13 @@ pub enum TimerState {
     Inactive(u32, Option<Analysis>),
     Preparing(Instant, u32, Option<Analysis>),
     BluetoothPreparing(Instant, u32, Option<Analysis>),
+    ExternalTimerPreparing(u32, Option<Analysis>),
     Ready,
     BluetoothReady,
+    ExternalTimerReady,
     Solving(Instant),
     BluetoothSolving(Instant, Vec<TimedMove>, PartialAnalysis),
+    ExternalTimerSolving(Instant),
     ManualTimeEntry(u32),
     ManualTimeEntryDelay(u32, Option<Key>),
     SolveComplete(u32, Option<Analysis>),
@@ -51,8 +54,12 @@ impl TimerState {
             }
             TimerState::Ready
             | TimerState::BluetoothReady
-            | TimerState::BluetoothPreparing(_, _, _) => solve_time_short_string(0),
-            TimerState::Solving(start) | TimerState::BluetoothSolving(start, _, _) => {
+            | TimerState::ExternalTimerReady
+            | TimerState::BluetoothPreparing(_, _, _)
+            | TimerState::ExternalTimerPreparing(_, _) => solve_time_short_string(0),
+            TimerState::Solving(start)
+            | TimerState::BluetoothSolving(start, _, _)
+            | TimerState::ExternalTimerSolving(start) => {
                 solve_time_short_string((Instant::now() - *start).as_millis() as u32)
             }
         }
@@ -62,8 +69,10 @@ impl TimerState {
         match self {
             TimerState::Inactive(_, _)
             | TimerState::BluetoothPreparing(_, _, _)
+            | TimerState::ExternalTimerPreparing(_, _)
             | TimerState::Solving(_)
             | TimerState::BluetoothSolving(_, _, _)
+            | TimerState::ExternalTimerSolving(_)
             | TimerState::ManualTimeEntry(_)
             | TimerState::ManualTimeEntryDelay(_, _)
             | TimerState::SolveComplete(_, _) => Theme::Content.into(),
@@ -74,7 +83,9 @@ impl TimerState {
                     Theme::Content.into()
                 }
             }
-            TimerState::Ready | TimerState::BluetoothReady => Theme::Green.into(),
+            TimerState::Ready | TimerState::BluetoothReady | TimerState::ExternalTimerReady => {
+                Theme::Green.into()
+            }
         }
     }
 

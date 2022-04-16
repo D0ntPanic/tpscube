@@ -28,6 +28,15 @@ pub struct TimerWidget {
     cube: TimerCube,
 }
 
+pub enum BluetoothEvent {
+    Move(TimedMove),
+    HandsOnTimer,
+    TimerStartCancel,
+    TimerReady,
+    TimerStarted,
+    TimerFinished(u32),
+}
+
 impl TimerWidget {
     pub fn new() -> Self {
         Self {
@@ -129,7 +138,7 @@ impl TimerWidget {
         ui: &mut Ui,
         rect: &Rect,
         history: &mut History,
-        mut bluetooth_moves: Vec<TimedMove>,
+        bluetooth_events: Vec<BluetoothEvent>,
         bluetooth_name: Option<String>,
         accept_keyboard: bool,
     ) -> Response {
@@ -145,6 +154,46 @@ impl TimerWidget {
         let interact = ui.interact(interact_rect, id, Sense::click_and_drag());
         ui.memory().request_focus(id);
 
+        // Check for Bluetooth timer events
+        for event in &bluetooth_events {
+            match event {
+                BluetoothEvent::HandsOnTimer => {
+                    match self.state.clone() {
+                        TimerState::Inactive(time, analysis) => {
+                            self.state = TimerState::ExternalTimerPreparing(time, analysis);
+                        }
+                        _ => self.state = TimerState::ExternalTimerPreparing(0, None),
+                    }
+                    ctxt.request_repaint();
+                }
+                BluetoothEvent::TimerStartCancel => {
+                    match self.state.clone() {
+                        TimerState::ExternalTimerPreparing(time, analysis) => {
+                            self.state = TimerState::Inactive(time, analysis);
+                        }
+                        _ => {
+                            self.state = TimerState::Inactive(0, None);
+                        }
+                    }
+                    ctxt.request_repaint();
+                }
+                BluetoothEvent::TimerReady => {
+                    self.state = TimerState::ExternalTimerReady;
+                    ctxt.request_repaint();
+                }
+                BluetoothEvent::TimerStarted => {
+                    self.state = TimerState::ExternalTimerSolving(Instant::now());
+                    ctxt.request_repaint();
+                }
+                BluetoothEvent::TimerFinished(time) => {
+                    self.finish_solve(*time, history);
+                    self.state = TimerState::SolveComplete(*time, None);
+                    ctxt.request_repaint();
+                }
+                _ => (),
+            }
+        }
+
         // Check for user input to interact with the timer
         let touching = crate::is_mobile() == Some(true)
             && (interact.is_pointer_button_down_on() || interact.dragged());
@@ -155,7 +204,7 @@ impl TimerWidget {
                 } else if self.cube.is_bluetooth_active() {
                     if self
                         .cube
-                        .update_bluetooth_scramble_and_check_finish(&bluetooth_moves)
+                        .update_bluetooth_scramble_and_check_finish(&bluetooth_events)
                     {
                         self.state = TimerState::BluetoothPreparing(Instant::now(), time, analysis);
                     }
@@ -181,7 +230,7 @@ impl TimerWidget {
             }
             TimerState::BluetoothPreparing(start, time, analysis) => {
                 if self.cube.is_bluetooth_active() {
-                    if bluetooth_moves.len() != 0 {
+                    if bluetooth_events.len() != 0 {
                         // For the first second after finishing a Bluetooth scramble,
                         // cause any extra moves to transition to the fix bad
                         // scramble state. This means that extra accidental turns
@@ -189,7 +238,7 @@ impl TimerWidget {
                         // start before the user is ready.
                         if !self
                             .cube
-                            .update_bluetooth_scramble_and_check_finish(&bluetooth_moves)
+                            .update_bluetooth_scramble_and_check_finish(&bluetooth_events)
                         {
                             self.state = TimerState::Inactive(time, analysis);
                         }
@@ -200,12 +249,24 @@ impl TimerWidget {
                     self.state = TimerState::Inactive(time, analysis);
                 }
             }
+            TimerState::ExternalTimerPreparing(time, analysis) => {
+                if bluetooth_name.is_none() {
+                    self.state = TimerState::Inactive(time, analysis);
+                }
+            }
             TimerState::Ready => {
                 if ctxt.input().keys_down.len() == 0 && !touching {
                     self.state = TimerState::Solving(Instant::now());
                 }
             }
             TimerState::BluetoothReady => {
+                let mut bluetooth_moves = Vec::new();
+                for event in bluetooth_events {
+                    if let BluetoothEvent::Move(mv) = event {
+                        bluetooth_moves.push(mv);
+                    }
+                }
+
                 if bluetooth_moves.len() != 0 {
                     // Rewrite first move timing data to be at start
                     let first_move = TimedMove::new(bluetooth_moves[0].move_(), 0);
@@ -219,6 +280,11 @@ impl TimerWidget {
                     );
                 }
             }
+            TimerState::ExternalTimerReady => {
+                if bluetooth_name.is_none() {
+                    self.state = TimerState::Inactive(0, None);
+                }
+            }
             TimerState::Solving(start) => {
                 if ctxt.input().keys_down.contains(&Key::Escape) {
                     self.abort_solve((Instant::now() - start).as_millis() as u32, history);
@@ -229,6 +295,13 @@ impl TimerWidget {
                 }
             }
             TimerState::BluetoothSolving(start, moves, _) => {
+                let mut bluetooth_moves = Vec::new();
+                for event in bluetooth_events {
+                    if let BluetoothEvent::Move(mv) = event {
+                        bluetooth_moves.push(mv);
+                    }
+                }
+
                 if ctxt.input().keys_down.contains(&Key::Escape) {
                     self.abort_solve((Instant::now() - start).as_millis() as u32, history);
                     ctxt.request_repaint();
@@ -259,6 +332,12 @@ impl TimerWidget {
                         self.state = TimerState::BluetoothSolving(start, moves, analysis);
                     }
                 }
+            }
+            TimerState::ExternalTimerSolving(_) => {
+                if bluetooth_name.is_none() {
+                    self.state = TimerState::Inactive(0, None);
+                }
+                ctxt.request_repaint();
             }
             TimerState::ManualTimeEntry(digits) => {
                 if ctxt.input().key_down(Key::Escape) {
@@ -323,7 +402,7 @@ impl TimerWidget {
         _frame: &mut epi::Frame<'_>,
         history: &mut History,
         bluetooth_state: Option<Cube3x3x3>,
-        bluetooth_moves: Vec<TimedMove>,
+        bluetooth_events: Vec<BluetoothEvent>,
         bluetooth_name: Option<String>,
         framerate: &mut Framerate,
         cube_rect: &mut Option<Rect>,
@@ -332,7 +411,7 @@ impl TimerWidget {
     ) {
         self.cube.check_for_new_scramble();
         self.cube
-            .update_bluetooth_state(&bluetooth_state, &bluetooth_moves);
+            .update_bluetooth_state(&bluetooth_state, &bluetooth_events);
 
         self.check_for_expired_session(history);
 
@@ -376,7 +455,7 @@ impl TimerWidget {
                         ui,
                         &rect,
                         history,
-                        bluetooth_moves,
+                        bluetooth_events,
                         bluetooth_name,
                         accept_keyboard,
                     );

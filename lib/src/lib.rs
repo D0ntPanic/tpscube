@@ -50,7 +50,8 @@ pub use sync::SyncStatus;
 
 #[cfg(feature = "bluetooth")]
 pub use bluetooth::{
-    AvailableDevice, BluetoothCube, BluetoothCubeState, BluetoothCubeType, MoveListenerHandle,
+    AvailableDevice, BluetoothCube, BluetoothCubeEvent, BluetoothCubeState, BluetoothCubeType,
+    MoveListenerHandle,
 };
 
 #[cfg(not(feature = "no_solver"))]

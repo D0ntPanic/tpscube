@@ -1,9 +1,8 @@
-use crate::bluetooth::BluetoothCubeDevice;
+use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
 use crate::common::{Cube, Move, TimedMove};
 use crate::cube3x3x3::Cube3x3x3;
 use anyhow::{anyhow, Result};
 use btleplug::api::{Characteristic, Peripheral};
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -25,7 +24,7 @@ impl<P: Peripheral + 'static> GiikerCube<P> {
     pub fn new(
         device: P,
         move_data: Characteristic,
-        move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+        move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
     ) -> Result<Self> {
         // Any writes at all to characteristics on this cube will hang forever, as this
         // cube does not respond to bluetooth writes correctly. We cannot request battery
@@ -101,10 +100,10 @@ impl<P: Peripheral + 'static> GiikerCube<P> {
             *last_move_time.lock().unwrap() = current_time;
 
             // Let clients know there is a new move
-            move_listener(
-                &[TimedMove::new(mv, move_time as u32)],
-                state_copy.lock().unwrap().deref(),
-            );
+            move_listener(BluetoothCubeEvent::Move(
+                vec![TimedMove::new(mv, move_time as u32)],
+                state_copy.lock().unwrap().clone(),
+            ));
         }));
         device.subscribe(&move_data)?;
 
@@ -147,7 +146,7 @@ impl<P: Peripheral + 'static> BluetoothCubeDevice for GiikerCube<P> {
 
 pub(crate) fn giiker_connect<P: Peripheral + 'static>(
     device: P,
-    move_listener: Box<dyn Fn(&[TimedMove], &Cube3x3x3) + Send + 'static>,
+    move_listener: Box<dyn Fn(BluetoothCubeEvent) + Send + 'static>,
 ) -> Result<Box<dyn BluetoothCubeDevice>> {
     let characteristics = device.discover_characteristics()?;
 
