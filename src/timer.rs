@@ -11,7 +11,7 @@ use crate::settings::Settings;
 use crate::style::{content_visuals, side_visuals};
 use anyhow::Result;
 use chrono::Local;
-use egui::{Align, CentralPanel, CtxRef, Key, Layout, Rect, Response, Sense, Ui, Vec2};
+use egui::{Align, CentralPanel, CtxRef, Event, Key, Layout, Rect, Response, Sense, Ui, Vec2};
 use instant::Instant;
 use scramble::TimerCube;
 use session::TimerSession;
@@ -152,12 +152,23 @@ impl TimerWidget {
             TimerState::Inactive(time, analysis) => {
                 if accept_keyboard && (ctxt.input().keys_down.contains(&Key::Space) || touching) {
                     self.state = TimerState::Preparing(Instant::now(), time, analysis);
-                } else {
+                } else if self.cube.is_bluetooth_active() {
                     if self
                         .cube
                         .update_bluetooth_scramble_and_check_finish(&bluetooth_moves)
                     {
                         self.state = TimerState::BluetoothPreparing(Instant::now(), time, analysis);
+                    }
+                } else if accept_keyboard {
+                    for event in &ctxt.input().events {
+                        if let Event::Text(text) = event {
+                            if text.len() == 1 {
+                                let ch = text.chars().next().unwrap();
+                                if let Some(digit) = ch.to_digit(10) {
+                                    self.state.update_for_numerical_input(digit);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -247,6 +258,41 @@ impl TimerWidget {
                         });
                         self.state = TimerState::BluetoothSolving(start, moves, analysis);
                     }
+                }
+            }
+            TimerState::ManualTimeEntry(digits) => {
+                if ctxt.input().key_down(Key::Escape) {
+                    self.state = TimerState::Inactive(0, None);
+                } else if ctxt.input().key_down(Key::Backspace) {
+                    self.state =
+                        TimerState::ManualTimeEntryDelay(digits / 10, Some(Key::Backspace));
+                } else if ctxt.input().key_down(Key::Enter) {
+                    let time = TimerState::digits_to_time(digits);
+                    self.finish_solve(time, history);
+                    self.state = TimerState::SolveComplete(time, None);
+                } else {
+                    for event in &ctxt.input().events {
+                        if let Event::Text(text) = event {
+                            if text.len() == 1 {
+                                let ch = text.chars().next().unwrap();
+                                if let Some(digit) = ch.to_digit(10) {
+                                    self.state.update_for_numerical_input(digit);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            TimerState::ManualTimeEntryDelay(digits, wait_for) => {
+                // This REALLY shouldn't be necessary but you get multiple Event::Text inputs
+                // for every key. WTF. This has the side effect of possible eaten inputs
+                // but its better than guaranteed repeated inputs.
+                if let Some(key) = wait_for {
+                    if !ctxt.input().key_down(key) {
+                        self.state = TimerState::ManualTimeEntry(digits);
+                    }
+                } else {
+                    self.state = TimerState::ManualTimeEntry(digits);
                 }
             }
             TimerState::SolveComplete(time, analysis) => {
