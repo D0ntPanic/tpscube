@@ -1,5 +1,5 @@
 use crate::theme::Theme;
-use crate::widgets::{solve_time_short_string, solve_time_string};
+use crate::widgets::{solve_time_short_string, solve_time_string, solve_time_string_ms};
 use egui::{Color32, Key};
 use instant::Instant;
 use tpscube_core::{Analysis, AnalysisSummary, PartialAnalysis, TimedMove};
@@ -28,10 +28,10 @@ impl TimerState {
     }
 
     pub fn digits_to_time(digits: u32) -> u32 {
-        let min = (digits / 10000) % 100;
-        let sec = (digits / 100) % 100;
-        let hsec = digits % 100;
-        min * 60000 + sec * 1000 + hsec * 10
+        let min = (digits / 100000) % 100;
+        let sec = (digits / 1000) % 100;
+        let msec = digits % 1000;
+        min * 60000 + sec * 1000 + msec
     }
 
     pub fn current_time_string(&self) -> String {
@@ -40,7 +40,7 @@ impl TimerState {
                 solve_time_string(*time)
             }
             TimerState::ManualTimeEntry(digits) | TimerState::ManualTimeEntryDelay(digits, _) => {
-                solve_time_string(Self::digits_to_time(*digits))
+                solve_time_string_ms(Self::digits_to_time(*digits))
             }
             TimerState::Preparing(_, time, _) => {
                 if self.is_solving() {
@@ -95,7 +95,7 @@ impl TimerState {
                 *self = TimerState::ManualTimeEntryDelay(digit, None);
             }
             TimerState::ManualTimeEntry(digits) => {
-                if *digits <= 99999 {
+                if *digits <= 999999 {
                     *self = TimerState::ManualTimeEntryDelay(*digits * 10 + digit, None);
                 }
             }

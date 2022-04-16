@@ -28,6 +28,19 @@ pub fn solve_time_string(time: u32) -> String {
     }
 }
 
+pub fn solve_time_string_ms(time: u32) -> String {
+    if time > 60000 {
+        format!(
+            "{}:{:02}.{:03}",
+            time / 60000,
+            (time % 60000) / 1000,
+            time % 1000
+        )
+    } else {
+        format!("{}.{:03}", time / 1000, time % 1000)
+    }
+}
+
 pub fn solve_time_short_string(time: u32) -> String {
     let time = time / 100;
     if time > 600 {
