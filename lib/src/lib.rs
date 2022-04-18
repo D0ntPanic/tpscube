@@ -36,8 +36,8 @@ pub use analysis::{
 };
 pub use common::{
     parse_move_string, parse_timed_move_string, Average, BestSolve, Color, Corner, CornerPiece,
-    Cube, CubeFace, ListAverage, Move, MoveSequence, Penalty, RotationDirection, Solve, SolveList,
-    SolveType, TimedMove,
+    Cube, CubeFace, InitialCubeState, ListAverage, Move, MoveSequence, Penalty, RotationDirection,
+    Solve, SolveList, SolveType, TimedMove,
 };
 pub use cube2x2x2::{Cube2x2x2, Cube2x2x2Faces, FaceRotation2x2x2};
 pub use cube3x3x3::{Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3, FaceRotation3x3x3};

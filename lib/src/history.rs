@@ -993,6 +993,10 @@ impl Session {
         &self.name
     }
 
+    pub fn solve_type(&self) -> SolveType {
+        self.solve_type
+    }
+
     pub fn update_id(&self) -> u64 {
         self.update_id
     }

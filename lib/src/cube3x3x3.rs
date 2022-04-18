@@ -1,5 +1,9 @@
-use crate::{Color, Corner, CornerPiece, Cube, CubeFace, Move, RandomSource, RotationDirection};
+use crate::{
+    Color, Corner, CornerPiece, Cube, CubeFace, InitialCubeState, Move, RandomSource,
+    RotationDirection,
+};
 use num_enum::TryFromPrimitive;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
 #[cfg(not(feature = "no_solver"))]
@@ -700,7 +704,7 @@ impl FaceRotation3x3x3 for Cube3x3x3 {
     }
 }
 
-impl Cube for Cube3x3x3 {
+impl InitialCubeState for Cube3x3x3 {
     fn new() -> Self {
         let mut corners = [CornerPiece {
             piece: Corner::URF,
@@ -766,7 +770,9 @@ impl Cube for Cube3x3x3 {
 
         cube
     }
+}
 
+impl Cube for Cube3x3x3 {
     fn is_solved(&self) -> bool {
         // Check corners
         for i in 0..8 {
@@ -796,6 +802,14 @@ impl Cube for Cube3x3x3 {
         rotation_move(self, mv);
     }
 
+    fn size(&self) -> usize {
+        3
+    }
+
+    fn colors(&self) -> BTreeMap<CubeFace, Vec<Vec<Color>>> {
+        self.as_faces().colors()
+    }
+
     #[cfg(not(feature = "no_solver"))]
     fn solve(&self) -> Option<Vec<Move>> {
         Solver::new(self, true).solve()
@@ -804,6 +818,14 @@ impl Cube for Cube3x3x3 {
     #[cfg(not(feature = "no_solver"))]
     fn solve_fast(&self) -> Option<Vec<Move>> {
         Solver::new(self, false).solve()
+    }
+
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Cube> {
+        Box::new(self.clone())
     }
 }
 
@@ -966,7 +988,7 @@ impl FaceRotation3x3x3 for Cube3x3x3Faces {
     }
 }
 
-impl Cube for Cube3x3x3Faces {
+impl InitialCubeState for Cube3x3x3Faces {
     fn new() -> Self {
         let mut state = [Color::White; 6 * 9];
         for i in 0..9 {
@@ -983,7 +1005,9 @@ impl Cube for Cube3x3x3Faces {
     fn sourced_random<T: RandomSource>(rng: &mut T) -> Self {
         Cube3x3x3::sourced_random(rng).as_faces()
     }
+}
 
+impl Cube for Cube3x3x3Faces {
     fn is_solved(&self) -> bool {
         for face in 0..6 {
             let face = CubeFace::try_from(face).unwrap();
@@ -1001,6 +1025,33 @@ impl Cube for Cube3x3x3Faces {
         rotation_move(self, mv);
     }
 
+    fn size(&self) -> usize {
+        3
+    }
+
+    fn colors(&self) -> BTreeMap<CubeFace, Vec<Vec<Color>>> {
+        let mut result = BTreeMap::new();
+        for face in &[
+            CubeFace::Top,
+            CubeFace::Front,
+            CubeFace::Right,
+            CubeFace::Back,
+            CubeFace::Left,
+            CubeFace::Bottom,
+        ] {
+            let mut rows = Vec::new();
+            for row in 0..3 {
+                let mut cols = Vec::new();
+                for col in 0..3 {
+                    cols.push(self.color(*face, row, col));
+                }
+                rows.push(cols);
+            }
+            result.insert(*face, rows);
+        }
+        result
+    }
+
     #[cfg(not(feature = "no_solver"))]
     fn solve(&self) -> Option<Vec<Move>> {
         self.as_pieces().solve()
@@ -1009,6 +1060,14 @@ impl Cube for Cube3x3x3Faces {
     #[cfg(not(feature = "no_solver"))]
     fn solve_fast(&self) -> Option<Vec<Move>> {
         self.as_pieces().solve_fast()
+    }
+
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Cube> {
+        Box::new(self.clone())
     }
 }
 

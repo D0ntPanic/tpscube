@@ -1,5 +1,7 @@
 use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
-use crate::common::{Color, Corner, CornerPiece, Cube, CubeFace, Move, TimedMove};
+use crate::common::{
+    Color, Corner, CornerPiece, Cube, CubeFace, InitialCubeState, Move, TimedMove,
+};
 use crate::cube3x3x3::{Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3};
 use aes::{
     cipher::generic_array::GenericArray,

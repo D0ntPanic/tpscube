@@ -11,6 +11,7 @@ mod future;
 mod gl;
 mod graph;
 mod history;
+mod mode;
 mod settings;
 mod style;
 mod theme;

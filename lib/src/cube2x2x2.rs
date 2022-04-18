@@ -1,4 +1,8 @@
-use crate::{Color, Corner, CornerPiece, Cube, CubeFace, Move, RandomSource, RotationDirection};
+use crate::{
+    Color, Corner, CornerPiece, Cube, CubeFace, InitialCubeState, Move, RandomSource,
+    RotationDirection,
+};
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
 #[cfg(not(feature = "no_solver"))]
@@ -217,7 +221,7 @@ impl FaceRotation2x2x2 for Cube2x2x2 {
     }
 }
 
-impl Cube for Cube2x2x2 {
+impl InitialCubeState for Cube2x2x2 {
     fn new() -> Self {
         let mut corners = [CornerPiece {
             piece: Corner::URF,
@@ -255,7 +259,9 @@ impl Cube for Cube2x2x2 {
 
         cube
     }
+}
 
+impl Cube for Cube2x2x2 {
     fn is_solved(&self) -> bool {
         // Check corners
         for i in 0..8 {
@@ -274,6 +280,14 @@ impl Cube for Cube2x2x2 {
         rotation_move(self, mv);
     }
 
+    fn size(&self) -> usize {
+        2
+    }
+
+    fn colors(&self) -> BTreeMap<CubeFace, Vec<Vec<Color>>> {
+        self.as_faces().colors()
+    }
+
     #[cfg(not(feature = "no_solver"))]
     fn solve(&self) -> Option<Vec<Move>> {
         Solver::new(self).solve()
@@ -282,6 +296,14 @@ impl Cube for Cube2x2x2 {
     #[cfg(not(feature = "no_solver"))]
     fn solve_fast(&self) -> Option<Vec<Move>> {
         Solver::new(self).solve()
+    }
+
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Cube> {
+        Box::new(self.clone())
     }
 }
 
@@ -402,7 +424,7 @@ impl FaceRotation2x2x2 for Cube2x2x2Faces {
     }
 }
 
-impl Cube for Cube2x2x2Faces {
+impl InitialCubeState for Cube2x2x2Faces {
     fn new() -> Self {
         let mut state = [Color::White; 6 * 4];
         for i in 0..4 {
@@ -419,7 +441,9 @@ impl Cube for Cube2x2x2Faces {
     fn sourced_random<T: RandomSource>(rng: &mut T) -> Self {
         Cube2x2x2::sourced_random(rng).as_faces()
     }
+}
 
+impl Cube for Cube2x2x2Faces {
     fn is_solved(&self) -> bool {
         for face in 0..6 {
             let face = CubeFace::try_from(face).unwrap();
@@ -437,6 +461,33 @@ impl Cube for Cube2x2x2Faces {
         rotation_move(self, mv);
     }
 
+    fn size(&self) -> usize {
+        2
+    }
+
+    fn colors(&self) -> BTreeMap<CubeFace, Vec<Vec<Color>>> {
+        let mut result = BTreeMap::new();
+        for face in &[
+            CubeFace::Top,
+            CubeFace::Front,
+            CubeFace::Right,
+            CubeFace::Back,
+            CubeFace::Left,
+            CubeFace::Bottom,
+        ] {
+            let mut rows = Vec::new();
+            for row in 0..2 {
+                let mut cols = Vec::new();
+                for col in 0..2 {
+                    cols.push(self.color(*face, row, col));
+                }
+                rows.push(cols);
+            }
+            result.insert(*face, rows);
+        }
+        result
+    }
+
     #[cfg(not(feature = "no_solver"))]
     fn solve(&self) -> Option<Vec<Move>> {
         self.as_pieces().solve()
@@ -445,6 +496,14 @@ impl Cube for Cube2x2x2Faces {
     #[cfg(not(feature = "no_solver"))]
     fn solve_fast(&self) -> Option<Vec<Move>> {
         self.as_pieces().solve_fast()
+    }
+
+    fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Cube> {
+        Box::new(self.clone())
     }
 }
 

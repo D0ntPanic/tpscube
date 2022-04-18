@@ -7,6 +7,7 @@ use crate::future::spawn_future;
 use crate::gl::GlContext;
 use crate::graph::GraphWidget;
 use crate::history::HistoryWidget;
+use crate::mode::SolveTypeSelectWindow;
 use crate::settings::Settings;
 use crate::style::{base_visuals, content_visuals, header_visuals};
 use crate::theme::Theme;
@@ -21,7 +22,7 @@ use epi::RepaintSignal;
 use image::GenericImageView;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
-use tpscube_core::{History, HistoryLoadProgress, Solve, SyncStatus};
+use tpscube_core::{History, HistoryLoadProgress, Solve, SolveType, SyncStatus};
 
 #[cfg(target_arch = "wasm32")]
 use crate::is_safari;
@@ -59,8 +60,10 @@ pub struct Application {
     solve_details: Option<SolveDetailsWindow>,
     solve_details_cube_rect: Option<Rect>,
     average_details: Option<AverageDetailsWindow>,
+    solve_type_select: Option<SolveTypeSelectWindow>,
     first_frame: bool,
     screen_size: ScreenSize,
+    solve_type: SolveType,
 
     #[cfg(not(target_arch = "wasm32"))]
     bluetooth: BluetoothState,
@@ -182,8 +185,10 @@ impl Application {
             solve_details: None,
             solve_details_cube_rect: None,
             average_details: None,
+            solve_type_select: None,
             first_frame: true,
             screen_size: ScreenSize::Normal,
+            solve_type: SolveType::Standard3x3x3,
 
             #[cfg(not(target_arch = "wasm32"))]
             bluetooth: BluetoothState::new(),
@@ -386,6 +391,21 @@ impl App for Application {
                                 )
                                 .on_hover_text(error);
                             }
+
+                            #[cfg(target_arch = "wasm32")]
+                            let allow_change_solve_type = true;
+                            #[cfg(not(target_arch = "wasm32"))]
+                            let allow_change_solve_type = !self.bluetooth.active();
+
+                            // Show solve type
+                            if ui
+                                .add(Label::new(self.solve_type.to_string()).sense(Sense::click()))
+                                .clicked()
+                                && allow_change_solve_type
+                            {
+                                self.solve_type_select =
+                                    Some(SolveTypeSelectWindow::new(self.solve_type));
+                            }
                         });
                     });
 
@@ -448,6 +468,7 @@ impl App for Application {
                         &mut self.timer_cube_rect,
                         &mut details,
                         self.solve_details.is_none(),
+                        &mut self.solve_type,
                     )
                 }
                 Mode::History => self.history_widget.update(
@@ -455,6 +476,7 @@ impl App for Application {
                     frame,
                     self.history.as_mut().unwrap(),
                     &mut details,
+                    self.solve_type,
                 ),
                 Mode::Graphs => {
                     self.graph_widget
@@ -520,6 +542,25 @@ impl App for Application {
                     }
                     _ => (),
                 }
+            } else if let Some(solve_type_select) = &self.solve_type_select {
+                let mut open = true;
+                let mut selection = None;
+                solve_type_select.update(ctxt, &mut open, &mut selection);
+                if !open || escape_down || selection.is_some() {
+                    self.solve_type_select = None;
+                }
+
+                match selection {
+                    Some(solve_type) => {
+                        self.solve_type = solve_type;
+                        let _ = self
+                            .history
+                            .as_mut()
+                            .unwrap()
+                            .set_string_setting("solve_type", &solve_type.to_string());
+                    }
+                    _ => (),
+                }
             }
 
             #[cfg(not(target_arch = "wasm32"))]
@@ -567,6 +608,18 @@ impl App for Application {
                     // frame, which will be scheduled immediately.
                     std::mem::swap(&mut self.history, history);
                     *loading_history = None;
+
+                    // Load initial solve type from settings
+                    self.solve_type = SolveType::from_str(
+                        &self
+                            .history
+                            .as_ref()
+                            .unwrap()
+                            .setting_as_string("solve_type")
+                            .unwrap_or("3x3x3".into()),
+                    )
+                    .unwrap_or(SolveType::Standard3x3x3);
+
                     ctxt.request_repaint();
                 } else if let Err(load_error) = result {
                     error = Some(load_error.to_string());
@@ -658,7 +711,7 @@ impl App for Application {
                     solve_details.paint_cube(ctxt, gl, rect).unwrap();
                 }
             }
-        } else if self.average_details.is_none() {
+        } else if self.average_details.is_none() && self.solve_type_select.is_none() {
             if let Some(rect) = &self.timer_cube_rect {
                 self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }
@@ -678,7 +731,7 @@ impl App for Application {
                     solve_details.paint_cube(ctxt, gl, rect).unwrap();
                 }
             }
-        } else if self.average_details.is_none() {
+        } else if self.average_details.is_none() && self.solve_type_select.is_none() {
             if let Some(rect) = &self.timer_cube_rect {
                 self.timer_widget.paint_cube(ctxt, gl, rect).unwrap();
             }

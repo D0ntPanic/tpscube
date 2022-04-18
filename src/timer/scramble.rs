@@ -9,7 +9,10 @@ use crate::timer::BluetoothEvent;
 use crate::widgets::fit_scramble;
 use anyhow::Result;
 use egui::{CtxRef, Pos2, Rect, Response, Sense, Ui, Vec2};
-use tpscube_core::{scramble_3x3x3, Cube, Cube3x3x3, Move, MoveSequence};
+use tpscube_core::{
+    scramble_2x2x2, scramble_3x3x3, Cube, Cube2x2x2, Cube3x3x3, InitialCubeState, Move,
+    MoveSequence, SolveType,
+};
 
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
 const TARGET_ANALYSIS_SCRAMBLE_FRACTION: f32 = 0.15;
@@ -31,6 +34,7 @@ pub struct TimerCube {
     scramble_move_index: Option<usize>,
     scramble_pending_move: Option<Move>,
     scramble_fix_moves: Vec<Move>,
+    solve_type: SolveType,
 }
 
 enum ScrambleMoveResult {
@@ -44,7 +48,7 @@ impl TimerCube {
     pub fn new() -> Self {
         let current_scramble = scramble_3x3x3();
         let displayed_scramble = current_scramble.clone();
-        let mut renderer = CubeRenderer::new();
+        let mut renderer = CubeRenderer::new(Box::new(Cube3x3x3::new()));
         renderer.reset_cube_state();
         renderer.do_moves(&current_scramble);
 
@@ -58,6 +62,7 @@ impl TimerCube {
             scramble_move_index: None,
             scramble_pending_move: None,
             scramble_fix_moves: Vec::new(),
+            solve_type: SolveType::Standard3x3x3,
         }
     }
 
@@ -69,11 +74,20 @@ impl TimerCube {
         self.bluetooth_active
     }
 
+    fn generate_scramble(&self) -> Vec<Move> {
+        match self.solve_type {
+            SolveType::Standard2x2x2 => scramble_2x2x2(),
+            SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => {
+                scramble_3x3x3()
+            }
+        }
+    }
+
     pub fn new_scramble(&mut self) {
         if let Some(scramble) = &self.next_scramble {
             self.current_scramble = scramble.clone();
         } else {
-            self.current_scramble = scramble_3x3x3();
+            self.current_scramble = self.generate_scramble();
         }
         self.current_scramble_displayed = false;
         self.displayed_scramble = self.current_scramble.clone();
@@ -115,7 +129,7 @@ impl TimerCube {
 
     pub fn bluetooth_started(&mut self, state: &Cube3x3x3) {
         self.bluetooth_active = true;
-        self.renderer.set_cube_state(state.clone());
+        self.renderer.set_cube_state(Box::new(state.clone()));
         self.renderer.reset_angle();
 
         self.display_scramble_from_current_state();
@@ -241,7 +255,7 @@ impl TimerCube {
         // Generate a scramble when the current one is onscreen. The slight delay will
         // not be noticed as much when performing a new scramble.
         if self.current_scramble_displayed && self.next_scramble.is_none() {
-            self.next_scramble = Some(scramble_3x3x3());
+            self.next_scramble = Some(self.generate_scramble());
         }
     }
 
@@ -587,5 +601,22 @@ impl TimerCube {
                 ui.input().pointer.delta().y / 3.0,
             );
         }
+    }
+
+    pub fn check_solve_type(&mut self, solve_type: SolveType) {
+        if self.solve_type == solve_type {
+            return;
+        }
+
+        self.solve_type = solve_type;
+
+        self.renderer = match solve_type {
+            SolveType::Standard2x2x2 => CubeRenderer::new(Box::new(Cube2x2x2::new())),
+            SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => {
+                CubeRenderer::new(Box::new(Cube3x3x3::new()))
+            }
+        };
+        self.next_scramble = None;
+        self.new_scramble();
     }
 }

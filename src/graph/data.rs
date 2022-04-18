@@ -1,6 +1,8 @@
 use crate::graph::plot::{Plot, SinglePlot, YAxis};
 use crate::theme::Theme;
-use tpscube_core::{Analysis, Cube, Cube3x3x3, CubeWithSolution, History, ListAverage, Solve};
+use tpscube_core::{
+    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, ListAverage, Solve,
+};
 
 pub struct GraphData {
     statistic: Statistic,

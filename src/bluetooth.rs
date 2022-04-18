@@ -11,7 +11,9 @@ use egui::{
 };
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
-use tpscube_core::{BluetoothCube, BluetoothCubeEvent, BluetoothCubeState, Cube, Cube3x3x3};
+use tpscube_core::{
+    BluetoothCube, BluetoothCubeEvent, BluetoothCubeState, Cube3x3x3, InitialCubeState,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum BluetoothMode {
@@ -39,7 +41,7 @@ impl BluetoothState {
             mode: BluetoothMode::DiscoverDevices,
             cube: None,
             error: None,
-            renderer: CubeRenderer::new(),
+            renderer: CubeRenderer::new(Box::new(Cube3x3x3::new())),
             move_queue: Arc::new(Mutex::new(Vec::new())),
             cube_state: Cube3x3x3::new(),
             timer_only: false,
@@ -259,7 +261,7 @@ impl BluetoothState {
                 let timer_only = cube.timer_only()?;
                 self.cube_state = state.clone();
                 self.timer_only = timer_only;
-                self.renderer.set_cube_state(state);
+                self.renderer.set_cube_state(Box::new(state));
                 if timer_only {
                     self.mode = BluetoothMode::Finished;
                 } else {
@@ -333,7 +335,7 @@ impl BluetoothState {
                     .clicked()
                 {
                     self.mode = BluetoothMode::ResetState;
-                    self.renderer.set_cube_state(Cube3x3x3::new());
+                    self.renderer.set_cube_state(Box::new(Cube3x3x3::new()));
                 }
             });
 
@@ -362,7 +364,7 @@ impl BluetoothState {
                         self.renderer.do_move(mv.move_());
                     }
                     self.cube_state = state.clone();
-                    self.renderer.verify_state(state);
+                    self.renderer.verify_state(Box::new(state));
                 }
                 _ => (), // This code is only reached for cubes, not timers
             }

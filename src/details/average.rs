@@ -7,8 +7,8 @@ use crate::widgets::{date_string, solve_time_string};
 use egui::{CtxRef, CursorIcon, Label, Pos2, Rect, Sense, Vec2, Window};
 use std::cmp::Ordering;
 use tpscube_core::{
-    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube3x3x3, CubeWithSolution, ListAverage,
-    Solve,
+    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube3x3x3, CubeWithSolution,
+    InitialCubeState, ListAverage, Solve,
 };
 
 const TARGET_MAX_WIDTH: f32 = 300.0;

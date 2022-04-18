@@ -1,6 +1,6 @@
 mod cfop;
 
-use crate::{Cube, Cube3x3x3, Solve, TimedMove};
+use crate::{Cube, Cube3x3x3, InitialCubeState, Solve, TimedMove};
 
 pub use cfop::{
     CFOPAnalysis, CFOPPartialAnalysis, CFOPProgress, CrossAnalysis, F2LPairAnalysis,

@@ -7,7 +7,9 @@ use egui::{
     popup_below_widget, Align2, CtxRef, CursorIcon, Label, Layout, ScrollArea, SelectableLabel,
     Sense, SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
 };
-use tpscube_core::{Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList};
+use tpscube_core::{
+    Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList, SolveType,
+};
 
 pub struct TimerSession {
     update_id: Option<u64>,
@@ -37,6 +39,16 @@ impl TimerSession {
             best_solve: None,
             best_ao5: None,
             best_ao12: None,
+        }
+    }
+
+    pub fn check_solve_type(&mut self, history: &mut History, solve_type: SolveType) {
+        // If solve type no longer matches session's, create a new session to hold the
+        // new type of solves
+        if let Some(session) = history.sessions().get(history.current_session()) {
+            if session.solve_type() != solve_type {
+                self.new_session(history);
+            }
         }
     }
 

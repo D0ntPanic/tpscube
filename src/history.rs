@@ -7,7 +7,9 @@ use egui::{
     containers::ScrollArea, popup_below_widget, Align2, CentralPanel, CtxRef, CursorIcon, Pos2,
     Rect, SelectableLabel, Sense, Stroke, Ui, Vec2,
 };
-use tpscube_core::{Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList};
+use tpscube_core::{
+    Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList, SolveType,
+};
 
 const REGION_PADDING: f32 = 16.0;
 const SESSION_REGION_BORDER: f32 = 8.0;
@@ -66,6 +68,7 @@ pub struct HistoryWidget {
     cached_update_id: Option<u64>,
     cached_best_columns: usize,
     cached_solve_columns: usize,
+    cached_solve_type: SolveType,
 }
 
 struct SolveLayoutMetrics {
@@ -398,7 +401,6 @@ impl HistoryRegion for AllTimeBestRegion {
                 + BEST_TIME_ROW_PADDING;
         }
 
-
         // Draw best average of 100
         if let Some(average) = &self.best_ao100 {
             let galley = ui
@@ -563,7 +565,13 @@ impl HistoryRegion for SessionRegion {
         all_time_best: &Option<AllTimeBestRegion>,
         details: &mut Option<SolveDetails>,
     ) {
-        let (all_time_best_solve, all_time_best_ao5, all_time_best_ao12, all_time_best_ao50, all_time_best_ao100) = match all_time_best {
+        let (
+            all_time_best_solve,
+            all_time_best_ao5,
+            all_time_best_ao12,
+            all_time_best_ao50,
+            all_time_best_ao100,
+        ) = match all_time_best {
             Some(region) => (
                 region.best_solve.as_ref().map(|best| best.time),
                 region.best_ao5.as_ref().map(|best| best.time),
@@ -1120,6 +1128,7 @@ impl HistoryWidget {
             cached_update_id: None,
             cached_best_columns: 0,
             cached_solve_columns: 0,
+            cached_solve_type: SolveType::Standard3x3x3,
         }
     }
 
@@ -1128,6 +1137,7 @@ impl HistoryWidget {
         ui: &Ui,
         layout_metrics: &SolveLayoutMetrics,
         history: &mut History,
+        solve_type: SolveType,
     ) {
         let mut all_time_best_solve: Option<BestSolve> = None;
         let mut all_time_best_ao5: Option<Average> = None;
@@ -1141,6 +1151,10 @@ impl HistoryWidget {
             let solves: Vec<Solve> = session.to_vec(history);
             if solves.len() == 0 {
                 // Skip empty sessions
+                continue;
+            }
+            if session.solve_type() != solve_type {
+                // Skip sessions that aren't the active solve type
                 continue;
             }
 
@@ -1283,6 +1297,7 @@ impl HistoryWidget {
         _frame: &mut epi::Frame<'_>,
         history: &mut History,
         details: &mut Option<SolveDetails>,
+        solve_type: SolveType,
     ) {
         ctxt.set_visuals(content_visuals());
         CentralPanel::default().show(ctxt, |ui| {
@@ -1332,11 +1347,13 @@ impl HistoryWidget {
             if self.cached_update_id != Some(history.update_id())
                 || self.cached_solve_columns != solve_columns
                 || self.cached_best_columns != best_columns
+                || self.cached_solve_type != solve_type
             {
                 self.cached_update_id = Some(history.update_id());
                 self.cached_solve_columns = solve_columns;
                 self.cached_best_columns = best_columns;
-                self.generate_regions(ui, &solve_layout_metrics, history);
+                self.cached_solve_type = solve_type;
+                self.generate_regions(ui, &solve_layout_metrics, history, solve_type);
             }
 
             ui.visuals_mut().widgets.inactive.bg_fill = Theme::BackgroundHighlight.into();

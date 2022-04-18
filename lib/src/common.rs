@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Local};
 use num_enum::TryFromPrimitive;
 use std::cmp::{Ord, Ordering, PartialOrd};
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -77,7 +78,7 @@ impl Color {
 }
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, TryFromPrimitive)]
 /// Faces of the cube relative to viewing the cube with white on top and green in front
 pub enum CubeFace {
     Top = 0,
@@ -395,17 +396,44 @@ pub enum Penalty {
 }
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, TryFromPrimitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, TryFromPrimitive)]
 pub enum SolveType {
     Standard3x3x3 = 0,
+    OneHanded3x3x3 = 1,
+    Blind3x3x3 = 2,
+    Standard2x2x2 = 3,
+    /*Standard4x4x4 = 4,
+    Blind4x4x4 = 5,
+    Standard5x5x5 = 6,
+    Blind5x5x5 = 7,
+    Standard6x6x6 = 8,
+    Standard7x7x7 = 9,
+    Pyraminx = 10,
+    Megaminx = 11,
+    Skewb = 12,
+    Square1 = 13,
+    Clock = 14,*/
 }
 
 impl SolveType {
     pub fn from_str(string: &str) -> Option<Self> {
-        if string == "3x3x3" {
-            Some(SolveType::Standard3x3x3)
-        } else {
-            None
+        match string {
+            "3x3x3" => Some(SolveType::Standard3x3x3),
+            "3x3x3 OH" => Some(SolveType::OneHanded3x3x3),
+            "3x3x3 Blind" => Some(SolveType::Blind3x3x3),
+            "2x2x2" => Some(SolveType::Standard2x2x2),
+            /*"4x4x4" => Some(SolveType::Standard4x4x4),
+            "4x4x4 Blind" => Some(SolveType::Blind4x4x4),
+            "5x5x5" => Some(SolveType::Standard5x5x5),
+            "5x5x5 Blind" => Some(SolveType::Blind5x5x5),
+            "6x6x6" => Some(SolveType::Standard6x6x6),
+            "7x7x7" => Some(SolveType::Standard7x7x7),
+            "Pyraminx" => Some(SolveType::Pyraminx),
+            "Megaminx" => Some(SolveType::Megaminx),
+            "Skewb" => Some(SolveType::Skewb),
+            "Square-1" => Some(SolveType::Square1),
+            "Clock" => Some(SolveType::Clock),*/
+            _ => None,
         }
     }
 }
@@ -414,6 +442,20 @@ impl ToString for SolveType {
     fn to_string(&self) -> String {
         match self {
             SolveType::Standard3x3x3 => "3x3x3".into(),
+            SolveType::OneHanded3x3x3 => "3x3x3 OH".into(),
+            SolveType::Blind3x3x3 => "3x3x3 Blind".into(),
+            SolveType::Standard2x2x2 => "2x2x2".into(),
+            /*SolveType::Standard4x4x4 => "4x4x4".into(),
+            SolveType::Blind4x4x4 => "4x4x4 Blind".into(),
+            SolveType::Standard5x5x5 => "5x5x5".into(),
+            SolveType::Blind5x5x5 => "5x5x5 Blind".into(),
+            SolveType::Standard6x6x6 => "6x6x6".into(),
+            SolveType::Standard7x7x7 => "7x7x7".into(),
+            SolveType::Pyraminx => "Pyraminx".into(),
+            SolveType::Megaminx => "Megaminx".into(),
+            SolveType::Skewb => "Skewb".into(),
+            SolveType::Square1 => "Square-1".into(),
+            SolveType::Clock => "Clock".into(),*/
         }
     }
 }
@@ -691,7 +733,7 @@ impl TimedMoveSequence for &[TimedMove] {
     }
 }
 
-pub trait Cube: Sized {
+pub trait InitialCubeState: Sized {
     /// Creates a new cube in the solved state
     fn new() -> Self;
 
@@ -702,7 +744,9 @@ pub trait Cube: Sized {
     fn random() -> Self {
         Self::sourced_random(&mut StandardRandomSource)
     }
+}
 
+pub trait Cube {
     /// Determines if this cube is in the solved state
     fn is_solved(&self) -> bool;
 
@@ -716,6 +760,9 @@ pub trait Cube: Sized {
         }
     }
 
+    fn size(&self) -> usize;
+    fn colors(&self) -> BTreeMap<CubeFace, Vec<Vec<Color>>>;
+
     /// Finds an efficient solution to this cube state
     #[cfg(not(feature = "no_solver"))]
     fn solve(&self) -> Option<Vec<Move>>;
@@ -724,6 +771,9 @@ pub trait Cube: Sized {
     /// result of `solve`.
     #[cfg(not(feature = "no_solver"))]
     fn solve_fast(&self) -> Option<Vec<Move>>;
+
+    fn reset(&mut self);
+    fn dyn_clone(&self) -> Box<dyn Cube>;
 }
 
 pub fn parse_move_string(string: &str) -> Result<Vec<Move>> {

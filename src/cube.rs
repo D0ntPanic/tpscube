@@ -11,7 +11,7 @@ use gl_matrix::{
 use instant::Instant;
 use num_traits::FloatConst;
 use std::time::Duration;
-use tpscube_core::{Cube, Cube3x3x3, CubeFace, Move};
+use tpscube_core::{Cube, CubeFace, Move};
 
 const FACE_COLORS: [[f32; 3]; 6] = [
     [1.0, 1.0, 1.0],
@@ -25,18 +25,11 @@ const PLACEHOLDER_FACE_COLOR: [f32; 3] = [1.0, 0.0, 1.0];
 const FACE_ROUGHNESS: f32 = 0.4;
 const INNER_COLOR: [f32; 3] = [0.02, 0.02, 0.02];
 const INNER_ROUGHNESS: f32 = 0.3;
-const CUBE_SIZE: usize = 3;
-const MODEL_OFFSET: [f32; 3] = [
-    1.0 - CUBE_SIZE as f32,
-    1.0 - CUBE_SIZE as f32,
-    1.0 - CUBE_SIZE as f32,
-];
-const MODEL_SCALE: f32 = 1.0 / CUBE_SIZE as f32;
 
 pub struct CubeRenderer {
     renderer: Option<GlRenderer>,
-    cube: Cube3x3x3,
-    target_cube: Cube3x3x3,
+    cube: Box<dyn Cube>,
+    target_cube: Box<dyn Cube>,
     move_queue: Vec<Move>,
     max_queued_moves: usize,
     pitch: f32,
@@ -46,7 +39,10 @@ pub struct CubeRenderer {
     animation: Option<Animation>,
     anim_fixed_index: [Vec<u16>; 6],
     anim_moving_index: [Vec<u16>; 6],
-    vert_ranges: [VertexRange; 6 * CUBE_SIZE * CUBE_SIZE],
+    vert_ranges: Vec<VertexRange>,
+    cube_size: usize,
+    model_offset: [f32; 3],
+    model_scale: f32,
 }
 
 pub struct SourceVertex {
@@ -71,11 +67,24 @@ struct Animation {
 }
 
 impl CubeRenderer {
-    pub fn new() -> Self {
+    pub fn new(cube: Box<dyn Cube>) -> Self {
+        let target_cube = cube.dyn_clone();
+        let cube_size = cube.size();
+
+        let mut vert_ranges = Vec::new();
+        vert_ranges.resize(
+            6 * cube_size * cube_size,
+            VertexRange {
+                start_index: 0,
+                model_verts: EDGE_SOURCE_VERTS,
+                face: 0,
+            },
+        );
+
         let mut result = Self {
             renderer: None,
-            cube: Cube3x3x3::new(),
-            target_cube: Cube3x3x3::new(),
+            cube,
+            target_cube,
             move_queue: Vec::new(),
             max_queued_moves: 8,
             pitch: 30.0,
@@ -99,15 +108,18 @@ impl CubeRenderer {
                 Vec::new(),
                 Vec::new(),
             ],
-            vert_ranges: [VertexRange {
-                start_index: 0,
-                model_verts: EDGE_SOURCE_VERTS,
-                face: 0,
-            }; 6 * CUBE_SIZE * CUBE_SIZE],
+            vert_ranges,
+            cube_size,
+            model_offset: [
+                1.0 - cube_size as f32,
+                1.0 - cube_size as f32,
+                1.0 - cube_size as f32,
+            ],
+            model_scale: 1.0 / cube_size as f32,
         };
 
         // Add vertex information for corner pieces
-        let e = CUBE_SIZE as i32 - 1;
+        let e = cube_size as i32 - 1;
         result.add_corner(
             [0, 0, 0],
             [1, -1],
@@ -166,7 +178,7 @@ impl CubeRenderer {
         );
 
         // Add vertex information for edge pieces
-        for i in 1..CUBE_SIZE as i32 - 1 {
+        for i in 1..cube_size as i32 - 1 {
             result.add_edge(
                 [i, e, e],
                 [-1, -1],
@@ -242,8 +254,8 @@ impl CubeRenderer {
         }
 
         // Add vertex information for center pieces
-        for row in 1..CUBE_SIZE as i32 - 1 {
-            for col in 1..CUBE_SIZE as i32 - 1 {
+        for row in 1..cube_size as i32 - 1 {
+            for col in 1..cube_size as i32 - 1 {
                 result.add_center([col, e, row], [-1, 0, 0], (CubeFace::Top, row, col));
                 result.add_center([col, e - row, e], [0, 0, 0], (CubeFace::Front, row, col));
                 result.add_center(
@@ -264,11 +276,13 @@ impl CubeRenderer {
     }
 
     pub fn reset_cube_state(&mut self) {
-        self.set_cube_state(Cube3x3x3::new());
+        self.cube.reset();
+        self.target_cube = self.cube.dyn_clone();
+        self.update_colors();
     }
 
-    pub fn set_cube_state(&mut self, cube: Cube3x3x3) {
-        self.cube = cube.clone();
+    pub fn set_cube_state(&mut self, cube: Box<dyn Cube>) {
+        self.cube = cube.dyn_clone();
         self.target_cube = cube;
         self.update_colors();
     }
@@ -282,7 +296,7 @@ impl CubeRenderer {
             for mv in moves {
                 self.target_cube.do_move(*mv);
             }
-            self.cube = self.target_cube.clone();
+            self.cube = self.target_cube.dyn_clone();
             self.move_queue.clear();
             self.animation = None;
             self.update_colors();
@@ -294,9 +308,9 @@ impl CubeRenderer {
         }
     }
 
-    pub fn verify_state(&mut self, cube: Cube3x3x3) {
-        if self.target_cube != cube {
-            self.cube = cube.clone();
+    pub fn verify_state(&mut self, cube: Box<dyn Cube>) {
+        if self.target_cube.colors() != cube.colors() {
+            self.cube = cube.dyn_clone();
             self.target_cube = cube;
             self.move_queue.clear();
             self.animation = None;
@@ -304,8 +318,8 @@ impl CubeRenderer {
         }
     }
 
-    pub fn cube_state(&self) -> Cube3x3x3 {
-        self.target_cube.clone()
+    pub fn cube_state(&self) -> Box<dyn Cube> {
+        self.target_cube.dyn_clone()
     }
 
     pub fn is_solved(&self) -> bool {
@@ -336,8 +350,8 @@ impl CubeRenderer {
     }
 
     fn vert_range(&mut self, piece: (CubeFace, i32, i32)) -> &mut VertexRange {
-        &mut self.vert_ranges[(piece.0 as u8 as usize * CUBE_SIZE * CUBE_SIZE)
-            + (piece.1 as usize * CUBE_SIZE)
+        &mut self.vert_ranges[(piece.0 as u8 as usize * self.cube_size * self.cube_size)
+            + (piece.1 as usize * self.cube_size)
             + piece.2 as usize]
     }
 
@@ -533,7 +547,7 @@ impl CubeRenderer {
     }
 
     fn update_colors(&mut self) {
-        let face_colors = self.cube.as_faces();
+        let face_colors = self.cube.colors();
         for face in &[
             CubeFace::Top,
             CubeFace::Front,
@@ -542,9 +556,9 @@ impl CubeRenderer {
             CubeFace::Left,
             CubeFace::Bottom,
         ] {
-            for row in 0..CUBE_SIZE {
-                for col in 0..CUBE_SIZE {
-                    let color = FACE_COLORS[face_colors.color(*face, row, col) as u8 as usize];
+            for row in 0..self.cube_size {
+                for col in 0..self.cube_size {
+                    let color = FACE_COLORS[face_colors[face][row][col] as u8 as usize];
                     let range = self.vert_range((*face, row as i32, col as i32)).clone();
                     for i in 0..range.model_verts.len() {
                         if range.model_verts[i].color == range.face {
@@ -601,9 +615,9 @@ impl CubeRenderer {
         mat4::scale(
             model_ref,
             &mat4::clone(model_ref),
-            &[MODEL_SCALE, MODEL_SCALE, MODEL_SCALE],
+            &[self.model_scale, self.model_scale, self.model_scale],
         );
-        mat4::translate(model_ref, &mat4::clone(model_ref), &MODEL_OFFSET);
+        mat4::translate(model_ref, &mat4::clone(model_ref), &self.model_offset);
         renderer.set_model_matrix(model);
 
         let mut anim_done = None;
@@ -646,9 +660,9 @@ impl CubeRenderer {
             mat4::scale(
                 model_ref,
                 &mat4::clone(model_ref),
-                &[MODEL_SCALE, MODEL_SCALE, MODEL_SCALE],
+                &[self.model_scale, self.model_scale, self.model_scale],
             );
-            mat4::translate(model_ref, &mat4::clone(model_ref), &MODEL_OFFSET);
+            mat4::translate(model_ref, &mat4::clone(model_ref), &self.model_offset);
             renderer.set_model_matrix(model);
 
             // Draw the moving part of the cube

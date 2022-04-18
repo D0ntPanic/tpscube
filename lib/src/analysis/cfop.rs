@@ -3,8 +3,8 @@ use crate::tables::{
 };
 use crate::{
     cube3x3x3::FaceRowOrColumn, AnalysisStepSummary, AnalysisSubstepTime, AnalysisSummary, Color,
-    Cube, Cube3x3x3Faces, CubeFace, CubeWithSolution, Move, MoveSequence, PartialAnalysis,
-    PartialAnalysisMethod, TimedMove,
+    Cube, Cube3x3x3Faces, CubeFace, CubeWithSolution, InitialCubeState, Move, MoveSequence,
+    PartialAnalysis, PartialAnalysisMethod, TimedMove,
 };
 
 /// Analysis of a full solve using CFOP method. Both one-look and two-look

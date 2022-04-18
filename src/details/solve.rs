@@ -16,7 +16,8 @@ use egui::{
 };
 use instant::Instant;
 use tpscube_core::{
-    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube3x3x3, CubeWithSolution, Solve,
+    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube3x3x3, CubeWithSolution,
+    InitialCubeState, Solve,
 };
 
 const TARGET_MIN_WIDTH: f32 = 280.0;
@@ -44,10 +45,9 @@ enum SolveDetailsMode {
 
 impl SolveDetailsWindow {
     pub fn new(solve: Solve) -> Self {
-        let mut renderer = CubeRenderer::new();
         let mut unsolved_state = Cube3x3x3::new();
         unsolved_state.do_moves(&solve.scramble);
-        renderer.set_cube_state(unsolved_state.clone());
+        let renderer = CubeRenderer::new(Box::new(unsolved_state.clone()));
 
         let analysis = if let Some(solution) = &solve.moves {
             Analysis::analyze(&CubeWithSolution {
@@ -247,7 +247,8 @@ impl SolveDetailsWindow {
                     || space_down
                 {
                     if self.replay_move_idx >= self.solve.moves.as_ref().unwrap().len() {
-                        self.renderer.set_cube_state(self.unsolved_state.clone());
+                        self.renderer
+                            .set_cube_state(Box::new(self.unsolved_state.clone()));
                         self.replay_move_idx = 0;
                         self.replay_time = 0.0;
                     }

@@ -10,7 +10,8 @@ use egui::{
 use report::TPSReport;
 use std::collections::HashMap;
 use tpscube_core::{
-    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, OLLAlgorithm, PLLAlgorithm,
+    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, OLLAlgorithm,
+    PLLAlgorithm,
 };
 
 pub struct AlgorithmsWidget {

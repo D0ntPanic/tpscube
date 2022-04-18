@@ -1,5 +1,5 @@
 use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
-use crate::common::{Color, Cube, CubeFace, Move, TimedMove};
+use crate::common::{Color, Cube, CubeFace, InitialCubeState, Move, TimedMove};
 use crate::cube3x3x3::{Cube3x3x3, Cube3x3x3Faces};
 use anyhow::{anyhow, Result};
 use btleplug::api::{Characteristic, Peripheral, WriteType};

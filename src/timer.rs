@@ -18,8 +18,8 @@ use session::TimerSession;
 use solve::{bluetooth_timer_ui, timer_ui};
 use state::TimerState;
 use tpscube_core::{
-    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, PartialAnalysis, Penalty, Solve,
-    SolveType, TimedMove,
+    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, PartialAnalysis,
+    Penalty, Solve, SolveType, TimedMove,
 };
 
 pub struct TimerWidget {
@@ -50,10 +50,10 @@ impl TimerWidget {
         self.state.is_solving()
     }
 
-    fn finish_solve(&mut self, time: u32, history: &mut History) {
+    fn finish_solve(&mut self, time: u32, history: &mut History, solve_type: SolveType) {
         history.new_solve(Solve {
             id: Solve::new_id(),
-            solve_type: SolveType::Standard3x3x3,
+            solve_type,
             session: history.current_session().into(),
             scramble: self.cube.scramble().to_vec(),
             created: Local::now(),
@@ -72,6 +72,7 @@ impl TimerWidget {
         history: &mut History,
         moves: Vec<TimedMove>,
         name: Option<String>,
+        solve_type: SolveType,
     ) {
         // Sanity check move data and modify move timing to be relative to the start
         // instead of relative to the prior move
@@ -97,7 +98,7 @@ impl TimerWidget {
 
         history.new_solve(Solve {
             id: Solve::new_id(),
-            solve_type: SolveType::Standard3x3x3,
+            solve_type,
             session: history.current_session().into(),
             scramble: self.cube.scramble().to_vec(),
             created: Local::now(),
@@ -141,6 +142,7 @@ impl TimerWidget {
         bluetooth_events: Vec<BluetoothEvent>,
         bluetooth_name: Option<String>,
         accept_keyboard: bool,
+        solve_type: SolveType,
     ) -> Response {
         let id = ui.make_persistent_id("timer_input");
 
@@ -186,7 +188,7 @@ impl TimerWidget {
                     ctxt.request_repaint();
                 }
                 BluetoothEvent::TimerFinished(time) => {
-                    self.finish_solve(*time, history);
+                    self.finish_solve(*time, history, solve_type);
                     self.state = TimerState::SolveComplete(*time, None);
                     ctxt.request_repaint();
                 }
@@ -290,7 +292,11 @@ impl TimerWidget {
                     self.abort_solve((Instant::now() - start).as_millis() as u32, history);
                     ctxt.request_repaint();
                 } else if ctxt.input().keys_down.len() != 0 || touching {
-                    self.finish_solve((Instant::now() - start).as_millis() as u32, history);
+                    self.finish_solve(
+                        (Instant::now() - start).as_millis() as u32,
+                        history,
+                        solve_type,
+                    );
                     ctxt.request_repaint();
                 }
             }
@@ -306,13 +312,17 @@ impl TimerWidget {
                     self.abort_solve((Instant::now() - start).as_millis() as u32, history);
                     ctxt.request_repaint();
                 } else if ctxt.input().keys_down.len() != 0 || touching {
-                    self.finish_solve((Instant::now() - start).as_millis() as u32, history);
+                    self.finish_solve(
+                        (Instant::now() - start).as_millis() as u32,
+                        history,
+                        solve_type,
+                    );
                     ctxt.request_repaint();
                 } else if bluetooth_moves.len() != 0 {
                     let mut moves = moves.clone();
                     moves.extend(bluetooth_moves);
                     if self.cube.is_solved() {
-                        self.finish_bluetooth_solve(history, moves, bluetooth_name);
+                        self.finish_bluetooth_solve(history, moves, bluetooth_name, solve_type);
                         ctxt.request_repaint();
                     } else {
                         let mut cube = Cube3x3x3::new();
@@ -347,7 +357,7 @@ impl TimerWidget {
                         TimerState::ManualTimeEntryDelay(digits / 10, Some(Key::Backspace));
                 } else if ctxt.input().key_down(Key::Enter) {
                     let time = TimerState::digits_to_time(digits);
-                    self.finish_solve(time, history);
+                    self.finish_solve(time, history, solve_type);
                     self.state = TimerState::SolveComplete(time, None);
                 } else {
                     for event in &ctxt.input().events {
@@ -385,7 +395,9 @@ impl TimerWidget {
         interact
     }
 
-    fn check_for_expired_session(&mut self, history: &mut History) {
+    fn check_for_expired_session(&mut self, history: &mut History, solve_type: SolveType) {
+        self.session.check_solve_type(history, solve_type);
+
         if let Some(last_solve_time) = self.session.last_solve_time() {
             if Settings::auto_sessions_enabled(history) {
                 let since = Local::now() - last_solve_time;
@@ -408,12 +420,22 @@ impl TimerWidget {
         cube_rect: &mut Option<Rect>,
         details: &mut Option<SolveDetails>,
         accept_keyboard: bool,
+        solve_type: &mut SolveType,
     ) {
         self.cube.check_for_new_scramble();
         self.cube
             .update_bluetooth_state(&bluetooth_state, &bluetooth_events);
 
-        self.check_for_expired_session(history);
+        if bluetooth_state.is_some() {
+            // If Bluetooth cube is connected, force 3x3x3 solve type
+            match solve_type {
+                SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => (),
+                _ => *solve_type = SolveType::Standard3x3x3,
+            }
+        }
+
+        self.cube.check_solve_type(*solve_type);
+        self.check_for_expired_session(history, *solve_type);
 
         ctxt.set_visuals(side_visuals());
         let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
@@ -458,6 +480,7 @@ impl TimerWidget {
                         bluetooth_events,
                         bluetooth_name,
                         accept_keyboard,
+                        *solve_type,
                     );
 
                     if is_solving {
