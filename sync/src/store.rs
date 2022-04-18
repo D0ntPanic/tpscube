@@ -29,7 +29,7 @@ pub async fn store_actions(
 
     // Write actions in chunks to avoid running into the item size limit
     for chunk in actions.chunks(MAX_ACTIONS_PER_ITEM) {
-        let data = zstd::encode_all(StoredAction::serialize_list(chunk)?.as_slice(), 0)?;
+        let data = zstd::encode_all(StoredAction::serialize_list(chunk).as_slice(), 0)?;
 
         let mut item = HashMap::new();
         item.insert(
