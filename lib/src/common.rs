@@ -7,6 +7,9 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use uuid::Uuid;
 
+#[cfg(not(feature = "no_solver"))]
+use std::convert::TryInto;
+
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
 /// Colors of the cube
@@ -19,15 +22,45 @@ pub enum Color {
     Yellow = 5,
 }
 
+#[repr(u8)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
+/// Identification of a corner piece. Names come from the faces of the cube this corner
+/// belongs to on a solved cube.
+pub enum Corner {
+    URF = 0,
+    UFL = 1,
+    ULB = 2,
+    UBR = 3,
+    DFR = 4,
+    DLF = 5,
+    DBL = 6,
+    DRB = 7,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct CornerPiece {
+    pub piece: Corner,
+    pub orientation: u8,
+}
+
+#[cfg(not(feature = "no_solver"))]
+pub(crate) struct CornerOrientationMoveTable;
+#[cfg(not(feature = "no_solver"))]
+pub(crate) struct CornerPermutationMoveTable;
+#[cfg(not(feature = "no_solver"))]
+pub(crate) struct CornerOrientationPruneTable;
+#[cfg(not(feature = "no_solver"))]
+pub(crate) struct CornerPermutationPruneTable;
+
 impl Color {
-    pub fn face(&self) -> Face {
+    pub fn face(&self) -> CubeFace {
         match self {
-            Color::White => Face::Top,
-            Color::Green => Face::Front,
-            Color::Red => Face::Right,
-            Color::Blue => Face::Back,
-            Color::Orange => Face::Left,
-            Color::Yellow => Face::Bottom,
+            Color::White => CubeFace::Top,
+            Color::Green => CubeFace::Front,
+            Color::Red => CubeFace::Right,
+            Color::Blue => CubeFace::Back,
+            Color::Orange => CubeFace::Left,
+            Color::Yellow => CubeFace::Bottom,
         }
     }
 
@@ -46,7 +79,7 @@ impl Color {
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
 /// Faces of the cube relative to viewing the cube with white on top and green in front
-pub enum Face {
+pub enum CubeFace {
     Top = 0,
     Front = 1,
     Right = 2,
@@ -55,26 +88,26 @@ pub enum Face {
     Bottom = 5,
 }
 
-impl Face {
+impl CubeFace {
     pub fn color(&self) -> Color {
         match self {
-            Face::Top => Color::White,
-            Face::Front => Color::Green,
-            Face::Right => Color::Red,
-            Face::Back => Color::Blue,
-            Face::Left => Color::Orange,
-            Face::Bottom => Color::Yellow,
+            CubeFace::Top => Color::White,
+            CubeFace::Front => Color::Green,
+            CubeFace::Right => Color::Red,
+            CubeFace::Back => Color::Blue,
+            CubeFace::Left => Color::Orange,
+            CubeFace::Bottom => Color::Yellow,
         }
     }
 
-    pub fn opposite(&self) -> Face {
+    pub fn opposite(&self) -> CubeFace {
         match self {
-            Face::Top => Face::Bottom,
-            Face::Front => Face::Back,
-            Face::Right => Face::Left,
-            Face::Back => Face::Front,
-            Face::Left => Face::Right,
-            Face::Bottom => Face::Top,
+            CubeFace::Top => CubeFace::Bottom,
+            CubeFace::Front => CubeFace::Back,
+            CubeFace::Right => CubeFace::Left,
+            CubeFace::Back => CubeFace::Front,
+            CubeFace::Left => CubeFace::Right,
+            CubeFace::Bottom => CubeFace::Top,
         }
     }
 }
@@ -138,6 +171,44 @@ impl Solve {
             Penalty::Time(penalty) => Some(self.time + penalty),
             Penalty::DNF => None,
         }
+    }
+}
+
+#[cfg(not(feature = "no_solver"))]
+impl CornerOrientationMoveTable {
+    pub fn get(idx: u16, mv: Move) -> u16 {
+        let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
+        u16::from_le_bytes(
+            crate::tables::CUBE_CORNER_ORIENTATION_MOVE_TABLE[offset..offset + 2]
+                .try_into()
+                .unwrap(),
+        )
+    }
+}
+
+#[cfg(not(feature = "no_solver"))]
+impl CornerPermutationMoveTable {
+    pub fn get(idx: u16, mv: Move) -> u16 {
+        let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
+        u16::from_le_bytes(
+            crate::tables::CUBE_CORNER_PERMUTATION_MOVE_TABLE[offset..offset + 2]
+                .try_into()
+                .unwrap(),
+        )
+    }
+}
+
+#[cfg(not(feature = "no_solver"))]
+impl CornerOrientationPruneTable {
+    pub fn get(idx: u16) -> usize {
+        crate::tables::CUBE_CORNER_ORIENTATION_PRUNE_TABLE[idx as usize] as usize
+    }
+}
+
+#[cfg(not(feature = "no_solver"))]
+impl CornerPermutationPruneTable {
+    pub fn get(idx: u16) -> usize {
+        crate::tables::CUBE_CORNER_PERMUTATION_PRUNE_TABLE[idx as usize] as usize
     }
 }
 
@@ -348,10 +419,10 @@ impl ToString for SolveType {
 }
 
 impl Move {
-    pub fn from_face_and_rotation(face: Face, rotation: i32) -> Option<Self> {
+    pub fn from_face_and_rotation(face: CubeFace, rotation: i32) -> Option<Self> {
         let rotation = rotation % 4;
         match face {
-            Face::Top => match rotation {
+            CubeFace::Top => match rotation {
                 -3 => Some(Move::U),
                 -2 => Some(Move::U2),
                 -1 => Some(Move::Up),
@@ -360,7 +431,7 @@ impl Move {
                 3 => Some(Move::Up),
                 _ => None,
             },
-            Face::Front => match rotation {
+            CubeFace::Front => match rotation {
                 -3 => Some(Move::F),
                 -2 => Some(Move::F2),
                 -1 => Some(Move::Fp),
@@ -369,7 +440,7 @@ impl Move {
                 3 => Some(Move::Fp),
                 _ => None,
             },
-            Face::Right => match rotation {
+            CubeFace::Right => match rotation {
                 -3 => Some(Move::R),
                 -2 => Some(Move::R2),
                 -1 => Some(Move::Rp),
@@ -378,7 +449,7 @@ impl Move {
                 3 => Some(Move::Rp),
                 _ => None,
             },
-            Face::Back => match rotation {
+            CubeFace::Back => match rotation {
                 -3 => Some(Move::B),
                 -2 => Some(Move::B2),
                 -1 => Some(Move::Bp),
@@ -387,7 +458,7 @@ impl Move {
                 3 => Some(Move::Bp),
                 _ => None,
             },
-            Face::Left => match rotation {
+            CubeFace::Left => match rotation {
                 -3 => Some(Move::L),
                 -2 => Some(Move::L2),
                 -1 => Some(Move::Lp),
@@ -396,7 +467,7 @@ impl Move {
                 3 => Some(Move::Lp),
                 _ => None,
             },
-            Face::Bottom => match rotation {
+            CubeFace::Bottom => match rotation {
                 -3 => Some(Move::D),
                 -2 => Some(Move::D2),
                 -1 => Some(Move::Dp),
@@ -408,8 +479,17 @@ impl Move {
         }
     }
 
+    pub(crate) fn sourced_random_2x2x2<T: RandomSource>(rng: &mut T) -> Move {
+        Move::try_from(rng.next(Self::count_2x2x2() as u32) as u8).unwrap()
+    }
+
     pub(crate) fn sourced_random_3x3x3<T: RandomSource>(rng: &mut T) -> Move {
         Move::try_from(rng.next(Self::count_3x3x3() as u32) as u8).unwrap()
+    }
+
+    /// Gets a randomly chosen move
+    pub fn random_2x2x2() -> Move {
+        Self::sourced_random_2x2x2(&mut StandardRandomSource)
     }
 
     /// Gets a randomly chosen move
@@ -417,30 +497,34 @@ impl Move {
         Self::sourced_random_3x3x3(&mut StandardRandomSource)
     }
 
+    pub const fn count_2x2x2() -> usize {
+        Move::D2 as u8 as usize + 1
+    }
+
     pub const fn count_3x3x3() -> usize {
         Move::D2 as u8 as usize + 1
     }
 
-    pub const fn face(&self) -> Face {
+    pub const fn face(&self) -> CubeFace {
         match self {
-            Move::U => Face::Top,
-            Move::Up => Face::Top,
-            Move::U2 => Face::Top,
-            Move::F => Face::Front,
-            Move::Fp => Face::Front,
-            Move::F2 => Face::Front,
-            Move::R => Face::Right,
-            Move::Rp => Face::Right,
-            Move::R2 => Face::Right,
-            Move::B => Face::Back,
-            Move::Bp => Face::Back,
-            Move::B2 => Face::Back,
-            Move::L => Face::Left,
-            Move::Lp => Face::Left,
-            Move::L2 => Face::Left,
-            Move::D => Face::Bottom,
-            Move::Dp => Face::Bottom,
-            Move::D2 => Face::Bottom,
+            Move::U => CubeFace::Top,
+            Move::Up => CubeFace::Top,
+            Move::U2 => CubeFace::Top,
+            Move::F => CubeFace::Front,
+            Move::Fp => CubeFace::Front,
+            Move::F2 => CubeFace::Front,
+            Move::R => CubeFace::Right,
+            Move::Rp => CubeFace::Right,
+            Move::R2 => CubeFace::Right,
+            Move::B => CubeFace::Back,
+            Move::Bp => CubeFace::Back,
+            Move::B2 => CubeFace::Back,
+            Move::L => CubeFace::Left,
+            Move::Lp => CubeFace::Left,
+            Move::L2 => CubeFace::Left,
+            Move::D => CubeFace::Bottom,
+            Move::Dp => CubeFace::Bottom,
+            Move::D2 => CubeFace::Bottom,
         }
     }
 

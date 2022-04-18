@@ -1,5 +1,5 @@
 use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
-use crate::common::{Color, Cube, Face, Move, TimedMove};
+use crate::common::{Color, Cube, CubeFace, Move, TimedMove};
 use crate::cube3x3x3::{Cube3x3x3, Cube3x3x3Faces};
 use anyhow::{anyhow, Result};
 use btleplug::api::{Characteristic, Peripheral, WriteType};
@@ -174,13 +174,13 @@ impl<P: Peripheral + 'static> GoCube<P> {
     }
 
     fn decode_cube_state(data: &[u8]) -> Result<Cube3x3x3> {
-        const FACES: [Face; 6] = [
-            Face::Back,
-            Face::Front,
-            Face::Top,
-            Face::Bottom,
-            Face::Right,
-            Face::Left,
+        const FACES: [CubeFace; 6] = [
+            CubeFace::Back,
+            CubeFace::Front,
+            CubeFace::Top,
+            CubeFace::Bottom,
+            CubeFace::Right,
+            CubeFace::Left,
         ];
         const COLORS: [Color; 6] = [
             Color::Blue,

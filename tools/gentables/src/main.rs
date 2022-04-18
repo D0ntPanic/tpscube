@@ -41,7 +41,7 @@ struct TableGenerator {
         [[Option<u16>; Move::count_3x3x3()];
             Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT],
     >,
-    corner_orientation_prune_table: Box<
+    corner_orientation_edge_slice_prune_table: Box<
         [[Option<u8>; Cube3x3x3::EDGE_SLICE_INDEX_COUNT];
             Cube3x3x3::CORNER_ORIENTATION_INDEX_COUNT],
     >,
@@ -52,7 +52,7 @@ struct TableGenerator {
         [[Option<u8>; Cube3x3x3::EDGE_ORIENTATION_INDEX_COUNT];
             Cube3x3x3::CORNER_ORIENTATION_INDEX_COUNT],
     >,
-    corner_permutation_prune_table: Box<
+    corner_edge_permutation_prune_table: Box<
         [[Option<u8>; Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
             Cube3x3x3::CORNER_PERMUTATION_INDEX_COUNT],
     >,
@@ -60,6 +60,8 @@ struct TableGenerator {
         [[Option<u8>; Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
             Cube3x3x3::PHASE_2_EDGE_PERMUTATION_INDEX_COUNT],
     >,
+    corner_orientation_prune_table: Box<[Option<u8>; Cube3x3x3::CORNER_ORIENTATION_INDEX_COUNT]>,
+    corner_permutation_prune_table: Box<[Option<u8>; Cube3x3x3::CORNER_PERMUTATION_INDEX_COUNT]>,
 }
 
 impl TableGenerator {
@@ -77,24 +79,29 @@ impl TableGenerator {
                 Cube3x3x3::PHASE_2_EDGE_PERMUTATION_INDEX_COUNT],
             phase_2_equatorial_edge_permutation_move_table: box [[None; Move::count_3x3x3()];
                 Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT],
-            corner_orientation_prune_table: box [[None; Cube3x3x3::EDGE_SLICE_INDEX_COUNT];
+            corner_orientation_edge_slice_prune_table: box [[None;
+                Cube3x3x3::EDGE_SLICE_INDEX_COUNT];
                 Cube3x3x3::CORNER_ORIENTATION_INDEX_COUNT],
             edge_orientation_prune_table: box [[None; Cube3x3x3::EDGE_SLICE_INDEX_COUNT];
                 Cube3x3x3::EDGE_ORIENTATION_INDEX_COUNT],
             combined_orientation_prune_table: box [[None; Cube3x3x3::EDGE_ORIENTATION_INDEX_COUNT];
                 Cube3x3x3::CORNER_ORIENTATION_INDEX_COUNT],
-            corner_permutation_prune_table: box [[None;
+            corner_edge_permutation_prune_table: box [[None;
                 Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
                 Cube3x3x3::CORNER_PERMUTATION_INDEX_COUNT],
             phase_2_edge_permutation_prune_table: box [[None;
                 Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT];
                 Cube3x3x3::PHASE_2_EDGE_PERMUTATION_INDEX_COUNT],
+            corner_orientation_prune_table: box [None; Cube3x3x3::CORNER_ORIENTATION_INDEX_COUNT],
+            corner_permutation_prune_table: box [None; Cube3x3x3::CORNER_PERMUTATION_INDEX_COUNT],
         };
-        tables.corner_orientation_prune_table[0][0] = Some(0);
+        tables.corner_orientation_edge_slice_prune_table[0][0] = Some(0);
         tables.edge_orientation_prune_table[0][0] = Some(0);
         tables.combined_orientation_prune_table[0][0] = Some(0);
-        tables.corner_permutation_prune_table[0][0] = Some(0);
+        tables.corner_edge_permutation_prune_table[0][0] = Some(0);
         tables.phase_2_edge_permutation_prune_table[0][0] = Some(0);
+        tables.corner_orientation_prune_table[0] = Some(0);
+        tables.corner_permutation_prune_table[0] = Some(0);
         tables
     }
 
@@ -186,10 +193,10 @@ impl TableGenerator {
         Progress { filled, total }
     }
 
-    fn corner_orientation_prune_table_progress(&self) -> Progress {
+    fn corner_orientation_edge_slice_prune_table_progress(&self) -> Progress {
         let mut filled = 0;
         let mut total = 0;
-        for i in self.corner_orientation_prune_table.as_ref() {
+        for i in self.corner_orientation_edge_slice_prune_table.as_ref() {
             for j in i {
                 total += 1;
                 if j.is_some() {
@@ -228,10 +235,10 @@ impl TableGenerator {
         Progress { filled, total }
     }
 
-    fn corner_permutation_prune_table_progress(&self) -> Progress {
+    fn corner_edge_permutation_prune_table_progress(&self) -> Progress {
         let mut filled = 0;
         let mut total = 0;
-        for i in self.corner_permutation_prune_table.as_ref() {
+        for i in self.corner_edge_permutation_prune_table.as_ref() {
             for j in i {
                 total += 1;
                 if j.is_some() {
@@ -256,6 +263,30 @@ impl TableGenerator {
         Progress { filled, total }
     }
 
+    fn corner_orientation_prune_table_progress(&self) -> Progress {
+        let mut filled = 0;
+        let mut total = 0;
+        for i in self.corner_orientation_prune_table.as_ref() {
+            total += 1;
+            if i.is_some() {
+                filled += 1;
+            }
+        }
+        Progress { filled, total }
+    }
+
+    fn corner_permutation_prune_table_progress(&self) -> Progress {
+        let mut filled = 0;
+        let mut total = 0;
+        for i in self.corner_permutation_prune_table.as_ref() {
+            total += 1;
+            if i.is_some() {
+                filled += 1;
+            }
+        }
+        Progress { filled, total }
+    }
+
     fn phase_1_move(&mut self, cubes: Vec<Cube3x3x3>) -> Vec<Cube3x3x3> {
         let mut next_cubes = Vec::new();
 
@@ -271,8 +302,9 @@ impl TableGenerator {
                 let old_equatorial_slice = cube.equatorial_edge_slice_index() as usize;
 
                 // Get current move counts for this cube
-                let corner_orient_move_count = self.corner_orientation_prune_table
-                    [old_corner_orientation][old_equatorial_slice]
+                let corner_orient_edge_slice_move_count = self
+                    .corner_orientation_edge_slice_prune_table[old_corner_orientation]
+                    [old_equatorial_slice]
                     .unwrap()
                     + 1;
                 let edge_orient_move_count = self.edge_orientation_prune_table
@@ -283,6 +315,10 @@ impl TableGenerator {
                     [old_corner_orientation][old_edge_orientation]
                     .unwrap()
                     + 1;
+                let corner_orient_move_count =
+                    self.corner_orientation_prune_table[old_corner_orientation].unwrap() + 1;
+                let corner_permute_move_count =
+                    self.corner_permutation_prune_table[old_corner_permutation].unwrap() + 1;
 
                 // Perform the move
                 cube.do_move(mv);
@@ -344,15 +380,17 @@ impl TableGenerator {
                 }
 
                 // Update prune tables to keep track of minimum number of moves to reach this state from solved
-                if self.corner_orientation_prune_table[new_corner_orientation as usize]
+                if self.corner_orientation_edge_slice_prune_table[new_corner_orientation as usize]
                     [new_equatorial_slice as usize]
                     .is_none()
-                    || Some(corner_orient_move_count)
-                        < self.corner_orientation_prune_table[new_corner_orientation as usize]
+                    || Some(corner_orient_edge_slice_move_count)
+                        < self.corner_orientation_edge_slice_prune_table
+                            [new_corner_orientation as usize]
                             [new_equatorial_slice as usize]
                 {
-                    self.corner_orientation_prune_table[new_corner_orientation as usize]
-                        [new_equatorial_slice as usize] = Some(corner_orient_move_count);
+                    self.corner_orientation_edge_slice_prune_table
+                        [new_corner_orientation as usize][new_equatorial_slice as usize] =
+                        Some(corner_orient_edge_slice_move_count);
                     has_new_info = true;
                 }
                 if self.edge_orientation_prune_table[new_edge_orientation as usize]
@@ -375,6 +413,22 @@ impl TableGenerator {
                 {
                     self.combined_orientation_prune_table[new_corner_orientation as usize]
                         [new_edge_orientation as usize] = Some(combined_orient_move_count);
+                    has_new_info = true;
+                }
+                if self.corner_orientation_prune_table[new_corner_orientation as usize].is_none()
+                    || Some(corner_orient_move_count)
+                        < self.corner_orientation_prune_table[new_corner_orientation as usize]
+                {
+                    self.corner_orientation_prune_table[new_corner_orientation as usize] =
+                        Some(corner_orient_move_count);
+                    has_new_info = true;
+                }
+                if self.corner_permutation_prune_table[new_corner_permutation as usize].is_none()
+                    || Some(corner_permute_move_count)
+                        < self.corner_permutation_prune_table[new_corner_permutation as usize]
+                {
+                    self.corner_permutation_prune_table[new_corner_permutation as usize] =
+                        Some(corner_permute_move_count);
                     has_new_info = true;
                 }
 
@@ -417,7 +471,7 @@ impl TableGenerator {
                     cube.phase_2_equatorial_edge_permutation_index();
 
                 // Get current move counts for this cube
-                let corner_permute_move_count = self.corner_permutation_prune_table
+                let corner_permute_move_count = self.corner_edge_permutation_prune_table
                     [old_corner_permutation as usize]
                     [old_equatorial_edge_permutation as usize]
                     .unwrap()
@@ -471,14 +525,14 @@ impl TableGenerator {
                 }
 
                 // Update prune tables to keep track of minimum number of moves to reach this state from solved
-                if self.corner_permutation_prune_table[new_corner_permutation as usize]
+                if self.corner_edge_permutation_prune_table[new_corner_permutation as usize]
                     [new_equatorial_edge_permutation as usize]
                     .is_none()
                     || Some(corner_permute_move_count)
-                        < self.corner_permutation_prune_table[new_corner_permutation as usize]
+                        < self.corner_edge_permutation_prune_table[new_corner_permutation as usize]
                             [new_equatorial_edge_permutation as usize]
                 {
-                    self.corner_permutation_prune_table[new_corner_permutation as usize]
+                    self.corner_edge_permutation_prune_table[new_corner_permutation as usize]
                         [new_equatorial_edge_permutation as usize] =
                         Some(corner_permute_move_count);
                     has_new_info = true;
@@ -533,8 +587,8 @@ impl TableGenerator {
                 self.equatorial_edge_slice_move_table_progress()
             );
             println!(
-                "        {} corner orientation prune table",
-                self.corner_orientation_prune_table_progress()
+                "        {} corner orientation / edge slice prune table",
+                self.corner_orientation_edge_slice_prune_table_progress()
             );
             println!(
                 "        {} edge orientation prune table",
@@ -543,6 +597,14 @@ impl TableGenerator {
             println!(
                 "        {} combined orientation prune table",
                 self.combined_orientation_prune_table_progress()
+            );
+            println!(
+                "        {} corner orientation prune table",
+                self.corner_orientation_prune_table_progress()
+            );
+            println!(
+                "        {} corner permutation prune table",
+                self.corner_permutation_prune_table_progress()
             );
         }
 
@@ -564,8 +626,8 @@ impl TableGenerator {
                 self.phase_2_equatorial_edge_permutation_move_table_progress()
             );
             println!(
-                "        {} corner permutation prune table",
-                self.corner_permutation_prune_table_progress()
+                "        {} corner / edge permutation prune table",
+                self.corner_edge_permutation_prune_table_progress()
             );
             println!(
                 "        {} edge permutation prune table",
@@ -584,18 +646,24 @@ impl TableGenerator {
         assert!(self
             .phase_2_equatorial_edge_permutation_move_table_progress()
             .complete());
-        assert!(self.corner_orientation_prune_table_progress().complete());
+        assert!(self
+            .corner_orientation_edge_slice_prune_table_progress()
+            .complete());
         assert!(self.edge_orientation_prune_table_progress().complete());
         assert!(self.combined_orientation_prune_table_progress().complete());
-        assert!(self.corner_permutation_prune_table_progress().complete());
+        assert!(self
+            .corner_edge_permutation_prune_table_progress()
+            .complete());
         assert!(self
             .phase_2_edge_permutation_prune_table_progress()
             .complete());
+        assert!(self.corner_orientation_prune_table_progress().complete());
+        assert!(self.corner_permutation_prune_table_progress().complete());
 
         // Output tables
         let mut out = BufWriter::new(
             File::create(Path::new(
-                "../../lib/src/tables/3x3x3_corner_orientation_move_table.bin",
+                "../../lib/src/tables/corner_orientation_move_table.bin",
             ))
             .unwrap(),
         );
@@ -607,7 +675,7 @@ impl TableGenerator {
 
         let mut out = BufWriter::new(
             File::create(Path::new(
-                "../../lib/src/tables/3x3x3_corner_permutation_move_table.bin",
+                "../../lib/src/tables/corner_permutation_move_table.bin",
             ))
             .unwrap(),
         );
@@ -669,11 +737,11 @@ impl TableGenerator {
 
         let mut out = BufWriter::new(
             File::create(Path::new(
-                "../../lib/src/tables/3x3x3_corner_orientation_prune_table.bin",
+                "../../lib/src/tables/3x3x3_corner_orientation_edge_slice_prune_table.bin",
             ))
             .unwrap(),
         );
-        for i in self.corner_orientation_prune_table.as_ref() {
+        for i in self.corner_orientation_edge_slice_prune_table.as_ref() {
             for j in i {
                 out.write(&[j.unwrap() as u8]).unwrap();
             }
@@ -705,11 +773,11 @@ impl TableGenerator {
 
         let mut out = BufWriter::new(
             File::create(Path::new(
-                "../../lib/src/tables/3x3x3_corner_permutation_prune_table.bin",
+                "../../lib/src/tables/3x3x3_corner_edge_permutation_prune_table.bin",
             ))
             .unwrap(),
         );
-        for i in self.corner_permutation_prune_table.as_ref() {
+        for i in self.corner_edge_permutation_prune_table.as_ref() {
             for j in i {
                 out.write(&[j.unwrap() as u8]).unwrap();
             }
@@ -733,12 +801,32 @@ impl TableGenerator {
             ))
             .unwrap(),
         );
-        for i in self.corner_permutation_prune_table.as_ref() {
+        for i in self.corner_edge_permutation_prune_table.as_ref() {
             let mut min = i[0].unwrap();
             for j in i {
                 min = std::cmp::min(min, j.unwrap());
             }
             out.write(&[min as u8]).unwrap();
+        }
+
+        let mut out = BufWriter::new(
+            File::create(Path::new(
+                "../../lib/src/tables/corner_orientation_prune_table.bin",
+            ))
+            .unwrap(),
+        );
+        for i in self.corner_orientation_prune_table.as_ref() {
+            out.write(&[i.unwrap() as u8]).unwrap();
+        }
+
+        let mut out = BufWriter::new(
+            File::create(Path::new(
+                "../../lib/src/tables/corner_permutation_prune_table.bin",
+            ))
+            .unwrap(),
+        );
+        for i in self.corner_permutation_prune_table.as_ref() {
+            out.write(&[i.unwrap() as u8]).unwrap();
         }
     }
 }

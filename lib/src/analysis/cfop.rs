@@ -3,7 +3,7 @@ use crate::tables::{
 };
 use crate::{
     cube3x3x3::FaceRowOrColumn, AnalysisStepSummary, AnalysisSubstepTime, AnalysisSummary, Color,
-    Cube, Cube3x3x3Faces, CubeWithSolution, Face, Move, MoveSequence, PartialAnalysis,
+    Cube, Cube3x3x3Faces, CubeFace, CubeWithSolution, Move, MoveSequence, PartialAnalysis,
     PartialAnalysisMethod, TimedMove,
 };
 
@@ -190,7 +190,7 @@ struct AnalysisData {
     total_moves: usize,
     cube: Cube3x3x3Faces,
     cross_color: Color,
-    cross_face: Face,
+    cross_face: CubeFace,
     cross_analysis: Option<CrossAnalysis>,
     f2l_pairs: Vec<F2LPairAnalysis>,
     oll_analysis: Vec<OLLAnalysis>,
@@ -266,7 +266,7 @@ impl OLLAlgorithm {
         }
     }
 
-    fn bitmask_from_cube(cube: &Cube3x3x3Faces, last_layer: Face) -> u32 {
+    fn bitmask_from_cube(cube: &Cube3x3x3Faces, last_layer: CubeFace) -> u32 {
         let color = last_layer.color();
         let edges = &CUBE3_LAST_LAYER_EDGE[last_layer as u8 as usize];
         let mut mask = Self::bit_for_idx(cube, edges[0].idx(0), color, 20);
@@ -326,7 +326,7 @@ impl OLLAlgorithm {
         result
     }
 
-    pub fn from_cube(cube: &Cube3x3x3Faces, last_layer: Face) -> Option<Self> {
+    pub fn from_cube(cube: &Cube3x3x3Faces, last_layer: CubeFace) -> Option<Self> {
         let mask1 = Self::bitmask_from_cube(cube, last_layer);
         let mask2 = Self::rotate_bitmask(mask1);
         let mask3 = Self::rotate_bitmask(mask2);
@@ -396,7 +396,7 @@ impl PLLAlgorithm {
         }
     }
 
-    pub fn from_cube(cube: &Cube3x3x3Faces, last_layer: Face) -> Option<Self> {
+    pub fn from_cube(cube: &Cube3x3x3Faces, last_layer: CubeFace) -> Option<Self> {
         // Iterate for each possible rotation (cases are stored as a single one of the
         // possible rotations).
         for rotation in 0..4 {

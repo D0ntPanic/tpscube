@@ -11,7 +11,7 @@ use gl_matrix::{
 use instant::Instant;
 use num_traits::FloatConst;
 use std::time::Duration;
-use tpscube_core::{Cube, Cube3x3x3, Face, Move};
+use tpscube_core::{Cube, Cube3x3x3, CubeFace, Move};
 
 const FACE_COLORS: [[f32; 3]; 6] = [
     [1.0, 1.0, 1.0],
@@ -65,7 +65,7 @@ pub struct VertexRange {
 struct Animation {
     start: Instant,
     length: Duration,
-    face: Face,
+    face: CubeFace,
     angle: f32,
     move_: Move,
 }
@@ -111,125 +111,149 @@ impl CubeRenderer {
         result.add_corner(
             [0, 0, 0],
             [1, -1],
-            (Face::Bottom, e, 0),
-            (Face::Back, e, e),
-            (Face::Left, e, 0),
+            (CubeFace::Bottom, e, 0),
+            (CubeFace::Back, e, e),
+            (CubeFace::Left, e, 0),
         );
         result.add_corner(
             [e, 0, 0],
             [1, 0],
-            (Face::Bottom, e, e),
-            (Face::Right, e, e),
-            (Face::Back, e, 0),
+            (CubeFace::Bottom, e, e),
+            (CubeFace::Right, e, e),
+            (CubeFace::Back, e, 0),
         );
         result.add_corner(
             [0, e, 0],
             [-1, 2],
-            (Face::Top, 0, 0),
-            (Face::Left, 0, 0),
-            (Face::Back, 0, e),
+            (CubeFace::Top, 0, 0),
+            (CubeFace::Left, 0, 0),
+            (CubeFace::Back, 0, e),
         );
         result.add_corner(
             [e, e, 0],
             [-1, 1],
-            (Face::Top, 0, e),
-            (Face::Back, 0, 0),
-            (Face::Right, 0, e),
+            (CubeFace::Top, 0, e),
+            (CubeFace::Back, 0, 0),
+            (CubeFace::Right, 0, e),
         );
         result.add_corner(
             [0, 0, e],
             [1, 2],
-            (Face::Bottom, 0, 0),
-            (Face::Left, e, e),
-            (Face::Front, e, 0),
+            (CubeFace::Bottom, 0, 0),
+            (CubeFace::Left, e, e),
+            (CubeFace::Front, e, 0),
         );
         result.add_corner(
             [e, 0, e],
             [1, 1],
-            (Face::Bottom, 0, e),
-            (Face::Front, e, e),
-            (Face::Right, e, 0),
+            (CubeFace::Bottom, 0, e),
+            (CubeFace::Front, e, e),
+            (CubeFace::Right, e, 0),
         );
         result.add_corner(
             [0, e, e],
             [-1, -1],
-            (Face::Top, e, 0),
-            (Face::Front, 0, 0),
-            (Face::Left, 0, e),
+            (CubeFace::Top, e, 0),
+            (CubeFace::Front, 0, 0),
+            (CubeFace::Left, 0, e),
         );
         result.add_corner(
             [e, e, e],
             [-1, 0],
-            (Face::Top, e, e),
-            (Face::Right, 0, 0),
-            (Face::Front, 0, e),
+            (CubeFace::Top, e, e),
+            (CubeFace::Right, 0, 0),
+            (CubeFace::Front, 0, e),
         );
 
         // Add vertex information for edge pieces
         for i in 1..CUBE_SIZE as i32 - 1 {
-            result.add_edge([i, e, e], [-1, -1], (Face::Top, e, i), (Face::Front, 0, i));
+            result.add_edge(
+                [i, e, e],
+                [-1, -1],
+                (CubeFace::Top, e, i),
+                (CubeFace::Front, 0, i),
+            );
             result.add_edge(
                 [0, e - i, e],
                 [0, 2],
-                (Face::Front, i, 0),
-                (Face::Left, i, e),
+                (CubeFace::Front, i, 0),
+                (CubeFace::Left, i, e),
             );
             result.add_edge(
                 [e, e - i, e],
                 [0, 0],
-                (Face::Front, i, e),
-                (Face::Right, i, 0),
+                (CubeFace::Front, i, e),
+                (CubeFace::Right, i, 0),
             );
-            result.add_edge([i, 0, e], [1, 1], (Face::Bottom, 0, i), (Face::Front, e, i));
+            result.add_edge(
+                [i, 0, e],
+                [1, 1],
+                (CubeFace::Bottom, 0, i),
+                (CubeFace::Front, e, i),
+            );
             result.add_edge(
                 [e, e, i],
                 [-1, 0],
-                (Face::Top, i, e),
-                (Face::Right, 0, e - i),
+                (CubeFace::Top, i, e),
+                (CubeFace::Right, 0, e - i),
             );
             result.add_edge(
                 [e, e - i, 0],
                 [2, 0],
-                (Face::Back, i, 0),
-                (Face::Right, i, e),
+                (CubeFace::Back, i, 0),
+                (CubeFace::Right, i, e),
             );
-            result.add_edge([e, 0, i], [1, 0], (Face::Bottom, i, e), (Face::Right, e, i));
+            result.add_edge(
+                [e, 0, i],
+                [1, 0],
+                (CubeFace::Bottom, i, e),
+                (CubeFace::Right, e, i),
+            );
             result.add_edge(
                 [e - i, e, 0],
                 [-1, 1],
-                (Face::Top, 0, e - i),
-                (Face::Back, 0, i),
+                (CubeFace::Top, 0, e - i),
+                (CubeFace::Back, 0, i),
             );
             result.add_edge(
                 [e - i, 0, 0],
                 [1, -1],
-                (Face::Bottom, e, e - i),
-                (Face::Back, e, i),
+                (CubeFace::Bottom, e, e - i),
+                (CubeFace::Back, e, i),
             );
-            result.add_edge([0, e, i], [-1, 2], (Face::Top, i, 0), (Face::Left, 0, i));
+            result.add_edge(
+                [0, e, i],
+                [-1, 2],
+                (CubeFace::Top, i, 0),
+                (CubeFace::Left, 0, i),
+            );
             result.add_edge(
                 [0, e - i, 0],
                 [2, 2],
-                (Face::Back, i, e),
-                (Face::Left, i, 0),
+                (CubeFace::Back, i, e),
+                (CubeFace::Left, i, 0),
             );
             result.add_edge(
                 [0, 0, i],
                 [1, 2],
-                (Face::Bottom, e - i, 0),
-                (Face::Left, e, i),
+                (CubeFace::Bottom, e - i, 0),
+                (CubeFace::Left, e, i),
             );
         }
 
         // Add vertex information for center pieces
         for row in 1..CUBE_SIZE as i32 - 1 {
             for col in 1..CUBE_SIZE as i32 - 1 {
-                result.add_center([col, e, row], [-1, 0, 0], (Face::Top, row, col));
-                result.add_center([col, e - row, e], [0, 0, 0], (Face::Front, row, col));
-                result.add_center([e, e - row, e - col], [0, 1, 0], (Face::Right, row, col));
-                result.add_center([e - col, e - row, 0], [2, 0, 0], (Face::Back, row, col));
-                result.add_center([0, e - row, col], [0, -1, 0], (Face::Left, row, col));
-                result.add_center([col, 0, e - row], [1, 0, 0], (Face::Bottom, row, col));
+                result.add_center([col, e, row], [-1, 0, 0], (CubeFace::Top, row, col));
+                result.add_center([col, e - row, e], [0, 0, 0], (CubeFace::Front, row, col));
+                result.add_center(
+                    [e, e - row, e - col],
+                    [0, 1, 0],
+                    (CubeFace::Right, row, col),
+                );
+                result.add_center([e - col, e - row, 0], [2, 0, 0], (CubeFace::Back, row, col));
+                result.add_center([0, e - row, col], [0, -1, 0], (CubeFace::Left, row, col));
+                result.add_center([col, 0, e - row], [1, 0, 0], (CubeFace::Bottom, row, col));
             }
         }
 
@@ -311,7 +335,7 @@ impl CubeRenderer {
         }
     }
 
-    fn vert_range(&mut self, piece: (Face, i32, i32)) -> &mut VertexRange {
+    fn vert_range(&mut self, piece: (CubeFace, i32, i32)) -> &mut VertexRange {
         &mut self.vert_ranges[(piece.0 as u8 as usize * CUBE_SIZE * CUBE_SIZE)
             + (piece.1 as usize * CUBE_SIZE)
             + piece.2 as usize]
@@ -358,9 +382,9 @@ impl CubeRenderer {
         &mut self,
         pos: [i32; 3],
         rot: [i32; 2],
-        first: (Face, i32, i32),
-        second: (Face, i32, i32),
-        third: (Face, i32, i32),
+        first: (CubeFace, i32, i32),
+        second: (CubeFace, i32, i32),
+        third: (CubeFace, i32, i32),
     ) {
         // Compute rotation matrix for rotating piece into place
         let mut rotation: Mat4 = [0.0; 16];
@@ -416,8 +440,8 @@ impl CubeRenderer {
         &mut self,
         pos: [i32; 3],
         rot: [i32; 2],
-        first: (Face, i32, i32),
-        second: (Face, i32, i32),
+        first: (CubeFace, i32, i32),
+        second: (CubeFace, i32, i32),
     ) {
         // Compute rotation matrix for rotating piece into place
         let mut rotation: Mat4 = [0.0; 16];
@@ -463,7 +487,7 @@ impl CubeRenderer {
         };
     }
 
-    fn add_center(&mut self, pos: [i32; 3], rot: [i32; 3], piece: (Face, i32, i32)) {
+    fn add_center(&mut self, pos: [i32; 3], rot: [i32; 3], piece: (CubeFace, i32, i32)) {
         // Compute rotation matrix for rotating piece into place
         let mut rotation: Mat4 = [0.0; 16];
         let rotation_ref = &mut rotation;
@@ -511,12 +535,12 @@ impl CubeRenderer {
     fn update_colors(&mut self) {
         let face_colors = self.cube.as_faces();
         for face in &[
-            Face::Top,
-            Face::Front,
-            Face::Right,
-            Face::Back,
-            Face::Left,
-            Face::Bottom,
+            CubeFace::Top,
+            CubeFace::Front,
+            CubeFace::Right,
+            CubeFace::Back,
+            CubeFace::Left,
+            CubeFace::Bottom,
         ] {
             for row in 0..CUBE_SIZE {
                 for col in 0..CUBE_SIZE {
@@ -598,12 +622,12 @@ impl CubeRenderer {
             // Calculate axis and angle for animation
             let angle = animation.angle * frac;
             let axis = match animation.face {
-                Face::Top => [0.0, 1.0, 0.0],
-                Face::Front => [0.0, 0.0, 1.0],
-                Face::Right => [1.0, 0.0, 0.0],
-                Face::Back => [0.0, 0.0, -1.0],
-                Face::Left => [-1.0, 0.0, 0.0],
-                Face::Bottom => [0.0, -1.0, 0.0],
+                CubeFace::Top => [0.0, 1.0, 0.0],
+                CubeFace::Front => [0.0, 0.0, 1.0],
+                CubeFace::Right => [1.0, 0.0, 0.0],
+                CubeFace::Back => [0.0, 0.0, -1.0],
+                CubeFace::Left => [-1.0, 0.0, 0.0],
+                CubeFace::Bottom => [0.0, -1.0, 0.0],
             };
 
             // Draw fixed part of the cube

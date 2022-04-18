@@ -1,272 +1,314 @@
-use crate::common::{Color, Face};
-use crate::cube3x3x3::{
-    Corner3x3x3, CornerPiece3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3, FaceRowOrColumn,
-};
+use crate::common::{Color, Corner, CornerPiece, CubeFace};
+use crate::cube2x2x2::Cube2x2x2Faces;
+use crate::cube3x3x3::{Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3, FaceRowOrColumn};
 
 #[cfg(not(feature = "no_solver"))]
 use crate::common::Move;
 
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE_CORNER_ORIENTATION_MOVE_TABLE: &'static [u8] =
+    include_bytes!("tables/corner_orientation_move_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE_CORNER_PERMUTATION_MOVE_TABLE: &'static [u8] =
+    include_bytes!("tables/corner_permutation_move_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_EDGE_ORIENTATION_MOVE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_edge_orientation_move_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_EQUATORIAL_EDGE_SLICE_MOVE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_equatorial_edge_slice_move_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_PHASE_2_EDGE_PERMUTATION_MOVE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_phase_2_edge_permutation_move_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_PHASE_2_EQUATORIAL_EDGE_PERMUTATION_MOVE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_phase_2_equatorial_edge_permutation_move_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE_CORNER_ORIENTATION_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/corner_orientation_prune_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE_CORNER_PERMUTATION_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/corner_permutation_prune_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_CORNER_ORIENTATION_EDGE_SLICE_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_corner_orientation_edge_slice_prune_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_EDGE_ORIENTATION_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_edge_orientation_prune_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_COMBINED_ORIENTATION_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_combined_orientation_prune_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_CORNER_EDGE_PERMUTATION_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_corner_edge_permutation_prune_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_PHASE_1_CORNER_PERMUTATION_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_phase_1_corner_permutation_prune_table.bin");
+#[cfg(not(feature = "no_solver"))]
+pub(crate) const CUBE3_PHASE_2_EDGE_PERMUTATION_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("tables/3x3x3_phase_2_edge_permutation_prune_table.bin");
+
 // Table for rotating the corners in piece format. Rotations are organized by
 // the face being rotated. Each entry is where the piece comes from and the
 // adjustment to the orientation (corner twist).
-pub(crate) const CUBE3_CORNER_PIECE_ROTATION: [[[CornerPiece3x3x3; 8]; 6]; 2] = [
+pub(crate) const CUBE_CORNER_PIECE_ROTATION: [[[CornerPiece; 8]; 6]; 2] = [
     // CW
     [
         // Top
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
         ],
         // Front
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 1,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 2,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 2,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 1,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
         ],
         // Right
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 2,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 1,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 1,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 2,
             },
         ],
         // Back
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 1,
             },
             // UBR/
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 2,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 2,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 1,
             },
         ],
         // Left
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 1,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 2,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 2,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 1,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
         ],
         // Bottom
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
         ],
@@ -276,258 +318,258 @@ pub(crate) const CUBE3_CORNER_PIECE_ROTATION: [[[CornerPiece3x3x3; 8]; 6]; 2] = 
         // Top
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
         ],
         // Front
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 1,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 2,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 2,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 1,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
         ],
         // Right
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 2,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 1,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 1,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 2,
             },
         ],
         // Back
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 1,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 2,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 2,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 1,
             },
         ],
         // Left
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 1,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 2,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 2,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 1,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
         ],
         // Bottom
         [
             // URF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::URF,
+            CornerPiece {
+                piece: Corner::URF,
                 orientation: 0,
             },
             // UFL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UFL,
+            CornerPiece {
+                piece: Corner::UFL,
                 orientation: 0,
             },
             // ULB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::ULB,
+            CornerPiece {
+                piece: Corner::ULB,
                 orientation: 0,
             },
             // UBR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::UBR,
+            CornerPiece {
+                piece: Corner::UBR,
                 orientation: 0,
             },
             // DFR
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DRB,
+            CornerPiece {
+                piece: Corner::DRB,
                 orientation: 0,
             },
             // DLF
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DFR,
+            CornerPiece {
+                piece: Corner::DFR,
                 orientation: 0,
             },
             // DBL
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DLF,
+            CornerPiece {
+                piece: Corner::DLF,
                 orientation: 0,
             },
             // DRB
-            CornerPiece3x3x3 {
-                piece: Corner3x3x3::DBL,
+            CornerPiece {
+                piece: Corner::DBL,
                 orientation: 0,
             },
         ],
@@ -1303,309 +1345,316 @@ pub(crate) const CUBE3_EDGE_PIECE_ROTATION: [[[EdgePiece3x3x3; 12]; 6]; 2] = [
 ];
 
 // Table of adjacent faces on corners for cubes in face color format
-pub(crate) const CUBE3_CORNER_ADJACENCY: [[[usize; 2]; 4]; 6] = [
-    // Top
-    [
-        [
-            Cube3x3x3Faces::idx(Face::Left, 0, 0),
-            Cube3x3x3Faces::idx(Face::Back, 0, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Back, 0, 0),
-            Cube3x3x3Faces::idx(Face::Right, 0, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Front, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 0, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Right, 0, 0),
-            Cube3x3x3Faces::idx(Face::Front, 0, 2),
-        ],
-    ],
-    // Front
-    [
-        [
-            Cube3x3x3Faces::idx(Face::Left, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 2, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Top, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 0, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 2, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Right, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 2),
-        ],
-    ],
-    // Right
-    [
-        [
-            Cube3x3x3Faces::idx(Face::Front, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 2, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Top, 0, 2),
-            Cube3x3x3Faces::idx(Face::Back, 0, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 2),
-            Cube3x3x3Faces::idx(Face::Front, 2, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Back, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 2),
-        ],
-    ],
-    // Back
-    [
-        [
-            Cube3x3x3Faces::idx(Face::Right, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 0, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Top, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 0, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 2, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Left, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 0),
-        ],
-    ],
-    // Left
-    [
-        [
-            Cube3x3x3Faces::idx(Face::Back, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 0, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Top, 2, 0),
-            Cube3x3x3Faces::idx(Face::Front, 0, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 0),
-            Cube3x3x3Faces::idx(Face::Back, 2, 2),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Front, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 0),
-        ],
-    ],
-    // Bottom
-    [
-        [
-            Cube3x3x3Faces::idx(Face::Left, 2, 2),
-            Cube3x3x3Faces::idx(Face::Front, 2, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Front, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 2, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Back, 2, 2),
-            Cube3x3x3Faces::idx(Face::Left, 2, 0),
-        ],
-        [
-            Cube3x3x3Faces::idx(Face::Right, 2, 2),
-            Cube3x3x3Faces::idx(Face::Back, 2, 0),
-        ],
-    ],
-];
+macro_rules! cube_corner_adjacency {
+    ($name: ident, $faces: ident, $n: expr) => {
+        pub(crate) const $name: [[[usize; 2]; 4]; 6] = [
+            // Top
+            [
+                [
+                    $faces::idx(CubeFace::Left, 0, 0),
+                    $faces::idx(CubeFace::Back, 0, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Back, 0, 0),
+                    $faces::idx(CubeFace::Right, 0, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Front, 0, 0),
+                    $faces::idx(CubeFace::Left, 0, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Right, 0, 0),
+                    $faces::idx(CubeFace::Front, 0, $n - 1),
+                ],
+            ],
+            // Front
+            [
+                [
+                    $faces::idx(CubeFace::Left, 0, $n - 1),
+                    $faces::idx(CubeFace::Top, $n - 1, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Top, $n - 1, $n - 1),
+                    $faces::idx(CubeFace::Right, 0, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Bottom, 0, 0),
+                    $faces::idx(CubeFace::Left, $n - 1, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Right, $n - 1, 0),
+                    $faces::idx(CubeFace::Bottom, 0, $n - 1),
+                ],
+            ],
+            // Right
+            [
+                [
+                    $faces::idx(CubeFace::Front, 0, $n - 1),
+                    $faces::idx(CubeFace::Top, $n - 1, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Top, 0, $n - 1),
+                    $faces::idx(CubeFace::Back, 0, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Bottom, 0, $n - 1),
+                    $faces::idx(CubeFace::Front, $n - 1, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Back, $n - 1, 0),
+                    $faces::idx(CubeFace::Bottom, $n - 1, $n - 1),
+                ],
+            ],
+            // Back
+            [
+                [
+                    $faces::idx(CubeFace::Right, 0, $n - 1),
+                    $faces::idx(CubeFace::Top, 0, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Top, 0, 0),
+                    $faces::idx(CubeFace::Left, 0, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Bottom, $n - 1, $n - 1),
+                    $faces::idx(CubeFace::Right, $n - 1, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Left, $n - 1, 0),
+                    $faces::idx(CubeFace::Bottom, $n - 1, 0),
+                ],
+            ],
+            // Left
+            [
+                [
+                    $faces::idx(CubeFace::Back, 0, $n - 1),
+                    $faces::idx(CubeFace::Top, 0, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Top, $n - 1, 0),
+                    $faces::idx(CubeFace::Front, 0, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Bottom, $n - 1, 0),
+                    $faces::idx(CubeFace::Back, $n - 1, $n - 1),
+                ],
+                [
+                    $faces::idx(CubeFace::Front, $n - 1, 0),
+                    $faces::idx(CubeFace::Bottom, 0, 0),
+                ],
+            ],
+            // Bottom
+            [
+                [
+                    $faces::idx(CubeFace::Left, $n - 1, $n - 1),
+                    $faces::idx(CubeFace::Front, $n - 1, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Front, $n - 1, $n - 1),
+                    $faces::idx(CubeFace::Right, $n - 1, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Back, $n - 1, $n - 1),
+                    $faces::idx(CubeFace::Left, $n - 1, 0),
+                ],
+                [
+                    $faces::idx(CubeFace::Right, $n - 1, $n - 1),
+                    $faces::idx(CubeFace::Back, $n - 1, 0),
+                ],
+            ],
+        ];
+    };
+}
+
+cube_corner_adjacency!(CUBE2_CORNER_ADJACENCY, Cube2x2x2Faces, 2);
+cube_corner_adjacency!(CUBE3_CORNER_ADJACENCY, Cube3x3x3Faces, 3);
 
 // Table of the parts of F2L pairs for each possible cross color
 pub(crate) const CUBE3_F2L_PAIRS: [[[usize; 5]; 4]; 6] = [
     // Top
     [
         [
-            Cube3x3x3Faces::idx(Face::Top, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 1, 0),
-            Cube3x3x3Faces::idx(Face::Back, 0, 2),
-            Cube3x3x3Faces::idx(Face::Back, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 1, 2),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Top, 0, 2),
-            Cube3x3x3Faces::idx(Face::Back, 0, 0),
-            Cube3x3x3Faces::idx(Face::Back, 1, 0),
-            Cube3x3x3Faces::idx(Face::Right, 0, 2),
-            Cube3x3x3Faces::idx(Face::Right, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Right, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 1, 2),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Top, 2, 0),
-            Cube3x3x3Faces::idx(Face::Front, 0, 0),
-            Cube3x3x3Faces::idx(Face::Front, 1, 0),
-            Cube3x3x3Faces::idx(Face::Left, 0, 2),
-            Cube3x3x3Faces::idx(Face::Left, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Left, 1, 2),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Top, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 0, 0),
-            Cube3x3x3Faces::idx(Face::Right, 1, 0),
-            Cube3x3x3Faces::idx(Face::Front, 0, 2),
-            Cube3x3x3Faces::idx(Face::Front, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Right, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 1, 2),
         ],
     ],
     // Front
     [
         [
-            Cube3x3x3Faces::idx(Face::Front, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 0, 2),
-            Cube3x3x3Faces::idx(Face::Left, 0, 1),
-            Cube3x3x3Faces::idx(Face::Top, 2, 0),
-            Cube3x3x3Faces::idx(Face::Top, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Top, 1, 0),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Front, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 2, 2),
-            Cube3x3x3Faces::idx(Face::Top, 1, 2),
-            Cube3x3x3Faces::idx(Face::Right, 0, 0),
-            Cube3x3x3Faces::idx(Face::Right, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Right, 1, 0),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Front, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 1, 0),
-            Cube3x3x3Faces::idx(Face::Left, 2, 2),
-            Cube3x3x3Faces::idx(Face::Left, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Front, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 2, 0),
-            Cube3x3x3Faces::idx(Face::Right, 2, 1),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 2),
-            Cube3x3x3Faces::idx(Face::Bottom, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 2),
         ],
     ],
     // Right
     [
         [
-            Cube3x3x3Faces::idx(Face::Right, 0, 0),
-            Cube3x3x3Faces::idx(Face::Front, 0, 2),
-            Cube3x3x3Faces::idx(Face::Front, 0, 1),
-            Cube3x3x3Faces::idx(Face::Top, 2, 2),
-            Cube3x3x3Faces::idx(Face::Top, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Right, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Right, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 0, 1),
-            Cube3x3x3Faces::idx(Face::Back, 0, 0),
-            Cube3x3x3Faces::idx(Face::Back, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Right, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Right, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 2),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 1),
-            Cube3x3x3Faces::idx(Face::Front, 2, 2),
-            Cube3x3x3Faces::idx(Face::Front, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Right, 2, 2),
-            Cube3x3x3Faces::idx(Face::Back, 2, 0),
-            Cube3x3x3Faces::idx(Face::Back, 2, 1),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 2),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 1),
         ],
     ],
     // Back
     [
         [
-            Cube3x3x3Faces::idx(Face::Back, 0, 0),
-            Cube3x3x3Faces::idx(Face::Right, 0, 2),
-            Cube3x3x3Faces::idx(Face::Right, 0, 1),
-            Cube3x3x3Faces::idx(Face::Top, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Right, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 1, 2),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Back, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 0, 0),
-            Cube3x3x3Faces::idx(Face::Top, 1, 0),
-            Cube3x3x3Faces::idx(Face::Left, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Top, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Back, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 2),
-            Cube3x3x3Faces::idx(Face::Bottom, 1, 2),
-            Cube3x3x3Faces::idx(Face::Right, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Back, 2, 2),
-            Cube3x3x3Faces::idx(Face::Left, 2, 0),
-            Cube3x3x3Faces::idx(Face::Left, 2, 1),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 0),
         ],
     ],
     // Left
     [
         [
-            Cube3x3x3Faces::idx(Face::Left, 0, 0),
-            Cube3x3x3Faces::idx(Face::Back, 0, 2),
-            Cube3x3x3Faces::idx(Face::Back, 0, 1),
-            Cube3x3x3Faces::idx(Face::Top, 0, 0),
-            Cube3x3x3Faces::idx(Face::Top, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Top, 0, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Left, 0, 2),
-            Cube3x3x3Faces::idx(Face::Top, 2, 0),
-            Cube3x3x3Faces::idx(Face::Top, 2, 1),
-            Cube3x3x3Faces::idx(Face::Front, 0, 0),
-            Cube3x3x3Faces::idx(Face::Front, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Left, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Top, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 0, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Left, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 1),
-            Cube3x3x3Faces::idx(Face::Back, 2, 2),
-            Cube3x3x3Faces::idx(Face::Back, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 1),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Left, 2, 2),
-            Cube3x3x3Faces::idx(Face::Front, 2, 0),
-            Cube3x3x3Faces::idx(Face::Front, 2, 1),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 0),
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 1),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 1),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 1),
         ],
     ],
     // Bottom
     [
         [
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 0),
-            Cube3x3x3Faces::idx(Face::Left, 2, 2),
-            Cube3x3x3Faces::idx(Face::Left, 1, 2),
-            Cube3x3x3Faces::idx(Face::Front, 2, 0),
-            Cube3x3x3Faces::idx(Face::Front, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Left, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Front, 1, 0),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Bottom, 0, 2),
-            Cube3x3x3Faces::idx(Face::Front, 2, 2),
-            Cube3x3x3Faces::idx(Face::Front, 1, 2),
-            Cube3x3x3Faces::idx(Face::Right, 2, 0),
-            Cube3x3x3Faces::idx(Face::Right, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Front, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Right, 1, 0),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 0),
-            Cube3x3x3Faces::idx(Face::Back, 2, 2),
-            Cube3x3x3Faces::idx(Face::Back, 1, 2),
-            Cube3x3x3Faces::idx(Face::Left, 2, 0),
-            Cube3x3x3Faces::idx(Face::Left, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Left, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Left, 1, 0),
         ],
         [
-            Cube3x3x3Faces::idx(Face::Bottom, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 2, 2),
-            Cube3x3x3Faces::idx(Face::Right, 1, 2),
-            Cube3x3x3Faces::idx(Face::Back, 2, 0),
-            Cube3x3x3Faces::idx(Face::Back, 1, 0),
+            Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 2, 2),
+            Cube3x3x3Faces::idx(CubeFace::Right, 1, 2),
+            Cube3x3x3Faces::idx(CubeFace::Back, 2, 0),
+            Cube3x3x3Faces::idx(CubeFace::Back, 1, 0),
         ],
     ],
 ];
@@ -1614,45 +1663,64 @@ pub(crate) const CUBE3_F2L_PAIRS: [[[usize; 5]; 4]; 6] = [
 pub(crate) const CUBE3_EDGE_ADJACENCY: [[usize; 4]; 6] = [
     // Top
     [
-        Cube3x3x3Faces::idx(Face::Back, 0, 1),
-        Cube3x3x3Faces::idx(Face::Left, 0, 1),
-        Cube3x3x3Faces::idx(Face::Right, 0, 1),
-        Cube3x3x3Faces::idx(Face::Front, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Back, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Left, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Right, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Front, 0, 1),
     ],
     // Front
     [
-        Cube3x3x3Faces::idx(Face::Top, 2, 1),
-        Cube3x3x3Faces::idx(Face::Left, 1, 2),
-        Cube3x3x3Faces::idx(Face::Right, 1, 0),
-        Cube3x3x3Faces::idx(Face::Bottom, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Top, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Left, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Right, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 1),
     ],
     // Right
     [
-        Cube3x3x3Faces::idx(Face::Top, 1, 2),
-        Cube3x3x3Faces::idx(Face::Front, 1, 2),
-        Cube3x3x3Faces::idx(Face::Back, 1, 0),
-        Cube3x3x3Faces::idx(Face::Bottom, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Top, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Front, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Back, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 2),
     ],
     // Back
     [
-        Cube3x3x3Faces::idx(Face::Top, 0, 1),
-        Cube3x3x3Faces::idx(Face::Right, 1, 2),
-        Cube3x3x3Faces::idx(Face::Left, 1, 0),
-        Cube3x3x3Faces::idx(Face::Bottom, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Top, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Right, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Left, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 1),
     ],
     // Left
     [
-        Cube3x3x3Faces::idx(Face::Top, 1, 0),
-        Cube3x3x3Faces::idx(Face::Back, 1, 2),
-        Cube3x3x3Faces::idx(Face::Front, 1, 0),
-        Cube3x3x3Faces::idx(Face::Bottom, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Top, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Back, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Front, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 0),
     ],
     // Bottom
     [
-        Cube3x3x3Faces::idx(Face::Front, 2, 1),
-        Cube3x3x3Faces::idx(Face::Left, 2, 1),
-        Cube3x3x3Faces::idx(Face::Right, 2, 1),
-        Cube3x3x3Faces::idx(Face::Back, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Front, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Left, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Right, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Back, 2, 1),
+    ],
+];
+
+// Table for rotation of a face in face color format. Each entry is the
+// index on a face where the new color comes from.
+pub(crate) const CUBE2_FACE_ROTATION: [[usize; 4]; 2] = [
+    // CW
+    [
+        Cube2x2x2Faces::face_offset(1, 0),
+        Cube2x2x2Faces::face_offset(0, 0),
+        Cube2x2x2Faces::face_offset(1, 1),
+        Cube2x2x2Faces::face_offset(0, 1),
+    ],
+    // CCW
+    [
+        Cube2x2x2Faces::face_offset(0, 1),
+        Cube2x2x2Faces::face_offset(1, 1),
+        Cube2x2x2Faces::face_offset(0, 0),
+        Cube2x2x2Faces::face_offset(1, 0),
     ],
 ];
 
@@ -1697,8 +1765,8 @@ pub(crate) const CUBE3_EDGE_ROTATION: [[usize; 4]; 2] = [
 
 // Table for rotation of corners in face color format. Each entry is the
 // index of the corner where the new color comes from. Corners are numbered
-// as follows: (0, 0), (0, 1), (2, 0), (2, 2)
-pub(crate) const CUBE3_CORNER_ROTATION: [[usize; 4]; 2] = [
+// as follows: (0, 0), (0, n-1), (n-1, 0), (n-1, n-1)
+pub(crate) const CUBE_CORNER_ROTATION: [[usize; 4]; 2] = [
     // CW
     [1, 3, 0, 2],
     // CCW
@@ -1710,56 +1778,63 @@ pub(crate) const CUBE3_CORNER_ROTATION: [[usize; 4]; 2] = [
 // the array is for each of the 3 faces on a corner (in the same order as
 // the orientation member, which is clockwise if looking straight at the
 // corner).
-pub(crate) const CUBE3_CORNER_INDICIES: [[usize; 3]; 8] = [
-    // URF
-    [
-        Cube3x3x3Faces::idx(Face::Top, 2, 2),
-        Cube3x3x3Faces::idx(Face::Right, 0, 0),
-        Cube3x3x3Faces::idx(Face::Front, 0, 2),
-    ],
-    // UFL
-    [
-        Cube3x3x3Faces::idx(Face::Top, 2, 0),
-        Cube3x3x3Faces::idx(Face::Front, 0, 0),
-        Cube3x3x3Faces::idx(Face::Left, 0, 2),
-    ],
-    // ULB
-    [
-        Cube3x3x3Faces::idx(Face::Top, 0, 0),
-        Cube3x3x3Faces::idx(Face::Left, 0, 0),
-        Cube3x3x3Faces::idx(Face::Back, 0, 2),
-    ],
-    // UBR
-    [
-        Cube3x3x3Faces::idx(Face::Top, 0, 2),
-        Cube3x3x3Faces::idx(Face::Back, 0, 0),
-        Cube3x3x3Faces::idx(Face::Right, 0, 2),
-    ],
-    // DFR
-    [
-        Cube3x3x3Faces::idx(Face::Bottom, 0, 2),
-        Cube3x3x3Faces::idx(Face::Front, 2, 2),
-        Cube3x3x3Faces::idx(Face::Right, 2, 0),
-    ],
-    // DLF
-    [
-        Cube3x3x3Faces::idx(Face::Bottom, 0, 0),
-        Cube3x3x3Faces::idx(Face::Left, 2, 2),
-        Cube3x3x3Faces::idx(Face::Front, 2, 0),
-    ],
-    // DBL
-    [
-        Cube3x3x3Faces::idx(Face::Bottom, 2, 0),
-        Cube3x3x3Faces::idx(Face::Back, 2, 2),
-        Cube3x3x3Faces::idx(Face::Left, 2, 0),
-    ],
-    // DRB
-    [
-        Cube3x3x3Faces::idx(Face::Bottom, 2, 2),
-        Cube3x3x3Faces::idx(Face::Right, 2, 2),
-        Cube3x3x3Faces::idx(Face::Back, 2, 0),
-    ],
-];
+macro_rules! cube_corner_indicies {
+    ($name: ident, $faces: ident, $n: expr) => {
+        pub(crate) const $name: [[usize; 3]; 8] = [
+            // URF
+            [
+                $faces::idx(CubeFace::Top, $n - 1, $n - 1),
+                $faces::idx(CubeFace::Right, 0, 0),
+                $faces::idx(CubeFace::Front, 0, $n - 1),
+            ],
+            // UFL
+            [
+                $faces::idx(CubeFace::Top, $n - 1, 0),
+                $faces::idx(CubeFace::Front, 0, 0),
+                $faces::idx(CubeFace::Left, 0, $n - 1),
+            ],
+            // ULB
+            [
+                $faces::idx(CubeFace::Top, 0, 0),
+                $faces::idx(CubeFace::Left, 0, 0),
+                $faces::idx(CubeFace::Back, 0, $n - 1),
+            ],
+            // UBR
+            [
+                $faces::idx(CubeFace::Top, 0, $n - 1),
+                $faces::idx(CubeFace::Back, 0, 0),
+                $faces::idx(CubeFace::Right, 0, $n - 1),
+            ],
+            // DFR
+            [
+                $faces::idx(CubeFace::Bottom, 0, $n - 1),
+                $faces::idx(CubeFace::Front, $n - 1, $n - 1),
+                $faces::idx(CubeFace::Right, $n - 1, 0),
+            ],
+            // DLF
+            [
+                $faces::idx(CubeFace::Bottom, 0, 0),
+                $faces::idx(CubeFace::Left, $n - 1, $n - 1),
+                $faces::idx(CubeFace::Front, $n - 1, 0),
+            ],
+            // DBL
+            [
+                $faces::idx(CubeFace::Bottom, $n - 1, 0),
+                $faces::idx(CubeFace::Back, $n - 1, $n - 1),
+                $faces::idx(CubeFace::Left, $n - 1, 0),
+            ],
+            // DRB
+            [
+                $faces::idx(CubeFace::Bottom, $n - 1, $n - 1),
+                $faces::idx(CubeFace::Right, $n - 1, $n - 1),
+                $faces::idx(CubeFace::Back, $n - 1, 0),
+            ],
+        ];
+    };
+}
+
+cube_corner_indicies!(CUBE2_CORNER_INDICIES, Cube2x2x2Faces, 2);
+cube_corner_indicies!(CUBE3_CORNER_INDICIES, Cube3x3x3Faces, 3);
 
 // Table for converting piece format to face color format. First level of
 // the array is the edge index in piece format, and the second level of
@@ -1767,67 +1842,67 @@ pub(crate) const CUBE3_CORNER_INDICIES: [[usize; 3]; 8] = [
 pub(crate) const CUBE3_EDGE_INDICIES: [[usize; 2]; 12] = [
     // UR
     [
-        Cube3x3x3Faces::idx(Face::Top, 1, 2),
-        Cube3x3x3Faces::idx(Face::Right, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Top, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Right, 0, 1),
     ],
     // UF
     [
-        Cube3x3x3Faces::idx(Face::Top, 2, 1),
-        Cube3x3x3Faces::idx(Face::Front, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Top, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Front, 0, 1),
     ],
     // UL
     [
-        Cube3x3x3Faces::idx(Face::Top, 1, 0),
-        Cube3x3x3Faces::idx(Face::Left, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Top, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Left, 0, 1),
     ],
     // UB
     [
-        Cube3x3x3Faces::idx(Face::Top, 0, 1),
-        Cube3x3x3Faces::idx(Face::Back, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Top, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Back, 0, 1),
     ],
     // DR
     [
-        Cube3x3x3Faces::idx(Face::Bottom, 1, 2),
-        Cube3x3x3Faces::idx(Face::Right, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Right, 2, 1),
     ],
     // DF
     [
-        Cube3x3x3Faces::idx(Face::Bottom, 0, 1),
-        Cube3x3x3Faces::idx(Face::Front, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 0, 1),
+        Cube3x3x3Faces::idx(CubeFace::Front, 2, 1),
     ],
     // DL
     [
-        Cube3x3x3Faces::idx(Face::Bottom, 1, 0),
-        Cube3x3x3Faces::idx(Face::Left, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Left, 2, 1),
     ],
     // DB
     [
-        Cube3x3x3Faces::idx(Face::Bottom, 2, 1),
-        Cube3x3x3Faces::idx(Face::Back, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Bottom, 2, 1),
+        Cube3x3x3Faces::idx(CubeFace::Back, 2, 1),
     ],
     // FR
     [
-        Cube3x3x3Faces::idx(Face::Front, 1, 2),
-        Cube3x3x3Faces::idx(Face::Right, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Front, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Right, 1, 0),
     ],
     // FL
     [
-        Cube3x3x3Faces::idx(Face::Front, 1, 0),
-        Cube3x3x3Faces::idx(Face::Left, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Front, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Left, 1, 2),
     ],
     // BL
     [
-        Cube3x3x3Faces::idx(Face::Back, 1, 2),
-        Cube3x3x3Faces::idx(Face::Left, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Back, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Left, 1, 0),
     ],
     // BR
     [
-        Cube3x3x3Faces::idx(Face::Back, 1, 0),
-        Cube3x3x3Faces::idx(Face::Right, 1, 2),
+        Cube3x3x3Faces::idx(CubeFace::Back, 1, 0),
+        Cube3x3x3Faces::idx(CubeFace::Right, 1, 2),
     ],
 ];
 
-pub(crate) const CUBE3_CORNER_COLORS: [[Color; 3]; 8] = [
+pub(crate) const CUBE_CORNER_COLORS: [[Color; 3]; 8] = [
     // URF
     [Color::White, Color::Red, Color::Green],
     // UFL
@@ -2505,40 +2580,40 @@ pub(crate) const POSSIBLE_PHASE_2_FOLLOWUP_MOVES: [&'static [Move]; Move::count_
 /// Layout of edges around last layer according to which face is the last layer
 pub(crate) const CUBE3_LAST_LAYER_EDGE: [[FaceRowOrColumn; 4]; 6] = [
     [
-        FaceRowOrColumn::RowRightToLeft(Face::Back, 0),
-        FaceRowOrColumn::RowRightToLeft(Face::Right, 0),
-        FaceRowOrColumn::RowRightToLeft(Face::Front, 0),
-        FaceRowOrColumn::RowRightToLeft(Face::Left, 0),
+        FaceRowOrColumn::RowRightToLeft(CubeFace::Back, 0),
+        FaceRowOrColumn::RowRightToLeft(CubeFace::Right, 0),
+        FaceRowOrColumn::RowRightToLeft(CubeFace::Front, 0),
+        FaceRowOrColumn::RowRightToLeft(CubeFace::Left, 0),
     ],
     [
-        FaceRowOrColumn::RowLeftToRight(Face::Top, 2),
-        FaceRowOrColumn::ColumnTopDown(Face::Right, 0),
-        FaceRowOrColumn::RowRightToLeft(Face::Bottom, 0),
-        FaceRowOrColumn::ColumnBottomUp(Face::Left, 2),
+        FaceRowOrColumn::RowLeftToRight(CubeFace::Top, 2),
+        FaceRowOrColumn::ColumnTopDown(CubeFace::Right, 0),
+        FaceRowOrColumn::RowRightToLeft(CubeFace::Bottom, 0),
+        FaceRowOrColumn::ColumnBottomUp(CubeFace::Left, 2),
     ],
     [
-        FaceRowOrColumn::ColumnBottomUp(Face::Top, 2),
-        FaceRowOrColumn::ColumnTopDown(Face::Back, 0),
-        FaceRowOrColumn::ColumnBottomUp(Face::Bottom, 2),
-        FaceRowOrColumn::ColumnBottomUp(Face::Front, 2),
+        FaceRowOrColumn::ColumnBottomUp(CubeFace::Top, 2),
+        FaceRowOrColumn::ColumnTopDown(CubeFace::Back, 0),
+        FaceRowOrColumn::ColumnBottomUp(CubeFace::Bottom, 2),
+        FaceRowOrColumn::ColumnBottomUp(CubeFace::Front, 2),
     ],
     [
-        FaceRowOrColumn::RowRightToLeft(Face::Top, 0),
-        FaceRowOrColumn::ColumnTopDown(Face::Left, 0),
-        FaceRowOrColumn::RowLeftToRight(Face::Bottom, 2),
-        FaceRowOrColumn::ColumnBottomUp(Face::Right, 2),
+        FaceRowOrColumn::RowRightToLeft(CubeFace::Top, 0),
+        FaceRowOrColumn::ColumnTopDown(CubeFace::Left, 0),
+        FaceRowOrColumn::RowLeftToRight(CubeFace::Bottom, 2),
+        FaceRowOrColumn::ColumnBottomUp(CubeFace::Right, 2),
     ],
     [
-        FaceRowOrColumn::ColumnTopDown(Face::Top, 0),
-        FaceRowOrColumn::ColumnTopDown(Face::Front, 0),
-        FaceRowOrColumn::ColumnTopDown(Face::Bottom, 0),
-        FaceRowOrColumn::ColumnBottomUp(Face::Back, 2),
+        FaceRowOrColumn::ColumnTopDown(CubeFace::Top, 0),
+        FaceRowOrColumn::ColumnTopDown(CubeFace::Front, 0),
+        FaceRowOrColumn::ColumnTopDown(CubeFace::Bottom, 0),
+        FaceRowOrColumn::ColumnBottomUp(CubeFace::Back, 2),
     ],
     [
-        FaceRowOrColumn::RowLeftToRight(Face::Front, 2),
-        FaceRowOrColumn::RowLeftToRight(Face::Right, 2),
-        FaceRowOrColumn::RowLeftToRight(Face::Back, 2),
-        FaceRowOrColumn::RowLeftToRight(Face::Left, 2),
+        FaceRowOrColumn::RowLeftToRight(CubeFace::Front, 2),
+        FaceRowOrColumn::RowLeftToRight(CubeFace::Right, 2),
+        FaceRowOrColumn::RowLeftToRight(CubeFace::Back, 2),
+        FaceRowOrColumn::RowLeftToRight(CubeFace::Left, 2),
     ],
 ];
 

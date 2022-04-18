@@ -1,8 +1,6 @@
 use crate::bluetooth::{BluetoothCubeDevice, BluetoothCubeEvent};
-use crate::common::{Color, Cube, Face, Move, TimedMove};
-use crate::cube3x3x3::{
-    Corner3x3x3, CornerPiece3x3x3, Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3,
-};
+use crate::common::{Color, Corner, CornerPiece, Cube, CubeFace, Move, TimedMove};
+use crate::cube3x3x3::{Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3};
 use aes::{
     cipher::generic_array::GenericArray,
     cipher::{BlockDecrypt, BlockEncrypt},
@@ -136,13 +134,13 @@ impl<P: Peripheral> GANCubeVersion1<P> {
     }
 
     fn decode_cube_state(data: &[u8]) -> Result<Cube3x3x3> {
-        const FACES: [Face; 6] = [
-            Face::Top,
-            Face::Right,
-            Face::Front,
-            Face::Bottom,
-            Face::Left,
-            Face::Back,
+        const FACES: [CubeFace; 6] = [
+            CubeFace::Top,
+            CubeFace::Right,
+            CubeFace::Front,
+            CubeFace::Bottom,
+            CubeFace::Left,
+            CubeFace::Back,
         ];
         const COLORS: [Color; 6] = [
             Color::White,
@@ -557,8 +555,8 @@ impl<P: Peripheral> GANCubeVersion2<P> {
                         let mut corner_pieces = Vec::with_capacity(8);
                         let mut edge_pieces = Vec::with_capacity(12);
                         for i in 0..8 {
-                            corner_pieces.push(CornerPiece3x3x3 {
-                                piece: Corner3x3x3::try_from(corners[i] as u8).unwrap(),
+                            corner_pieces.push(CornerPiece {
+                                piece: Corner::try_from(corners[i] as u8).unwrap(),
                                 orientation: corner_twist[i] as u8,
                             });
                         }
