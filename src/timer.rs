@@ -428,9 +428,8 @@ impl TimerWidget {
 
         if bluetooth_state.is_some() {
             // If Bluetooth cube is connected, force 3x3x3 solve type
-            match solve_type {
-                SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => (),
-                _ => *solve_type = SolveType::Standard3x3x3,
+            if !solve_type.is_3x3x3() {
+                *solve_type = SolveType::Standard3x3x3;
             }
         }
 

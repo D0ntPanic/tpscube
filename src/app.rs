@@ -478,10 +478,12 @@ impl App for Application {
                     &mut details,
                     self.solve_type,
                 ),
-                Mode::Graphs => {
-                    self.graph_widget
-                        .update(ctxt, frame, self.history.as_mut().unwrap())
-                }
+                Mode::Graphs => self.graph_widget.update(
+                    ctxt,
+                    frame,
+                    self.history.as_mut().unwrap(),
+                    self.solve_type,
+                ),
                 Mode::Algorithms => {
                     self.algorithms_widget
                         .update(ctxt, frame, self.history.as_mut().unwrap())

@@ -12,7 +12,7 @@ use egui::{
     SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
 };
 use plot::Plot;
-use tpscube_core::History;
+use tpscube_core::{History, SolveType};
 
 const GRAPH_PADDING: f32 = 16.0;
 
@@ -22,6 +22,7 @@ pub struct GraphWidget {
     average_size: usize,
     plot: Option<Plot>,
     update_id: Option<u64>,
+    solve_type: SolveType,
     settings_restored: bool,
 }
 
@@ -33,6 +34,7 @@ impl GraphWidget {
             average_size: 5,
             plot: None,
             update_id: None,
+            solve_type: SolveType::Standard3x3x3,
             settings_restored: false,
         }
     }
@@ -211,7 +213,7 @@ impl GraphWidget {
         }
     }
 
-    fn landscape_sidebar(&mut self, ctxt: &CtxRef, history: &mut History) {
+    fn landscape_sidebar(&mut self, ctxt: &CtxRef, history: &mut History, solve_type: SolveType) {
         SidePanel::left("left_graph_options")
             .default_width(160.0)
             .resizable(false)
@@ -224,12 +226,17 @@ impl GraphWidget {
                     .id_source("left_graph_options_scroll")
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
-                            ui.section("Statistic");
-                            self.statistic_options(ui, history);
+                            if solve_type.is_3x3x3() {
+                                ui.section("Statistic");
+                                self.statistic_options(ui, history);
 
-                            ui.add_space(8.0);
-                            ui.section("Phase");
-                            self.phase_options(ui, history);
+                                ui.add_space(8.0);
+                                ui.section("Phase");
+                                self.phase_options(ui, history);
+                            } else {
+                                self.statistic = Statistic::TotalTime;
+                                self.phase = Phase::EntireSolve;
+                            }
 
                             ui.add_space(8.0);
                             ui.section("Average");
@@ -239,51 +246,59 @@ impl GraphWidget {
             });
     }
 
-    fn portrait_top_bar(&mut self, ctxt: &CtxRef, history: &mut History) {
+    fn portrait_top_bar(&mut self, ctxt: &CtxRef, history: &mut History, solve_type: SolveType) {
         TopBottomPanel::top("top_graph_options").show(ctxt, |ui| {
             ui.vertical(|ui| {
                 ui.with_layout(
                     Layout::from_main_dir_and_cross_align(Direction::LeftToRight, Align::TOP),
                     |ui| {
-                        ui.allocate_ui(
-                            Vec2::new((ui.max_rect().width() - 48.0) / 2.0, ui.max_rect().height()),
-                            |ui| {
-                                ui.vertical(|ui| {
-                                    ui.section("Statistic");
-                                    self.statistic_options(ui, history);
-                                    ui.add_space(4.0);
-                                });
-                            },
-                        );
+                        if solve_type.is_3x3x3() {
+                            ui.allocate_ui(
+                                Vec2::new(
+                                    (ui.max_rect().width() - 48.0) / 2.0,
+                                    ui.max_rect().height(),
+                                ),
+                                |ui| {
+                                    ui.vertical(|ui| {
+                                        ui.section("Statistic");
+                                        self.statistic_options(ui, history);
+                                        ui.add_space(4.0);
+                                    });
+                                },
+                            );
 
-                        // Show separator between sections
-                        ui.scope(|ui| {
-                            ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
-                                width: 1.0,
-                                color: Theme::Disabled.into(),
-                            };
-                            ui.separator();
-                        });
+                            // Show separator between sections
+                            ui.scope(|ui| {
+                                ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
+                                    width: 1.0,
+                                    color: Theme::Disabled.into(),
+                                };
+                                ui.separator();
+                            });
 
-                        ui.allocate_ui(
-                            Vec2::new((ui.max_rect().width() - 48.0) / 3.0, ui.max_rect().height()),
-                            |ui| {
-                                ui.vertical(|ui| {
-                                    ui.section("Phase");
-                                    self.phase_options(ui, history);
-                                    ui.add_space(4.0);
-                                });
-                            },
-                        );
+                            ui.allocate_ui(
+                                Vec2::new(
+                                    (ui.max_rect().width() - 48.0) / 3.0,
+                                    ui.max_rect().height(),
+                                ),
+                                |ui| {
+                                    ui.vertical(|ui| {
+                                        ui.section("Phase");
+                                        self.phase_options(ui, history);
+                                        ui.add_space(4.0);
+                                    });
+                                },
+                            );
 
-                        // Show separator between sections
-                        ui.scope(|ui| {
-                            ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
-                                width: 1.0,
-                                color: Theme::Disabled.into(),
-                            };
-                            ui.separator();
-                        });
+                            // Show separator between sections
+                            ui.scope(|ui| {
+                                ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
+                                    width: 1.0,
+                                    color: Theme::Disabled.into(),
+                                };
+                                ui.separator();
+                            });
+                        }
 
                         ui.allocate_ui(
                             Vec2::new((ui.max_rect().width() - 48.0) / 6.0, ui.max_rect().height()),
@@ -367,7 +382,13 @@ impl GraphWidget {
         }
     }
 
-    pub fn update(&mut self, ctxt: &CtxRef, _frame: &mut epi::Frame<'_>, history: &mut History) {
+    pub fn update(
+        &mut self,
+        ctxt: &CtxRef,
+        _frame: &mut epi::Frame<'_>,
+        history: &mut History,
+        solve_type: SolveType,
+    ) {
         if !self.settings_restored {
             self.restore_settings(history);
         }
@@ -376,17 +397,18 @@ impl GraphWidget {
         let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
         if aspect >= 1.0 {
             // Landscape mode. Graph options to the left.
-            self.landscape_sidebar(ctxt, history);
+            self.landscape_sidebar(ctxt, history, solve_type);
         } else {
             // Portrait mode. Graph options at the top.
-            self.portrait_top_bar(ctxt, history);
+            self.portrait_top_bar(ctxt, history, solve_type);
         }
 
         ctxt.set_visuals(content_visuals());
         CentralPanel::default().show(ctxt, |ui| {
-            if self.update_id != Some(history.update_id()) {
+            if self.update_id != Some(history.update_id()) || self.solve_type != solve_type {
                 // If history has been updated, regenerate plot
                 self.plot = None;
+                self.solve_type = solve_type;
             }
 
             // Get plot data
@@ -399,7 +421,7 @@ impl GraphWidget {
                         .statistic(self.statistic)
                         .phase(self.phase)
                         .average_size(self.average_size)
-                        .build(history),
+                        .build(history, solve_type),
                 );
                 self.update_id = Some(history.update_id());
                 self.plot.as_mut().unwrap()

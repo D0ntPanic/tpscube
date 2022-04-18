@@ -436,6 +436,15 @@ impl SolveType {
             _ => None,
         }
     }
+
+    pub fn is_3x3x3(&self) -> bool {
+        match self {
+            SolveType::Standard3x3x3 => true,
+            SolveType::OneHanded3x3x3 => true,
+            SolveType::Blind3x3x3 => true,
+            _ => false,
+        }
+    }
 }
 
 impl ToString for SolveType {

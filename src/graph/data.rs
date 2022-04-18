@@ -2,6 +2,7 @@ use crate::graph::plot::{Plot, SinglePlot, YAxis};
 use crate::theme::Theme;
 use tpscube_core::{
     Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, ListAverage, Solve,
+    SolveType,
 };
 
 pub struct GraphData {
@@ -281,7 +282,7 @@ impl GraphData {
         }
     }
 
-    pub fn build(self, history: &History) -> Plot {
+    pub fn build(self, history: &History, solve_type: SolveType) -> Plot {
         let title = format!(
             "{} for {}",
             match self.statistic {
@@ -315,6 +316,11 @@ impl GraphData {
 
         let mut window = Vec::new();
         for solve in history.iter() {
+            if solve.solve_type != solve_type {
+                // Only include solves with the current solve type
+                continue;
+            }
+
             let data_point = match Self::data_point(solve, self.statistic, self.phase) {
                 Some(value) => Some(value),
                 None => continue,
