@@ -112,13 +112,13 @@ impl TimerWidget {
         self.cube.new_scramble();
     }
 
-    fn abort_solve(&mut self, time: u32, history: &mut History) {
+    fn abort_solve(&mut self, time: u32, history: &mut History, solve_type: SolveType) {
         if time > 2000 {
             // If some solve progress was made, add a DNF. Otherwise,
             // treat it as an accidental start.
             history.new_solve(Solve {
                 id: Solve::new_id(),
-                solve_type: SolveType::Standard3x3x3,
+                solve_type,
                 session: history.current_session().into(),
                 scramble: self.cube.scramble().to_vec(),
                 created: Local::now(),
@@ -208,7 +208,18 @@ impl TimerWidget {
                         .cube
                         .update_bluetooth_scramble_and_check_finish(&bluetooth_events)
                     {
-                        self.state = TimerState::BluetoothPreparing(Instant::now(), time, analysis);
+                        if solve_type == SolveType::Blind3x3x3 {
+                            // When solving in blind mode, start timer immediately when the
+                            // scramble is complete so that memorization time is accounted for.
+                            self.state = TimerState::BluetoothSolving(
+                                Instant::now(),
+                                Vec::new(),
+                                PartialAnalysis::Unsuccessful,
+                            );
+                        } else {
+                            self.state =
+                                TimerState::BluetoothPreparing(Instant::now(), time, analysis);
+                        }
                     }
                 } else if accept_keyboard {
                     for event in &ctxt.input().events {
@@ -289,7 +300,11 @@ impl TimerWidget {
             }
             TimerState::Solving(start) => {
                 if ctxt.input().keys_down.contains(&Key::Escape) {
-                    self.abort_solve((Instant::now() - start).as_millis() as u32, history);
+                    self.abort_solve(
+                        (Instant::now() - start).as_millis() as u32,
+                        history,
+                        solve_type,
+                    );
                     ctxt.request_repaint();
                 } else if ctxt.input().keys_down.len() != 0 || touching {
                     self.finish_solve(
@@ -309,7 +324,11 @@ impl TimerWidget {
                 }
 
                 if ctxt.input().keys_down.contains(&Key::Escape) {
-                    self.abort_solve((Instant::now() - start).as_millis() as u32, history);
+                    self.abort_solve(
+                        (Instant::now() - start).as_millis() as u32,
+                        history,
+                        solve_type,
+                    );
                     ctxt.request_repaint();
                 } else if ctxt.input().keys_down.len() != 0 || touching {
                     self.finish_solve(
