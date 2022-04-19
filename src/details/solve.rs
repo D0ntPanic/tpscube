@@ -16,8 +16,8 @@ use egui::{
 };
 use instant::Instant;
 use tpscube_core::{
-    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube3x3x3, CubeWithSolution,
-    InitialCubeState, Solve,
+    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube2x2x2, Cube3x3x3, CubeWithSolution,
+    InitialCubeState, Solve, SolveType,
 };
 
 const TARGET_MIN_WIDTH: f32 = 280.0;
@@ -26,7 +26,7 @@ const STEP_COLUMN_PADDING: f32 = 8.0;
 
 pub struct SolveDetailsWindow {
     solve: Solve,
-    unsolved_state: Cube3x3x3,
+    unsolved_state: Box<dyn Cube>,
     analysis: Analysis,
     summary: Vec<AnalysisStepSummary>,
     renderer: CubeRenderer,
@@ -45,31 +45,53 @@ enum SolveDetailsMode {
 
 impl SolveDetailsWindow {
     pub fn new(solve: Solve) -> Self {
-        let mut unsolved_state = Cube3x3x3::new();
-        unsolved_state.do_moves(&solve.scramble);
-        let renderer = CubeRenderer::new(Box::new(unsolved_state.clone()));
+        match solve.solve_type {
+            SolveType::Standard2x2x2 => {
+                let mut unsolved_state = Box::new(Cube2x2x2::new());
+                unsolved_state.do_moves(&solve.scramble);
+                let renderer = CubeRenderer::new(unsolved_state.dyn_clone());
 
-        let analysis = if let Some(solution) = &solve.moves {
-            Analysis::analyze(&CubeWithSolution {
-                initial_state: unsolved_state.clone(),
-                solution: solution.clone(),
-            })
-        } else {
-            Analysis::default()
-        };
-        let summary = analysis.detailed_step_summary();
+                Self {
+                    solve,
+                    unsolved_state,
+                    analysis: Analysis::default(),
+                    summary: Vec::new(),
+                    renderer,
+                    replay_time: 0.0,
+                    replay_move_idx: 0,
+                    playing: false,
+                    last_frame: Instant::now(),
+                    mode: SolveDetailsMode::Replay,
+                }
+            }
+            SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => {
+                let mut unsolved_state = Cube3x3x3::new();
+                unsolved_state.do_moves(&solve.scramble);
+                let renderer = CubeRenderer::new(Box::new(unsolved_state.clone()));
 
-        Self {
-            solve,
-            unsolved_state,
-            analysis,
-            summary,
-            renderer,
-            replay_time: 0.0,
-            replay_move_idx: 0,
-            playing: false,
-            last_frame: Instant::now(),
-            mode: SolveDetailsMode::Replay,
+                let analysis = if let Some(solution) = &solve.moves {
+                    Analysis::analyze(&CubeWithSolution {
+                        initial_state: unsolved_state.clone(),
+                        solution: solution.clone(),
+                    })
+                } else {
+                    Analysis::default()
+                };
+                let summary = analysis.detailed_step_summary();
+
+                Self {
+                    solve,
+                    unsolved_state: Box::new(unsolved_state),
+                    analysis,
+                    summary,
+                    renderer,
+                    replay_time: 0.0,
+                    replay_move_idx: 0,
+                    playing: false,
+                    last_frame: Instant::now(),
+                    mode: SolveDetailsMode::Replay,
+                }
+            }
         }
     }
 
@@ -248,7 +270,7 @@ impl SolveDetailsWindow {
                 {
                     if self.replay_move_idx >= self.solve.moves.as_ref().unwrap().len() {
                         self.renderer
-                            .set_cube_state(Box::new(self.unsolved_state.clone()));
+                            .set_cube_state(self.unsolved_state.dyn_clone());
                         self.replay_move_idx = 0;
                         self.replay_time = 0.0;
                     }
