@@ -398,6 +398,7 @@ impl App for Application {
                             let allow_change_solve_type = !self.bluetooth.active();
 
                             // Show solve type
+                            ui.style_mut().visuals.widgets = base_visuals().widgets;
                             if ui
                                 .add(Label::new(self.solve_type.to_string()).sense(Sense::click()))
                                 .clicked()
