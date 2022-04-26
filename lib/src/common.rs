@@ -250,12 +250,15 @@ pub struct Average {
 
 pub trait ListAverage {
     fn average(&self) -> Option<u32>;
+    fn average_ignore_dnf(&self) -> Option<u32>;
 }
 
 pub trait SolveList: ListAverage {
     fn last_average(&self, count: usize) -> Option<Average>;
+    fn last_average_ignore_dnf(&self, count: usize) -> Option<Average>;
     fn best(&self) -> Option<BestSolve>;
     fn best_average(&self, count: usize) -> Option<Average>;
+    fn best_average_ignore_dnf(&self, count: usize) -> Option<Average>;
 }
 
 impl ListAverage for &[Option<u32>] {
@@ -312,6 +315,65 @@ impl ListAverage for &[Option<u32>] {
             None
         }
     }
+
+    fn average_ignore_dnf(&self) -> Option<u32> {
+        if self.len() == 0 {
+            return None;
+        }
+
+        // Sort solves by time, ensuring that DNF is considered the
+        // maximum time.
+        let mut sorted: Vec<Option<u32>> = self.to_vec();
+        sorted.retain(|a| a.is_some());
+        sorted.sort_unstable_by(|a, b| {
+            if a.is_none() && b.is_none() {
+                Ordering::Equal
+            } else if a.is_none() {
+                Ordering::Greater
+            } else if b.is_none() {
+                Ordering::Less
+            } else {
+                let a = a.unwrap();
+                let b = b.unwrap();
+                a.cmp(&b)
+            }
+        });
+
+        // Remove the best and worst time(s) as appropriate for the size of the set.
+        // If there are less than 5 values, use an arithmetic mean and do not
+        // eliminate any values.
+        let to_remove = if sorted.len() >= 5 {
+            (sorted.len() + 39) / 40
+        } else {
+            0
+        };
+        let solves = &sorted[to_remove..sorted.len() - to_remove];
+
+        // Sum the solves that are not removed. If there is a DNF in this set, the
+        // entire average is invalid.
+        let sum = solves.iter().fold(Some(0), |sum, time| {
+            if let Some(sum) = sum {
+                if let Some(time) = time {
+                    Some(sum + *time as u64)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
+        // Compute final average
+        if let Some(sum) = sum {
+            if solves.len() > 0 {
+                Some(((sum + (solves.len() as u64 / 2)) / (solves.len() as u64)) as u32)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl ListAverage for &[Solve] {
@@ -319,12 +381,32 @@ impl ListAverage for &[Solve] {
         let times: Vec<Option<u32>> = self.iter().map(|solve| solve.final_time()).collect();
         times.as_slice().average()
     }
+    fn average_ignore_dnf(&self) -> Option<u32> {
+        let times: Vec<Option<u32>> = self.iter().map(|solve| solve.final_time()).collect();
+        times.as_slice().average_ignore_dnf()
+    }
 }
 
 impl SolveList for &[Solve] {
     fn last_average(&self, count: usize) -> Option<Average> {
         if self.len() >= count {
             let solves = self[self.len() - count..].to_vec();
+            if let Some(time) = solves.as_slice().average() {
+                Some(Average { solves, time })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    fn last_average_ignore_dnf(&self, count: usize) -> Option<Average> {
+        if self.len() >= count {
+            // let mut solves = self[self.len() - count..].to_vec();
+            let mut solves = self.to_vec();
+            solves.retain(|solve| solve.final_time().is_some());
+            solves = solves[solves.len() - count..].to_vec();
             if let Some(time) = solves.as_slice().average() {
                 Some(Average { solves, time })
             } else {
@@ -365,6 +447,31 @@ impl SolveList for &[Solve] {
         self.windows(count)
             .fold(None, |best, solves| {
                 if let Some(time) = solves.average() {
+                    if let Some((best_solves, best_time)) = best {
+                        if time < best_time {
+                            Some((solves, time))
+                        } else {
+                            Some((best_solves, best_time))
+                        }
+                    } else {
+                        Some((solves, time))
+                    }
+                } else {
+                    best
+                }
+            })
+            .map(|best| {
+                let (solves, time) = best;
+                Average {
+                    solves: solves.to_vec(),
+                    time,
+                }
+            })
+    }
+    fn best_average_ignore_dnf(&self, count: usize) -> Option<Average> {
+        self.windows(count)
+            .fold(None, |best, solves| {
+                if let Some(time) = solves.average_ignore_dnf() {
                     if let Some((best_solves, best_time)) = best {
                         if time < best_time {
                             Some((solves, time))
@@ -810,7 +917,7 @@ pub fn parse_timed_move_string(string: &str) -> Result<Vec<TimedMove>> {
         let time_str = move_iter
             .next()
             .ok_or_else(|| anyhow!("Invalid move '{}'", move_str))?;
-        let mv = Move::from_str(mv_str).ok_or_else(|| anyhow!("Invalid move '{}'"))?;
+        let mv = Move::from_str(mv_str).ok_or_else(|| anyhow!("Invalid move '{}'", move_str))?;
         let time = u32::from_str(time_str)?;
         moves.push(TimedMove(mv, time));
     }
