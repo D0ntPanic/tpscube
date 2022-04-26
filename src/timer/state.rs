@@ -47,10 +47,24 @@ impl TimerState {
                     *time
                 }
             }
+            TimerState::ManualTimeEntry(digits) | TimerState::ManualTimeEntryDelay(digits, _) => {
+                Self::digits_to_time(*digits)
+            }
+            TimerState::Preparing(_, time, _) => {
+                if self.is_solving() {
+                    0
+                } else {
+                    *time
+                }
+            }
             TimerState::Ready
             | TimerState::BluetoothReady
-            | TimerState::BluetoothPreparing(_, _, _) => 0,
-            TimerState::Solving(start) | TimerState::BluetoothSolving(start, _, _) => {
+            | TimerState::ExternalTimerReady
+            | TimerState::BluetoothPreparing(_, _, _)
+            | TimerState::ExternalTimerPreparing(_, _) => 0,
+            TimerState::Solving(start)
+            | TimerState::BluetoothSolving(start, _, _)
+            | TimerState::ExternalTimerSolving(start) => {
                 (Instant::now() - *start).as_millis() as u32
             }
         }

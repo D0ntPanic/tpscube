@@ -1358,13 +1358,13 @@ impl HistoryWidget {
         let mut session_regions = Vec::new();
         let mut all_solves: Vec<Solve> = Vec::new();
         for session in history.sessions().values() {
-            if session.solve_type() != solve_type {
-                // Skip sessions that aren't the active solve type
-                continue;
-            }
             let solves: Vec<Solve> = session.to_vec(history);
             if solves.len() == 0 {
                 // Skip empty sessions
+                continue;
+            }
+            if session.solve_type() != solve_type {
+                // Skip sessions that aren't the active solve type
                 continue;
             }
             all_solves.extend_from_slice(solves.as_slice());
