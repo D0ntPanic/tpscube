@@ -774,7 +774,7 @@ pub fn parse_timed_move_string(string: &str) -> Result<Vec<TimedMove>> {
         let time_str = move_iter
             .next()
             .ok_or_else(|| anyhow!("Invalid move '{}'", move_str))?;
-        let mv = Move::from_str(mv_str).ok_or_else(|| anyhow!("Invalid move '{}'"))?;
+        let mv = Move::from_str(mv_str).ok_or_else(|| anyhow!("Invalid move '{}'", move_str))?;
         let time = u32::from_str(time_str)?;
         moves.push(TimedMove(mv, time));
     }
