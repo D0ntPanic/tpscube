@@ -46,7 +46,7 @@ impl TimerPostAnalysis {
     }
 
     pub fn height(&self, ui: &Ui) -> f32 {
-        ui.fonts().row_height(FontSize::Normal.into()) * self.steps.len() as f32
+        ui.fonts().row_height(FontSize::Normal.into()) * (self.steps.len() + 2) as f32
     }
 
     pub fn move_count(&self) -> usize {
@@ -131,8 +131,12 @@ impl TimerPostAnalysis {
         let mut time_width: f32 = 0.0;
         let mut move_width: f32 = 0.0;
         let mut max_time = 0;
+        let mut recognition_total_time = 0;
+        let mut execution_total_time = 0;
         for step in &self.steps {
             let time = step.recognition_time + step.execution_time;
+            recognition_total_time += step.recognition_time;
+            execution_total_time += step.execution_time;
             max_time = max_time.max(time);
             let galley = ui.fonts().layout_single_line(
                 FontSize::Normal.into(),
@@ -219,5 +223,34 @@ impl TimerPostAnalysis {
 
             y += ui.fonts().row_height(FontSize::Normal.into());
         }
+
+        let galley = ui.fonts().layout_single_line(
+            FontSize::Normal.into(),
+            if style.has_bars() {
+                format!(
+                    "Recognize: {}   Execute: {}",
+                    solve_time_string(recognition_total_time),
+                    solve_time_string(execution_total_time)
+                )
+            } else if style.has_move_count() {
+                format!(
+                    "Rec: {}  Exe: {}",
+                    solve_time_string(recognition_total_time),
+                    solve_time_string(execution_total_time)
+                )
+            } else {
+                format!(
+                    "R: {} E: {}",
+                    solve_time_string(recognition_total_time),
+                    solve_time_string(execution_total_time)
+                )
+            },
+        );
+
+        y += 0.5 * ui.fonts().row_height(FontSize::Normal.into());
+
+        x = (rect.width() - galley.size.x) / 2.0 + rect.left();
+        ui.painter()
+            .galley(Pos2::new(x, y), galley, Theme::Disabled.into());
     }
 }

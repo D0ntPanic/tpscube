@@ -50,13 +50,6 @@ impl TimerState {
             TimerState::ManualTimeEntry(digits) | TimerState::ManualTimeEntryDelay(digits, _) => {
                 Self::digits_to_time(*digits)
             }
-            TimerState::Preparing(_, time, _) => {
-                if self.is_solving() {
-                    0
-                } else {
-                    *time
-                }
-            }
             TimerState::Ready
             | TimerState::BluetoothReady
             | TimerState::ExternalTimerReady
