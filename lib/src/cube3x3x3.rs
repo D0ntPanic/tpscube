@@ -1,5 +1,5 @@
 use crate::{
-    Color, Corner, CornerPiece, Cube, CubeFace, InitialCubeState, Move, RandomSource,
+    Color, Corner, CornerPiece, Cube, CubeFace, FaceRotation, InitialCubeState, Move, RandomSource,
     RotationDirection,
 };
 use num_enum::TryFromPrimitive;
@@ -49,12 +49,6 @@ pub struct Cube3x3x3Faces {
     state: [Color; 6 * 9],
 }
 
-/// Face rotation for 3x3x3 cubes
-pub trait FaceRotation3x3x3 {
-    /// Rotate a face in a given direction
-    fn rotate(&mut self, face: CubeFace, dir: RotationDirection);
-}
-
 pub(crate) enum FaceRowOrColumn {
     RowLeftToRight(CubeFace, usize),
     RowRightToLeft(CubeFace, usize),
@@ -99,7 +93,7 @@ impl EdgeOrientationMoveTable {
     fn get(idx: u16, mv: Move) -> u16 {
         let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
-            crate::tables::CUBE3_EDGE_ORIENTATION_MOVE_TABLE[offset..offset + 2]
+            crate::tables::solve::CUBE3_EDGE_ORIENTATION_MOVE_TABLE[offset..offset + 2]
                 .try_into()
                 .unwrap(),
         )
@@ -111,7 +105,7 @@ impl EquatorialEdgeSliceMoveTable {
     fn get(idx: u16, mv: Move) -> u16 {
         let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
-            crate::tables::CUBE3_EQUATORIAL_EDGE_SLICE_MOVE_TABLE[offset..offset + 2]
+            crate::tables::solve::CUBE3_EQUATORIAL_EDGE_SLICE_MOVE_TABLE[offset..offset + 2]
                 .try_into()
                 .unwrap(),
         )
@@ -123,7 +117,7 @@ impl Phase2EdgePermutationMoveTable {
     fn get(idx: u16, mv: Move) -> u16 {
         let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
-            crate::tables::CUBE3_PHASE_2_EDGE_PERMUTATION_MOVE_TABLE[offset..offset + 2]
+            crate::tables::solve::CUBE3_PHASE_2_EDGE_PERMUTATION_MOVE_TABLE[offset..offset + 2]
                 .try_into()
                 .unwrap(),
         )
@@ -135,7 +129,8 @@ impl Phase2EquatorialEdgePermutationMoveTable {
     fn get(idx: u16, mv: Move) -> u16 {
         let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
-            crate::tables::CUBE3_PHASE_2_EQUATORIAL_EDGE_PERMUTATION_MOVE_TABLE[offset..offset + 2]
+            crate::tables::solve::CUBE3_PHASE_2_EQUATORIAL_EDGE_PERMUTATION_MOVE_TABLE
+                [offset..offset + 2]
                 .try_into()
                 .unwrap(),
         )
@@ -145,7 +140,7 @@ impl Phase2EquatorialEdgePermutationMoveTable {
 #[cfg(not(feature = "no_solver"))]
 impl CornerOrientationEdgeSlicePruneTable {
     fn get(corner_orientation_idx: u16, edge_slice_idx: u16) -> usize {
-        crate::tables::CUBE3_CORNER_ORIENTATION_EDGE_SLICE_PRUNE_TABLE[corner_orientation_idx
+        crate::tables::solve::CUBE3_CORNER_ORIENTATION_EDGE_SLICE_PRUNE_TABLE[corner_orientation_idx
             as usize
             * Cube3x3x3::EDGE_SLICE_INDEX_COUNT
             + edge_slice_idx as usize] as usize
@@ -155,7 +150,7 @@ impl CornerOrientationEdgeSlicePruneTable {
 #[cfg(not(feature = "no_solver"))]
 impl EdgeOrientationPruneTable {
     fn get(edge_orientation_idx: u16, edge_slice_idx: u16) -> usize {
-        crate::tables::CUBE3_EDGE_ORIENTATION_PRUNE_TABLE[edge_orientation_idx as usize
+        crate::tables::solve::CUBE3_EDGE_ORIENTATION_PRUNE_TABLE[edge_orientation_idx as usize
             * Cube3x3x3::EDGE_SLICE_INDEX_COUNT
             + edge_slice_idx as usize] as usize
     }
@@ -164,7 +159,8 @@ impl EdgeOrientationPruneTable {
 #[cfg(not(feature = "no_solver"))]
 impl CombinedOrientationPruneTable {
     fn get(corner_orientation_idx: u16, edge_orientation_idx: u16) -> usize {
-        crate::tables::CUBE3_COMBINED_ORIENTATION_PRUNE_TABLE[corner_orientation_idx as usize
+        crate::tables::solve::CUBE3_COMBINED_ORIENTATION_PRUNE_TABLE[corner_orientation_idx
+            as usize
             * Cube3x3x3::EDGE_ORIENTATION_INDEX_COUNT
             + edge_orientation_idx as usize] as usize
     }
@@ -173,7 +169,8 @@ impl CombinedOrientationPruneTable {
 #[cfg(not(feature = "no_solver"))]
 impl CornerEdgePermutationPruneTable {
     fn get(corner_permutation_idx: u16, equatorial_edge_permutation_idx: u16) -> usize {
-        crate::tables::CUBE3_CORNER_EDGE_PERMUTATION_PRUNE_TABLE[corner_permutation_idx as usize
+        crate::tables::solve::CUBE3_CORNER_EDGE_PERMUTATION_PRUNE_TABLE[corner_permutation_idx
+            as usize
             * Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT
             + equatorial_edge_permutation_idx as usize] as usize
     }
@@ -182,15 +179,16 @@ impl CornerEdgePermutationPruneTable {
 #[cfg(not(feature = "no_solver"))]
 impl Phase1CornerPermutationPruneTable {
     fn get(corner_permutation_idx: u16) -> usize {
-        crate::tables::CUBE3_PHASE_1_CORNER_PERMUTATION_PRUNE_TABLE[corner_permutation_idx as usize]
-            as usize
+        crate::tables::solve::CUBE3_PHASE_1_CORNER_PERMUTATION_PRUNE_TABLE
+            [corner_permutation_idx as usize] as usize
     }
 }
 
 #[cfg(not(feature = "no_solver"))]
 impl Phase2EdgePermutationPruneTable {
     fn get(edge_permutation_idx: u16, equatorial_edge_permutation_idx: u16) -> usize {
-        crate::tables::CUBE3_PHASE_2_EDGE_PERMUTATION_PRUNE_TABLE[edge_permutation_idx as usize
+        crate::tables::solve::CUBE3_PHASE_2_EDGE_PERMUTATION_PRUNE_TABLE[edge_permutation_idx
+            as usize
             * Cube3x3x3::PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT
             + equatorial_edge_permutation_idx as usize] as usize
     }
@@ -314,16 +312,16 @@ impl Solver {
         // Need to go deeper. Iterate through the possible moves.
         let possible_moves = if depth == 1 {
             if self.moves.len() == 0 {
-                crate::tables::POSSIBLE_PHASE_1_LAST_MOVES
+                crate::tables::solve::CUBE3_POSSIBLE_PHASE_1_LAST_MOVES
             } else {
-                crate::tables::POSSIBLE_PHASE_1_LAST_FOLLOWUP_MOVES
+                crate::tables::solve::CUBE3_POSSIBLE_PHASE_1_LAST_FOLLOWUP_MOVES
                     [*self.moves.last().unwrap() as u8 as usize]
             }
         } else {
             if self.moves.len() == 0 {
-                crate::tables::POSSIBLE_PHASE_1_MOVES
+                crate::tables::solve::CUBE3_POSSIBLE_PHASE_1_MOVES
             } else {
-                crate::tables::POSSIBLE_PHASE_1_FOLLOWUP_MOVES
+                crate::tables::solve::CUBE3_POSSIBLE_PHASE_1_FOLLOWUP_MOVES
                     [*self.moves.last().unwrap() as u8 as usize]
             }
         };
@@ -442,9 +440,9 @@ impl Solver {
 
         // Need to go deeper. Iterate through the possible moves.
         let possible_moves = if self.moves.len() == 0 {
-            crate::tables::POSSIBLE_PHASE_2_MOVES
+            crate::tables::solve::CUBE3_POSSIBLE_PHASE_2_MOVES
         } else {
-            crate::tables::POSSIBLE_PHASE_2_FOLLOWUP_MOVES
+            crate::tables::solve::CUBE3_POSSIBLE_PHASE_2_FOLLOWUP_MOVES
                 [*self.moves.last().unwrap() as u8 as usize]
         };
         for mv in possible_moves {
@@ -650,8 +648,8 @@ impl Cube3x3x3 {
         for corner_idx in 0..8 {
             let piece = self.corners[corner_idx];
             for i in 0..3 {
-                let dest = crate::tables::CUBE3_CORNER_INDICIES[corner_idx][i];
-                let src = crate::tables::CUBE3_CORNER_INDICIES[piece.piece as u8 as usize]
+                let dest = crate::tables::corner::CUBE3_CORNER_INDICIES[corner_idx][i];
+                let src = crate::tables::corner::CUBE3_CORNER_INDICIES[piece.piece as u8 as usize]
                     [(i + 3 - piece.orientation as usize) % 3];
                 let face = Cube3x3x3Faces::face_for_idx(src);
                 faces.state[dest] = faces.state[Cube3x3x3Faces::idx(face, 1, 1)];
@@ -662,9 +660,9 @@ impl Cube3x3x3 {
         for edge_idx in 0..12 {
             let piece = self.edges[edge_idx];
             for i in 0..2 {
-                let dest = crate::tables::CUBE3_EDGE_INDICIES[edge_idx][i];
-                let src = crate::tables::CUBE3_EDGE_INDICIES[piece.piece as u8 as usize]
-                    [i ^ piece.orientation as usize];
+                let dest = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES[edge_idx][i];
+                let src = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES
+                    [piece.piece as u8 as usize][i ^ piece.orientation as usize];
                 let face = Cube3x3x3Faces::face_for_idx(src);
                 faces.state[dest] = faces.state[Cube3x3x3Faces::idx(face, 1, 1)];
             }
@@ -674,8 +672,8 @@ impl Cube3x3x3 {
     }
 }
 
-impl FaceRotation3x3x3 for Cube3x3x3 {
-    fn rotate(&mut self, face: CubeFace, dir: RotationDirection) {
+impl FaceRotation for Cube3x3x3 {
+    fn rotate_wide(&mut self, face: CubeFace, dir: RotationDirection, _width: usize) {
         let face_idx = face as u8 as usize;
         let dir_idx = dir as u8 as usize;
 
@@ -684,9 +682,10 @@ impl FaceRotation3x3x3 for Cube3x3x3 {
         let old_edges = self.edges;
 
         // Apply corner movement using lookup table
-        for i in 0..8 {
-            let src = crate::tables::CUBE_CORNER_PIECE_ROTATION[dir_idx][face_idx][i];
-            self.corners[i] = CornerPiece {
+        for i in 0..4 {
+            let (dest, src) =
+                crate::tables::corner::CUBE_CORNER_PIECE_ROTATION[dir_idx][face_idx][i];
+            self.corners[dest as u8 as usize] = CornerPiece {
                 piece: old_corners[src.piece as u8 as usize].piece,
                 orientation: (old_corners[src.piece as u8 as usize].orientation + src.orientation)
                     % 3,
@@ -694,9 +693,10 @@ impl FaceRotation3x3x3 for Cube3x3x3 {
         }
 
         // Apply edge movement using lookup table
-        for i in 0..12 {
-            let src = crate::tables::CUBE3_EDGE_PIECE_ROTATION[dir_idx][face_idx][i];
-            self.edges[i] = EdgePiece3x3x3 {
+        for i in 0..4 {
+            let (dest, src) =
+                crate::tables::table3x3x3::CUBE3_EDGE_PIECE_ROTATION[dir_idx][face_idx][i];
+            self.edges[dest as u8 as usize] = EdgePiece3x3x3 {
                 piece: old_edges[src.piece as u8 as usize].piece,
                 orientation: (old_edges[src.piece as u8 as usize].orientation ^ src.orientation),
             };
@@ -799,7 +799,7 @@ impl Cube for Cube3x3x3 {
     }
 
     fn do_move(&mut self, mv: Move) {
-        rotation_move(self, mv);
+        self.rotate_counted(mv.face(), mv.rotation());
     }
 
     fn size(&self) -> usize {
@@ -867,12 +867,12 @@ impl Cube3x3x3Faces {
 
     /// Gets the color of a specific corner (there are three colors per corner)
     pub fn corner_color(&self, corner: Corner, idx: usize) -> Color {
-        self.state[crate::tables::CUBE3_CORNER_INDICIES[corner as u8 as usize][idx]]
+        self.state[crate::tables::corner::CUBE3_CORNER_INDICIES[corner as u8 as usize][idx]]
     }
 
     /// Gets the color of a specific edge (there are two colors per edge)
     pub fn edge_color(&self, edge: Edge3x3x3, idx: usize) -> Color {
-        self.state[crate::tables::CUBE3_EDGE_INDICIES[edge as u8 as usize][idx]]
+        self.state[crate::tables::table3x3x3::CUBE3_EDGE_INDICIES[edge as u8 as usize][idx]]
     }
 
     /// Gets this cube state in piece format
@@ -887,27 +887,27 @@ impl Cube3x3x3Faces {
             ];
             // Find this corner piece and orientation
             for i in 0..8 {
-                if corner_colors[0] == crate::tables::CUBE_CORNER_COLORS[i][0]
-                    && corner_colors[1] == crate::tables::CUBE_CORNER_COLORS[i][1]
-                    && corner_colors[2] == crate::tables::CUBE_CORNER_COLORS[i][2]
+                if corner_colors[0] == crate::tables::corner::CUBE_CORNER_COLORS[i][0]
+                    && corner_colors[1] == crate::tables::corner::CUBE_CORNER_COLORS[i][1]
+                    && corner_colors[2] == crate::tables::corner::CUBE_CORNER_COLORS[i][2]
                 {
                     pieces.corners[corner_idx as usize] = CornerPiece {
                         piece: Corner::try_from(i as u8).unwrap(),
                         orientation: 0,
                     };
                     break;
-                } else if corner_colors[1] == crate::tables::CUBE_CORNER_COLORS[i][0]
-                    && corner_colors[2] == crate::tables::CUBE_CORNER_COLORS[i][1]
-                    && corner_colors[0] == crate::tables::CUBE_CORNER_COLORS[i][2]
+                } else if corner_colors[1] == crate::tables::corner::CUBE_CORNER_COLORS[i][0]
+                    && corner_colors[2] == crate::tables::corner::CUBE_CORNER_COLORS[i][1]
+                    && corner_colors[0] == crate::tables::corner::CUBE_CORNER_COLORS[i][2]
                 {
                     pieces.corners[corner_idx as usize] = CornerPiece {
                         piece: Corner::try_from(i as u8).unwrap(),
                         orientation: 1,
                     };
                     break;
-                } else if corner_colors[2] == crate::tables::CUBE_CORNER_COLORS[i][0]
-                    && corner_colors[0] == crate::tables::CUBE_CORNER_COLORS[i][1]
-                    && corner_colors[1] == crate::tables::CUBE_CORNER_COLORS[i][2]
+                } else if corner_colors[2] == crate::tables::corner::CUBE_CORNER_COLORS[i][0]
+                    && corner_colors[0] == crate::tables::corner::CUBE_CORNER_COLORS[i][1]
+                    && corner_colors[1] == crate::tables::corner::CUBE_CORNER_COLORS[i][2]
                 {
                     pieces.corners[corner_idx as usize] = CornerPiece {
                         piece: Corner::try_from(i as u8).unwrap(),
@@ -925,16 +925,16 @@ impl Cube3x3x3Faces {
             ];
             // Find this edge piece and orientation
             for i in 0..12 {
-                if edge_colors[0] == crate::tables::CUBE3_EDGE_COLORS[i][0]
-                    && edge_colors[1] == crate::tables::CUBE3_EDGE_COLORS[i][1]
+                if edge_colors[0] == crate::tables::table3x3x3::CUBE3_EDGE_COLORS[i][0]
+                    && edge_colors[1] == crate::tables::table3x3x3::CUBE3_EDGE_COLORS[i][1]
                 {
                     pieces.edges[edge_idx as usize] = EdgePiece3x3x3 {
                         piece: Edge3x3x3::try_from(i as u8).unwrap(),
                         orientation: 0,
                     };
                     break;
-                } else if edge_colors[1] == crate::tables::CUBE3_EDGE_COLORS[i][0]
-                    && edge_colors[0] == crate::tables::CUBE3_EDGE_COLORS[i][1]
+                } else if edge_colors[1] == crate::tables::table3x3x3::CUBE3_EDGE_COLORS[i][0]
+                    && edge_colors[0] == crate::tables::table3x3x3::CUBE3_EDGE_COLORS[i][1]
                 {
                     pieces.edges[edge_idx as usize] = EdgePiece3x3x3 {
                         piece: Edge3x3x3::try_from(i as u8).unwrap(),
@@ -949,16 +949,16 @@ impl Cube3x3x3Faces {
     }
 }
 
-impl FaceRotation3x3x3 for Cube3x3x3Faces {
-    fn rotate(&mut self, face: CubeFace, dir: RotationDirection) {
+impl FaceRotation for Cube3x3x3Faces {
+    fn rotate_wide(&mut self, face: CubeFace, dir: RotationDirection, _width: usize) {
         let face_idx = face as u8 as usize;
         let dir_idx = dir as u8 as usize;
 
         // Rotate colors on face itself
         let mut rotated_colors: [Color; 9] = [Color::White; 9];
         for i in 0..9 {
-            rotated_colors[i] =
-                self.state[Self::face_start(face) + crate::tables::CUBE3_FACE_ROTATION[dir_idx][i]];
+            rotated_colors[i] = self.state[Self::face_start(face)
+                + crate::tables::table3x3x3::CUBE3_FACE_ROTATION[dir_idx][i]];
         }
         for i in 0..9 {
             self.state[Self::face_start(face) + i] = rotated_colors[i];
@@ -968,21 +968,23 @@ impl FaceRotation3x3x3 for Cube3x3x3Faces {
         let mut adjacent_edge_colors: [Color; 4] = [Color::White; 4];
         let mut adjacent_corner_colors: [[Color; 2]; 4] = [[Color::White; 2]; 4];
         for i in 0..4 {
-            adjacent_edge_colors[i] = self.state[crate::tables::CUBE3_EDGE_ADJACENCY[face_idx][i]];
+            adjacent_edge_colors[i] =
+                self.state[crate::tables::table3x3x3::CUBE3_EDGE_ADJACENCY[face_idx][i]];
             adjacent_corner_colors[i][0] =
-                self.state[crate::tables::CUBE3_CORNER_ADJACENCY[face_idx][i][0]];
+                self.state[crate::tables::corner::CUBE3_CORNER_ADJACENCY[face_idx][i][0]];
             adjacent_corner_colors[i][1] =
-                self.state[crate::tables::CUBE3_CORNER_ADJACENCY[face_idx][i][1]];
+                self.state[crate::tables::corner::CUBE3_CORNER_ADJACENCY[face_idx][i][1]];
         }
 
         // Rotate colors on edges and corners
         for i in 0..4 {
-            let j = crate::tables::CUBE3_EDGE_ROTATION[dir_idx][i];
-            let k = crate::tables::CUBE_CORNER_ROTATION[dir_idx][i];
-            self.state[crate::tables::CUBE3_EDGE_ADJACENCY[face_idx][j]] = adjacent_edge_colors[i];
-            self.state[crate::tables::CUBE3_CORNER_ADJACENCY[face_idx][k][0]] =
+            let j = crate::tables::table3x3x3::CUBE3_EDGE_ROTATION[dir_idx][i];
+            let k = crate::tables::corner::CUBE_CORNER_ROTATION[dir_idx][i];
+            self.state[crate::tables::table3x3x3::CUBE3_EDGE_ADJACENCY[face_idx][j]] =
+                adjacent_edge_colors[i];
+            self.state[crate::tables::corner::CUBE3_CORNER_ADJACENCY[face_idx][k][0]] =
                 adjacent_corner_colors[i][0];
-            self.state[crate::tables::CUBE3_CORNER_ADJACENCY[face_idx][k][1]] =
+            self.state[crate::tables::corner::CUBE3_CORNER_ADJACENCY[face_idx][k][1]] =
                 adjacent_corner_colors[i][1];
         }
     }
@@ -1022,7 +1024,7 @@ impl Cube for Cube3x3x3Faces {
     }
 
     fn do_move(&mut self, mv: Move) {
-        rotation_move(self, mv);
+        self.rotate_counted(mv.face(), mv.rotation());
     }
 
     fn size(&self) -> usize {
@@ -1105,47 +1107,6 @@ impl std::fmt::Display for Cube3x3x3Faces {
             write!(f, "{}\n", s)?;
         }
         Ok(())
-    }
-}
-
-fn rotation_move<T: FaceRotation3x3x3>(cube: &mut T, mv: Move) {
-    match mv {
-        Move::U => cube.rotate(CubeFace::Top, RotationDirection::CW),
-        Move::Up => cube.rotate(CubeFace::Top, RotationDirection::CCW),
-        Move::U2 => {
-            cube.rotate(CubeFace::Top, RotationDirection::CW);
-            cube.rotate(CubeFace::Top, RotationDirection::CW);
-        }
-        Move::F => cube.rotate(CubeFace::Front, RotationDirection::CW),
-        Move::Fp => cube.rotate(CubeFace::Front, RotationDirection::CCW),
-        Move::F2 => {
-            cube.rotate(CubeFace::Front, RotationDirection::CW);
-            cube.rotate(CubeFace::Front, RotationDirection::CW);
-        }
-        Move::R => cube.rotate(CubeFace::Right, RotationDirection::CW),
-        Move::Rp => cube.rotate(CubeFace::Right, RotationDirection::CCW),
-        Move::R2 => {
-            cube.rotate(CubeFace::Right, RotationDirection::CW);
-            cube.rotate(CubeFace::Right, RotationDirection::CW);
-        }
-        Move::B => cube.rotate(CubeFace::Back, RotationDirection::CW),
-        Move::Bp => cube.rotate(CubeFace::Back, RotationDirection::CCW),
-        Move::B2 => {
-            cube.rotate(CubeFace::Back, RotationDirection::CW);
-            cube.rotate(CubeFace::Back, RotationDirection::CW);
-        }
-        Move::L => cube.rotate(CubeFace::Left, RotationDirection::CW),
-        Move::Lp => cube.rotate(CubeFace::Left, RotationDirection::CCW),
-        Move::L2 => {
-            cube.rotate(CubeFace::Left, RotationDirection::CW);
-            cube.rotate(CubeFace::Left, RotationDirection::CW);
-        }
-        Move::D => cube.rotate(CubeFace::Bottom, RotationDirection::CW),
-        Move::Dp => cube.rotate(CubeFace::Bottom, RotationDirection::CCW),
-        Move::D2 => {
-            cube.rotate(CubeFace::Bottom, RotationDirection::CW);
-            cube.rotate(CubeFace::Bottom, RotationDirection::CW);
-        }
     }
 }
 

@@ -1,6 +1,7 @@
-use crate::tables::{
-    CUBE3_EDGE_ADJACENCY, CUBE3_F2L_PAIRS, CUBE3_LAST_LAYER_EDGE, CUBE3_OLL_CASES, CUBE3_PLL_CASES,
+use crate::tables::analysis::{
+    CUBE3_F2L_PAIRS, CUBE3_LAST_LAYER_EDGE, CUBE3_OLL_CASES, CUBE3_PLL_CASES,
 };
+use crate::tables::table3x3x3::CUBE3_EDGE_ADJACENCY;
 use crate::{
     cube3x3x3::FaceRowOrColumn, AnalysisStepSummary, AnalysisSubstepTime, AnalysisSummary, Color,
     Cube, Cube3x3x3Faces, CubeFace, CubeWithSolution, InitialCubeState, Move, MoveSequence,
