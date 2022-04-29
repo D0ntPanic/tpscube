@@ -143,6 +143,24 @@ pub enum Move {
     D = 15,
     Dp = 16,
     D2 = 17,
+    Uw = 18,
+    Uwp = 19,
+    Uw2 = 20,
+    Fw = 21,
+    Fwp = 22,
+    Fw2 = 23,
+    Rw = 24,
+    Rwp = 25,
+    Rw2 = 26,
+    Bw = 27,
+    Bwp = 28,
+    Bw2 = 29,
+    Lw = 30,
+    Lwp = 31,
+    Lw2 = 32,
+    Dw = 33,
+    Dwp = 34,
+    Dw2 = 35,
 }
 
 #[derive(Clone, Debug)]
@@ -180,7 +198,7 @@ impl CornerOrientationMoveTable {
     pub fn get(idx: u16, mv: Move) -> u16 {
         let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
-            crate::tables::CUBE_CORNER_ORIENTATION_MOVE_TABLE[offset..offset + 2]
+            crate::tables::solve::CUBE_CORNER_ORIENTATION_MOVE_TABLE[offset..offset + 2]
                 .try_into()
                 .unwrap(),
         )
@@ -192,7 +210,7 @@ impl CornerPermutationMoveTable {
     pub fn get(idx: u16, mv: Move) -> u16 {
         let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
-            crate::tables::CUBE_CORNER_PERMUTATION_MOVE_TABLE[offset..offset + 2]
+            crate::tables::solve::CUBE_CORNER_PERMUTATION_MOVE_TABLE[offset..offset + 2]
                 .try_into()
                 .unwrap(),
         )
@@ -202,14 +220,14 @@ impl CornerPermutationMoveTable {
 #[cfg(not(feature = "no_solver"))]
 impl CornerOrientationPruneTable {
     pub fn get(idx: u16) -> usize {
-        crate::tables::CUBE_CORNER_ORIENTATION_PRUNE_TABLE[idx as usize] as usize
+        crate::tables::solve::CUBE_CORNER_ORIENTATION_PRUNE_TABLE[idx as usize] as usize
     }
 }
 
 #[cfg(not(feature = "no_solver"))]
 impl CornerPermutationPruneTable {
     pub fn get(idx: u16) -> usize {
-        crate::tables::CUBE_CORNER_PERMUTATION_PRUNE_TABLE[idx as usize] as usize
+        crate::tables::solve::CUBE_CORNER_PERMUTATION_PRUNE_TABLE[idx as usize] as usize
     }
 }
 
@@ -577,64 +595,131 @@ impl ToString for SolveType {
 }
 
 impl Move {
-    pub fn from_face_and_rotation(face: CubeFace, rotation: i32) -> Option<Self> {
+    pub fn from_face_and_rotation_wide(
+        face: CubeFace,
+        rotation: i32,
+        width: usize,
+    ) -> Option<Self> {
         let rotation = rotation % 4;
-        match face {
-            CubeFace::Top => match rotation {
-                -3 => Some(Move::U),
-                -2 => Some(Move::U2),
-                -1 => Some(Move::Up),
-                1 => Some(Move::U),
-                2 => Some(Move::U2),
-                3 => Some(Move::Up),
-                _ => None,
+        match width {
+            1 => match face {
+                CubeFace::Top => match rotation {
+                    -3 => Some(Move::U),
+                    -2 => Some(Move::U2),
+                    -1 => Some(Move::Up),
+                    1 => Some(Move::U),
+                    2 => Some(Move::U2),
+                    3 => Some(Move::Up),
+                    _ => None,
+                },
+                CubeFace::Front => match rotation {
+                    -3 => Some(Move::F),
+                    -2 => Some(Move::F2),
+                    -1 => Some(Move::Fp),
+                    1 => Some(Move::F),
+                    2 => Some(Move::F2),
+                    3 => Some(Move::Fp),
+                    _ => None,
+                },
+                CubeFace::Right => match rotation {
+                    -3 => Some(Move::R),
+                    -2 => Some(Move::R2),
+                    -1 => Some(Move::Rp),
+                    1 => Some(Move::R),
+                    2 => Some(Move::R2),
+                    3 => Some(Move::Rp),
+                    _ => None,
+                },
+                CubeFace::Back => match rotation {
+                    -3 => Some(Move::B),
+                    -2 => Some(Move::B2),
+                    -1 => Some(Move::Bp),
+                    1 => Some(Move::B),
+                    2 => Some(Move::B2),
+                    3 => Some(Move::Bp),
+                    _ => None,
+                },
+                CubeFace::Left => match rotation {
+                    -3 => Some(Move::L),
+                    -2 => Some(Move::L2),
+                    -1 => Some(Move::Lp),
+                    1 => Some(Move::L),
+                    2 => Some(Move::L2),
+                    3 => Some(Move::Lp),
+                    _ => None,
+                },
+                CubeFace::Bottom => match rotation {
+                    -3 => Some(Move::D),
+                    -2 => Some(Move::D2),
+                    -1 => Some(Move::Dp),
+                    1 => Some(Move::D),
+                    2 => Some(Move::D2),
+                    3 => Some(Move::Dp),
+                    _ => None,
+                },
             },
-            CubeFace::Front => match rotation {
-                -3 => Some(Move::F),
-                -2 => Some(Move::F2),
-                -1 => Some(Move::Fp),
-                1 => Some(Move::F),
-                2 => Some(Move::F2),
-                3 => Some(Move::Fp),
-                _ => None,
+            2 => match face {
+                CubeFace::Top => match rotation {
+                    -3 => Some(Move::Uw),
+                    -2 => Some(Move::Uw2),
+                    -1 => Some(Move::Uwp),
+                    1 => Some(Move::Uw),
+                    2 => Some(Move::Uw2),
+                    3 => Some(Move::Uwp),
+                    _ => None,
+                },
+                CubeFace::Front => match rotation {
+                    -3 => Some(Move::Fw),
+                    -2 => Some(Move::Fw2),
+                    -1 => Some(Move::Fwp),
+                    1 => Some(Move::Fw),
+                    2 => Some(Move::Fw2),
+                    3 => Some(Move::Fwp),
+                    _ => None,
+                },
+                CubeFace::Right => match rotation {
+                    -3 => Some(Move::Rw),
+                    -2 => Some(Move::Rw2),
+                    -1 => Some(Move::Rwp),
+                    1 => Some(Move::Rw),
+                    2 => Some(Move::Rw2),
+                    3 => Some(Move::Rwp),
+                    _ => None,
+                },
+                CubeFace::Back => match rotation {
+                    -3 => Some(Move::Bw),
+                    -2 => Some(Move::Bw2),
+                    -1 => Some(Move::Bwp),
+                    1 => Some(Move::Bw),
+                    2 => Some(Move::Bw2),
+                    3 => Some(Move::Bwp),
+                    _ => None,
+                },
+                CubeFace::Left => match rotation {
+                    -3 => Some(Move::Lw),
+                    -2 => Some(Move::Lw2),
+                    -1 => Some(Move::Lwp),
+                    1 => Some(Move::Lw),
+                    2 => Some(Move::Lw2),
+                    3 => Some(Move::Lwp),
+                    _ => None,
+                },
+                CubeFace::Bottom => match rotation {
+                    -3 => Some(Move::Dw),
+                    -2 => Some(Move::Dw2),
+                    -1 => Some(Move::Dwp),
+                    1 => Some(Move::Dw),
+                    2 => Some(Move::Dw2),
+                    3 => Some(Move::Dwp),
+                    _ => None,
+                },
             },
-            CubeFace::Right => match rotation {
-                -3 => Some(Move::R),
-                -2 => Some(Move::R2),
-                -1 => Some(Move::Rp),
-                1 => Some(Move::R),
-                2 => Some(Move::R2),
-                3 => Some(Move::Rp),
-                _ => None,
-            },
-            CubeFace::Back => match rotation {
-                -3 => Some(Move::B),
-                -2 => Some(Move::B2),
-                -1 => Some(Move::Bp),
-                1 => Some(Move::B),
-                2 => Some(Move::B2),
-                3 => Some(Move::Bp),
-                _ => None,
-            },
-            CubeFace::Left => match rotation {
-                -3 => Some(Move::L),
-                -2 => Some(Move::L2),
-                -1 => Some(Move::Lp),
-                1 => Some(Move::L),
-                2 => Some(Move::L2),
-                3 => Some(Move::Lp),
-                _ => None,
-            },
-            CubeFace::Bottom => match rotation {
-                -3 => Some(Move::D),
-                -2 => Some(Move::D2),
-                -1 => Some(Move::Dp),
-                1 => Some(Move::D),
-                2 => Some(Move::D2),
-                3 => Some(Move::Dp),
-                _ => None,
-            },
+            _ => None,
         }
+    }
+
+    pub fn from_face_and_rotation(face: CubeFace, rotation: i32) -> Option<Self> {
+        Self::from_face_and_rotation_wide(face, rotation, 1)
     }
 
     pub(crate) fn sourced_random_2x2x2<T: RandomSource>(rng: &mut T) -> Move {
@@ -643,6 +728,10 @@ impl Move {
 
     pub(crate) fn sourced_random_3x3x3<T: RandomSource>(rng: &mut T) -> Move {
         Move::try_from(rng.next(Self::count_3x3x3() as u32) as u8).unwrap()
+    }
+
+    pub(crate) fn sourced_random_4x4x4<T: RandomSource>(rng: &mut T) -> Move {
+        Move::try_from(rng.next(Self::count_4x4x4() as u32) as u8).unwrap()
     }
 
     /// Gets a randomly chosen move
@@ -655,6 +744,11 @@ impl Move {
         Self::sourced_random_3x3x3(&mut StandardRandomSource)
     }
 
+    /// Gets a randomly chosen move
+    pub fn random_4x4x4() -> Move {
+        Self::sourced_random_4x4x4(&mut StandardRandomSource)
+    }
+
     pub const fn count_2x2x2() -> usize {
         Move::D2 as u8 as usize + 1
     }
@@ -663,50 +757,102 @@ impl Move {
         Move::D2 as u8 as usize + 1
     }
 
+    pub const fn count_4x4x4() -> usize {
+        Move::Dw2 as u8 as usize + 1
+    }
+
     pub const fn face(&self) -> CubeFace {
         match self {
-            Move::U => CubeFace::Top,
-            Move::Up => CubeFace::Top,
-            Move::U2 => CubeFace::Top,
-            Move::F => CubeFace::Front,
-            Move::Fp => CubeFace::Front,
-            Move::F2 => CubeFace::Front,
-            Move::R => CubeFace::Right,
-            Move::Rp => CubeFace::Right,
-            Move::R2 => CubeFace::Right,
-            Move::B => CubeFace::Back,
-            Move::Bp => CubeFace::Back,
-            Move::B2 => CubeFace::Back,
-            Move::L => CubeFace::Left,
-            Move::Lp => CubeFace::Left,
-            Move::L2 => CubeFace::Left,
-            Move::D => CubeFace::Bottom,
-            Move::Dp => CubeFace::Bottom,
-            Move::D2 => CubeFace::Bottom,
+            Move::U | Move::Up | Move::U2 | Move::Uw | Move::Uwp | Move::Uw2 => CubeFace::Top,
+            Move::F | Move::Fp | Move::F2 | Move::Fw | Move::Fwp | Move::Fw2 => CubeFace::Front,
+            Move::R | Move::Rp | Move::R2 | Move::Rw | Move::Rwp | Move::Rw2 => CubeFace::Right,
+            Move::B | Move::Bp | Move::B2 | Move::Bw | Move::Bwp | Move::Bw2 => CubeFace::Back,
+            Move::L | Move::Lp | Move::L2 | Move::Lw | Move::Lwp | Move::Lw2 => CubeFace::Left,
+            Move::D | Move::Dp | Move::D2 | Move::Dw | Move::Dwp | Move::Dw2 => CubeFace::Bottom,
         }
     }
 
     /// Gets the face rotation amount in number of 90 degree clockwise rotations
     pub const fn rotation(&self) -> i32 {
         match self {
-            Move::U => 1,
-            Move::Up => -1,
-            Move::U2 => 2,
-            Move::F => 1,
-            Move::Fp => -1,
-            Move::F2 => 2,
-            Move::R => 1,
-            Move::Rp => -1,
-            Move::R2 => 2,
-            Move::B => 1,
-            Move::Bp => -1,
-            Move::B2 => 2,
-            Move::L => 1,
-            Move::Lp => -1,
-            Move::L2 => 2,
-            Move::D => 1,
-            Move::Dp => -1,
-            Move::D2 => 2,
+            Move::U
+            | Move::F
+            | Move::R
+            | Move::B
+            | Move::L
+            | Move::D
+            | Move::Uw
+            | Move::Fw
+            | Move::Rw
+            | Move::Bw
+            | Move::Lw
+            | Move::Dw => 1,
+            Move::Up
+            | Move::Fp
+            | Move::Rp
+            | Move::Bp
+            | Move::Lp
+            | Move::Dp
+            | Move::Uwp
+            | Move::Fwp
+            | Move::Rwp
+            | Move::Bwp
+            | Move::Lwp
+            | Move::Dwp => -1,
+            Move::U2
+            | Move::F2
+            | Move::R2
+            | Move::B2
+            | Move::L2
+            | Move::D2
+            | Move::Uw2
+            | Move::Fw2
+            | Move::Rw2
+            | Move::Bw2
+            | Move::Lw2
+            | Move::Dw2 => 2,
+        }
+    }
+
+    /// Gets the slice width
+    pub const fn width(&self) -> usize {
+        match self {
+            Move::U
+            | Move::F
+            | Move::R
+            | Move::B
+            | Move::L
+            | Move::D
+            | Move::Up
+            | Move::Fp
+            | Move::Rp
+            | Move::Bp
+            | Move::Lp
+            | Move::Dp
+            | Move::U2
+            | Move::F2
+            | Move::R2
+            | Move::B2
+            | Move::L2
+            | Move::D2 => 1,
+            Move::Uw
+            | Move::Fw
+            | Move::Rw
+            | Move::Bw
+            | Move::Lw
+            | Move::Dw
+            | Move::Uwp
+            | Move::Fwp
+            | Move::Rwp
+            | Move::Bwp
+            | Move::Lwp
+            | Move::Dwp
+            | Move::Uw2
+            | Move::Fw2
+            | Move::Rw2
+            | Move::Bw2
+            | Move::Lw2
+            | Move::Dw2 => 2,
         }
     }
 
@@ -730,6 +876,24 @@ impl Move {
             Move::D => Move::Dp,
             Move::Dp => Move::D,
             Move::D2 => Move::D2,
+            Move::Uw => Move::Uwp,
+            Move::Uwp => Move::Uw,
+            Move::Uw2 => Move::Uw2,
+            Move::Fw => Move::Fwp,
+            Move::Fwp => Move::Fw,
+            Move::Fw2 => Move::Fw2,
+            Move::Rw => Move::Rwp,
+            Move::Rwp => Move::Rw,
+            Move::Rw2 => Move::Rw2,
+            Move::Bw => Move::Bwp,
+            Move::Bwp => Move::Bw,
+            Move::Bw2 => Move::Bw2,
+            Move::Lw => Move::Lwp,
+            Move::Lwp => Move::Lw,
+            Move::Lw2 => Move::Lw2,
+            Move::Dw => Move::Dwp,
+            Move::Dwp => Move::Dw,
+            Move::Dw2 => Move::Dw2,
         }
     }
 
@@ -753,6 +917,24 @@ impl Move {
             "D" => Some(Move::D),
             "D'" => Some(Move::Dp),
             "D2" => Some(Move::D2),
+            "Uw" | "u" => Some(Move::Uw),
+            "Uw'" | "u'" => Some(Move::Uwp),
+            "Uw2" | "u2" => Some(Move::Uw2),
+            "Fw" | "f" => Some(Move::Fw),
+            "Fw'" | "f'" => Some(Move::Fwp),
+            "Fw2" | "f2" => Some(Move::Fw2),
+            "Rw" | "r" => Some(Move::Rw),
+            "Rw'" | "r'" => Some(Move::Rwp),
+            "Rw2" | "r2" => Some(Move::Rw2),
+            "Bw" | "b" => Some(Move::Bw),
+            "Bw'" | "b'" => Some(Move::Bwp),
+            "Bw2" | "b2" => Some(Move::Bw2),
+            "Lw" | "l" => Some(Move::Lw),
+            "Lw'" | "l'" => Some(Move::Lwp),
+            "Lw2" | "l2" => Some(Move::Lw2),
+            "Dw" | "d" => Some(Move::Dw),
+            "Dw'" | "d'" => Some(Move::Dwp),
+            "Dw2" | "d2" => Some(Move::Dw2),
             _ => None,
         }
     }
@@ -779,6 +961,24 @@ impl ToString for Move {
             Move::D => "D".into(),
             Move::Dp => "D'".into(),
             Move::D2 => "D2".into(),
+            Move::Uw => "Uw".into(),
+            Move::Uwp => "Uw'".into(),
+            Move::Uw2 => "Uw2".into(),
+            Move::Fw => "Fw".into(),
+            Move::Fwp => "Fw'".into(),
+            Move::Fw2 => "Fw2".into(),
+            Move::Rw => "Rw".into(),
+            Move::Rwp => "Rw'".into(),
+            Move::Rw2 => "Rw2".into(),
+            Move::Bw => "Bw".into(),
+            Move::Bwp => "Bw'".into(),
+            Move::Bw2 => "Bw2".into(),
+            Move::Lw => "Lw".into(),
+            Move::Lwp => "Lw'".into(),
+            Move::Lw2 => "Lw2".into(),
+            Move::Dw => "Dw".into(),
+            Move::Dwp => "Dw'".into(),
+            Move::Dw2 => "Dw2".into(),
         }
     }
 }
@@ -890,6 +1090,41 @@ pub trait Cube {
 
     fn reset(&mut self);
     fn dyn_clone(&self) -> Box<dyn Cube>;
+}
+
+/// Face rotation for cubes
+pub trait FaceRotation {
+    /// Rotate a face in a given direction with a slice width
+    fn rotate_wide(&mut self, face: CubeFace, dir: RotationDirection, width: usize);
+
+    /// Rotate a face in a given direction
+    fn rotate(&mut self, face: CubeFace, dir: RotationDirection) {
+        self.rotate_wide(face, dir, 1);
+    }
+
+    fn rotate_counted_wide(&mut self, face: CubeFace, dir: i32, width: usize) {
+        if dir < 0 {
+            for _ in 0..-dir {
+                self.rotate_wide(face, RotationDirection::CCW, width);
+            }
+        } else {
+            for _ in 0..dir {
+                self.rotate_wide(face, RotationDirection::CW, width);
+            }
+        }
+    }
+
+    fn rotate_counted(&mut self, face: CubeFace, dir: i32) {
+        if dir < 0 {
+            for _ in 0..-dir {
+                self.rotate(face, RotationDirection::CCW);
+            }
+        } else {
+            for _ in 0..dir {
+                self.rotate(face, RotationDirection::CW);
+            }
+        }
+    }
 }
 
 pub fn parse_move_string(string: &str) -> Result<Vec<Move>> {

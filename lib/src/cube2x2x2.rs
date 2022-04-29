@@ -1,5 +1,5 @@
 use crate::{
-    Color, Corner, CornerPiece, Cube, CubeFace, InitialCubeState, Move, RandomSource,
+    Color, Corner, CornerPiece, Cube, CubeFace, FaceRotation, InitialCubeState, Move, RandomSource,
     RotationDirection,
 };
 use std::collections::BTreeMap;
@@ -21,12 +21,6 @@ pub struct Cube2x2x2 {
 /// A 2x2x2 cube represented in face color format (easy to use, matches visuals).
 pub struct Cube2x2x2Faces {
     state: [Color; 6 * 4],
-}
-
-/// Face rotation for 2x2x2 cubes
-pub trait FaceRotation2x2x2 {
-    /// Rotate a face in a given direction
-    fn rotate(&mut self, face: CubeFace, dir: RotationDirection);
 }
 
 #[cfg(not(feature = "no_solver"))]
@@ -79,9 +73,9 @@ impl Solver {
     fn search(&mut self, cube: IndexCube, depth: usize) {
         // Need to go deeper. Iterate through the possible moves.
         let possible_moves = if self.moves.len() == 0 {
-            crate::tables::POSSIBLE_PHASE_1_MOVES
+            crate::tables::solve::CUBE2_POSSIBLE_MOVES
         } else {
-            crate::tables::POSSIBLE_PHASE_1_FOLLOWUP_MOVES
+            crate::tables::solve::CUBE2_POSSIBLE_FOLLOWUP_MOVES
                 [*self.moves.last().unwrap() as u8 as usize]
         };
 
@@ -189,8 +183,8 @@ impl Cube2x2x2 {
         for corner_idx in 0..8 {
             let piece = self.corners[corner_idx];
             for i in 0..3 {
-                let dest = crate::tables::CUBE2_CORNER_INDICIES[corner_idx][i];
-                let src = crate::tables::CUBE2_CORNER_INDICIES[piece.piece as u8 as usize]
+                let dest = crate::tables::corner::CUBE2_CORNER_INDICIES[corner_idx][i];
+                let src = crate::tables::corner::CUBE2_CORNER_INDICIES[piece.piece as u8 as usize]
                     [(i + 3 - piece.orientation as usize) % 3];
                 let face = Cube2x2x2Faces::face_for_idx(src);
                 faces.state[dest] = face.color();
@@ -201,8 +195,8 @@ impl Cube2x2x2 {
     }
 }
 
-impl FaceRotation2x2x2 for Cube2x2x2 {
-    fn rotate(&mut self, face: CubeFace, dir: RotationDirection) {
+impl FaceRotation for Cube2x2x2 {
+    fn rotate_wide(&mut self, face: CubeFace, dir: RotationDirection, _width: usize) {
         let face_idx = face as u8 as usize;
         let dir_idx = dir as u8 as usize;
 
@@ -210,9 +204,10 @@ impl FaceRotation2x2x2 for Cube2x2x2 {
         let old_corners = self.corners;
 
         // Apply corner movement using lookup table
-        for i in 0..8 {
-            let src = crate::tables::CUBE_CORNER_PIECE_ROTATION[dir_idx][face_idx][i];
-            self.corners[i] = CornerPiece {
+        for i in 0..4 {
+            let (dest, src) =
+                crate::tables::corner::CUBE_CORNER_PIECE_ROTATION[dir_idx][face_idx][i];
+            self.corners[dest as u8 as usize] = CornerPiece {
                 piece: old_corners[src.piece as u8 as usize].piece,
                 orientation: (old_corners[src.piece as u8 as usize].orientation + src.orientation)
                     % 3,
@@ -277,7 +272,7 @@ impl Cube for Cube2x2x2 {
     }
 
     fn do_move(&mut self, mv: Move) {
-        rotation_move(self, mv);
+        self.rotate_counted(mv.face(), mv.rotation());
     }
 
     fn size(&self) -> usize {
@@ -339,7 +334,7 @@ impl Cube2x2x2Faces {
 
     /// Gets the color of a specific corner (there are three colors per corner)
     pub fn corner_color(&self, corner: Corner, idx: usize) -> Color {
-        self.state[crate::tables::CUBE2_CORNER_INDICIES[corner as u8 as usize][idx]]
+        self.state[crate::tables::corner::CUBE2_CORNER_INDICIES[corner as u8 as usize][idx]]
     }
 
     /// Gets this cube state in piece format
@@ -354,27 +349,27 @@ impl Cube2x2x2Faces {
             ];
             // Find this corner piece and orientation
             for i in 0..8 {
-                if corner_colors[0] == crate::tables::CUBE_CORNER_COLORS[i][0]
-                    && corner_colors[1] == crate::tables::CUBE_CORNER_COLORS[i][1]
-                    && corner_colors[2] == crate::tables::CUBE_CORNER_COLORS[i][2]
+                if corner_colors[0] == crate::tables::corner::CUBE_CORNER_COLORS[i][0]
+                    && corner_colors[1] == crate::tables::corner::CUBE_CORNER_COLORS[i][1]
+                    && corner_colors[2] == crate::tables::corner::CUBE_CORNER_COLORS[i][2]
                 {
                     pieces.corners[corner_idx as usize] = CornerPiece {
                         piece: Corner::try_from(i as u8).unwrap(),
                         orientation: 0,
                     };
                     break;
-                } else if corner_colors[1] == crate::tables::CUBE_CORNER_COLORS[i][0]
-                    && corner_colors[2] == crate::tables::CUBE_CORNER_COLORS[i][1]
-                    && corner_colors[0] == crate::tables::CUBE_CORNER_COLORS[i][2]
+                } else if corner_colors[1] == crate::tables::corner::CUBE_CORNER_COLORS[i][0]
+                    && corner_colors[2] == crate::tables::corner::CUBE_CORNER_COLORS[i][1]
+                    && corner_colors[0] == crate::tables::corner::CUBE_CORNER_COLORS[i][2]
                 {
                     pieces.corners[corner_idx as usize] = CornerPiece {
                         piece: Corner::try_from(i as u8).unwrap(),
                         orientation: 1,
                     };
                     break;
-                } else if corner_colors[2] == crate::tables::CUBE_CORNER_COLORS[i][0]
-                    && corner_colors[0] == crate::tables::CUBE_CORNER_COLORS[i][1]
-                    && corner_colors[1] == crate::tables::CUBE_CORNER_COLORS[i][2]
+                } else if corner_colors[2] == crate::tables::corner::CUBE_CORNER_COLORS[i][0]
+                    && corner_colors[0] == crate::tables::corner::CUBE_CORNER_COLORS[i][1]
+                    && corner_colors[1] == crate::tables::corner::CUBE_CORNER_COLORS[i][2]
                 {
                     pieces.corners[corner_idx as usize] = CornerPiece {
                         piece: Corner::try_from(i as u8).unwrap(),
@@ -389,16 +384,16 @@ impl Cube2x2x2Faces {
     }
 }
 
-impl FaceRotation2x2x2 for Cube2x2x2Faces {
-    fn rotate(&mut self, face: CubeFace, dir: RotationDirection) {
+impl FaceRotation for Cube2x2x2Faces {
+    fn rotate_wide(&mut self, face: CubeFace, dir: RotationDirection, _width: usize) {
         let face_idx = face as u8 as usize;
         let dir_idx = dir as u8 as usize;
 
         // Rotate colors on face itself
         let mut rotated_colors: [Color; 9] = [Color::White; 9];
         for i in 0..4 {
-            rotated_colors[i] =
-                self.state[Self::face_start(face) + crate::tables::CUBE2_FACE_ROTATION[dir_idx][i]];
+            rotated_colors[i] = self.state[Self::face_start(face)
+                + crate::tables::table2x2x2::CUBE2_FACE_ROTATION[dir_idx][i]];
         }
         for i in 0..4 {
             self.state[Self::face_start(face) + i] = rotated_colors[i];
@@ -408,17 +403,17 @@ impl FaceRotation2x2x2 for Cube2x2x2Faces {
         let mut adjacent_corner_colors: [[Color; 2]; 4] = [[Color::White; 2]; 4];
         for i in 0..4 {
             adjacent_corner_colors[i][0] =
-                self.state[crate::tables::CUBE2_CORNER_ADJACENCY[face_idx][i][0]];
+                self.state[crate::tables::corner::CUBE2_CORNER_ADJACENCY[face_idx][i][0]];
             adjacent_corner_colors[i][1] =
-                self.state[crate::tables::CUBE2_CORNER_ADJACENCY[face_idx][i][1]];
+                self.state[crate::tables::corner::CUBE2_CORNER_ADJACENCY[face_idx][i][1]];
         }
 
         // Rotate colors on corners
         for i in 0..4 {
-            let j = crate::tables::CUBE_CORNER_ROTATION[dir_idx][i];
-            self.state[crate::tables::CUBE2_CORNER_ADJACENCY[face_idx][j][0]] =
+            let j = crate::tables::corner::CUBE_CORNER_ROTATION[dir_idx][i];
+            self.state[crate::tables::corner::CUBE2_CORNER_ADJACENCY[face_idx][j][0]] =
                 adjacent_corner_colors[i][0];
-            self.state[crate::tables::CUBE2_CORNER_ADJACENCY[face_idx][j][1]] =
+            self.state[crate::tables::corner::CUBE2_CORNER_ADJACENCY[face_idx][j][1]] =
                 adjacent_corner_colors[i][1];
         }
     }
@@ -458,7 +453,7 @@ impl Cube for Cube2x2x2Faces {
     }
 
     fn do_move(&mut self, mv: Move) {
-        rotation_move(self, mv);
+        self.rotate_counted(mv.face(), mv.rotation());
     }
 
     fn size(&self) -> usize {
@@ -541,47 +536,6 @@ impl std::fmt::Display for Cube2x2x2Faces {
             write!(f, "{}\n", s)?;
         }
         Ok(())
-    }
-}
-
-fn rotation_move<T: FaceRotation2x2x2>(cube: &mut T, mv: Move) {
-    match mv {
-        Move::U => cube.rotate(CubeFace::Top, RotationDirection::CW),
-        Move::Up => cube.rotate(CubeFace::Top, RotationDirection::CCW),
-        Move::U2 => {
-            cube.rotate(CubeFace::Top, RotationDirection::CW);
-            cube.rotate(CubeFace::Top, RotationDirection::CW);
-        }
-        Move::F => cube.rotate(CubeFace::Front, RotationDirection::CW),
-        Move::Fp => cube.rotate(CubeFace::Front, RotationDirection::CCW),
-        Move::F2 => {
-            cube.rotate(CubeFace::Front, RotationDirection::CW);
-            cube.rotate(CubeFace::Front, RotationDirection::CW);
-        }
-        Move::R => cube.rotate(CubeFace::Right, RotationDirection::CW),
-        Move::Rp => cube.rotate(CubeFace::Right, RotationDirection::CCW),
-        Move::R2 => {
-            cube.rotate(CubeFace::Right, RotationDirection::CW);
-            cube.rotate(CubeFace::Right, RotationDirection::CW);
-        }
-        Move::B => cube.rotate(CubeFace::Back, RotationDirection::CW),
-        Move::Bp => cube.rotate(CubeFace::Back, RotationDirection::CCW),
-        Move::B2 => {
-            cube.rotate(CubeFace::Back, RotationDirection::CW);
-            cube.rotate(CubeFace::Back, RotationDirection::CW);
-        }
-        Move::L => cube.rotate(CubeFace::Left, RotationDirection::CW),
-        Move::Lp => cube.rotate(CubeFace::Left, RotationDirection::CCW),
-        Move::L2 => {
-            cube.rotate(CubeFace::Left, RotationDirection::CW);
-            cube.rotate(CubeFace::Left, RotationDirection::CW);
-        }
-        Move::D => cube.rotate(CubeFace::Bottom, RotationDirection::CW),
-        Move::Dp => cube.rotate(CubeFace::Bottom, RotationDirection::CCW),
-        Move::D2 => {
-            cube.rotate(CubeFace::Bottom, RotationDirection::CW);
-            cube.rotate(CubeFace::Bottom, RotationDirection::CW);
-        }
     }
 }
 
