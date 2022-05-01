@@ -39,10 +39,12 @@ impl SolveTypeSelectWindow {
                     ui.section("Standard Cubes");
                     self.option(ui, selected, SolveType::Standard2x2x2, "2x2x2");
                     self.option(ui, selected, SolveType::Standard3x3x3, "3x3x3");
+                    self.option(ui, selected, SolveType::Standard4x4x4, "4x4x4");
                     self.option(ui, selected, SolveType::OneHanded3x3x3, "3x3x3 One Handed");
 
                     ui.section("Blindfolded");
                     self.option(ui, selected, SolveType::Blind3x3x3, "3x3x3 Blindfolded");
+                    self.option(ui, selected, SolveType::Blind4x4x4, "4x4x4 Blindfolded");
                 });
             });
     }

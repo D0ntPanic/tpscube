@@ -86,7 +86,7 @@ impl CubeRenderer {
             cube,
             target_cube,
             move_queue: Vec::new(),
-            max_queued_moves: 8,
+            max_queued_moves: if cube_size <= 3 { 8 } else { 0 },
             pitch: 30.0,
             yaw: -35.0,
             verts: Vec::new(),

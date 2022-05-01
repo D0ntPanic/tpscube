@@ -438,9 +438,9 @@ pub enum SolveType {
     OneHanded3x3x3 = 1,
     Blind3x3x3 = 2,
     Standard2x2x2 = 3,
-    /*Standard4x4x4 = 4,
+    Standard4x4x4 = 4,
     Blind4x4x4 = 5,
-    Standard5x5x5 = 6,
+    /*Standard5x5x5 = 6,
     Blind5x5x5 = 7,
     Standard6x6x6 = 8,
     Standard7x7x7 = 9,
@@ -458,9 +458,9 @@ impl SolveType {
             "3x3x3 OH" => Some(SolveType::OneHanded3x3x3),
             "3x3x3 Blind" => Some(SolveType::Blind3x3x3),
             "2x2x2" => Some(SolveType::Standard2x2x2),
-            /*"4x4x4" => Some(SolveType::Standard4x4x4),
+            "4x4x4" => Some(SolveType::Standard4x4x4),
             "4x4x4 Blind" => Some(SolveType::Blind4x4x4),
-            "5x5x5" => Some(SolveType::Standard5x5x5),
+            /*"5x5x5" => Some(SolveType::Standard5x5x5),
             "5x5x5 Blind" => Some(SolveType::Blind5x5x5),
             "6x6x6" => Some(SolveType::Standard6x6x6),
             "7x7x7" => Some(SolveType::Standard7x7x7),
@@ -481,6 +481,14 @@ impl SolveType {
             _ => false,
         }
     }
+
+    pub fn is_4x4x4(&self) -> bool {
+        match self {
+            SolveType::Standard4x4x4 => true,
+            SolveType::Blind4x4x4 => true,
+            _ => false,
+        }
+    }
 }
 
 impl ToString for SolveType {
@@ -490,9 +498,9 @@ impl ToString for SolveType {
             SolveType::OneHanded3x3x3 => "3x3x3 OH".into(),
             SolveType::Blind3x3x3 => "3x3x3 Blind".into(),
             SolveType::Standard2x2x2 => "2x2x2".into(),
-            /*SolveType::Standard4x4x4 => "4x4x4".into(),
+            SolveType::Standard4x4x4 => "4x4x4".into(),
             SolveType::Blind4x4x4 => "4x4x4 Blind".into(),
-            SolveType::Standard5x5x5 => "5x5x5".into(),
+            /*SolveType::Standard5x5x5 => "5x5x5".into(),
             SolveType::Blind5x5x5 => "5x5x5 Blind".into(),
             SolveType::Standard6x6x6 => "6x6x6".into(),
             SolveType::Standard7x7x7 => "7x7x7".into(),
