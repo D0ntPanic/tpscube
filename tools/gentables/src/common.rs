@@ -35,20 +35,20 @@ pub struct PruneTable2D<const A: usize, const B: usize> {
 }
 
 impl<const N: usize, const M: usize> MoveTable<N, M> {
-    pub fn get(&self, idx: u16, mv: Move) -> Option<u16> {
-        self.contents[idx as usize][mv as usize]
+    pub fn get(&self, idx: usize, mv: Move) -> Option<u16> {
+        self.contents[idx][mv as usize]
     }
 
-    pub fn set(&mut self, idx: u16, mv: Move, value: u16) {
-        self.contents[idx as usize][mv as usize] = Some(value);
+    pub fn set(&mut self, idx: usize, mv: Move, value: usize) {
+        self.contents[idx][mv as usize] = Some(value as u16);
     }
 
-    pub fn update(&mut self, old: u16, mv: Move, new: u16) -> bool {
+    pub fn update(&mut self, old: usize, mv: Move, new: usize) -> bool {
         if self.get(old, mv).is_none() {
             self.set(old, mv, new);
             true
         } else {
-            assert_eq!(self.get(old, mv), Some(new));
+            assert_eq!(self.get(old, mv), Some(new as u16));
             false
         }
     }
@@ -109,15 +109,15 @@ impl<const N: usize, const M: usize> Default for MoveTable<N, M> {
 }
 
 impl<const N: usize> PruneTable1D<N> {
-    pub fn get(&self, idx: u16) -> Option<u8> {
-        self.contents[idx as usize]
+    pub fn get(&self, idx: usize) -> Option<u8> {
+        self.contents[idx]
     }
 
-    pub fn set(&mut self, idx: u16, value: u8) {
-        self.contents[idx as usize] = Some(value);
+    pub fn set(&mut self, idx: usize, value: u8) {
+        self.contents[idx] = Some(value);
     }
 
-    pub fn update(&mut self, old: u16, new: u16) -> bool {
+    pub fn update(&mut self, old: usize, new: usize) -> bool {
         let value = self.get(old).unwrap() + 1;
         if self.get(new).is_none() || Some(value) < self.get(new) {
             self.set(new, value);
@@ -127,7 +127,7 @@ impl<const N: usize> PruneTable1D<N> {
         }
     }
 
-    pub fn update_as_solution(&mut self, new: u16) -> bool {
+    pub fn update_as_solution(&mut self, new: usize) -> bool {
         if self.get(new).is_none() || Some(0) < self.get(new) {
             self.set(new, 0);
             true
@@ -171,15 +171,15 @@ impl<const N: usize> Default for PruneTable1D<N> {
 }
 
 impl<const A: usize, const B: usize> PruneTable2D<A, B> {
-    pub fn get(&self, a: u16, b: u16) -> Option<u8> {
-        self.contents[a as usize][b as usize]
+    pub fn get(&self, a: usize, b: usize) -> Option<u8> {
+        self.contents[a][b]
     }
 
-    pub fn set(&mut self, a: u16, b: u16, value: u8) {
-        self.contents[a as usize][b as usize] = Some(value);
+    pub fn set(&mut self, a: usize, b: usize, value: u8) {
+        self.contents[a][b] = Some(value);
     }
 
-    pub fn update(&mut self, old_a: u16, old_b: u16, new_a: u16, new_b: u16) -> bool {
+    pub fn update(&mut self, old_a: usize, old_b: usize, new_a: usize, new_b: usize) -> bool {
         let value = self.get(old_a, old_b).unwrap() + 1;
         if self.get(new_a, new_b).is_none() || Some(value) < self.get(new_a, new_b) {
             self.set(new_a, new_b, value);
@@ -189,7 +189,7 @@ impl<const A: usize, const B: usize> PruneTable2D<A, B> {
         }
     }
 
-    pub fn update_as_solution(&mut self, new_a: u16, new_b: u16) -> bool {
+    pub fn update_as_solution(&mut self, new_a: usize, new_b: usize) -> bool {
         if self.get(new_a, new_b).is_none() || Some(0) < self.get(new_a, new_b) {
             self.set(new_a, new_b, 0);
             true

@@ -59,17 +59,17 @@ impl TableGenerator {
                 let mv = Move::try_from(move_idx as u8).unwrap();
 
                 // Get old indicies so that we know where we came from
-                let old_corner_orientation = cube.corner_orientation_index();
-                let old_edge_orientation = cube.edge_orientation_index();
-                let old_equatorial_slice = cube.equatorial_edge_slice_index();
+                let old_corner_orientation = cube.corner_orientation_index() as usize;
+                let old_edge_orientation = cube.edge_orientation_index() as usize;
+                let old_equatorial_slice = cube.equatorial_edge_slice_index() as usize;
 
                 // Perform the move
                 cube.do_move(mv);
 
                 // Get new indicies for this state
-                let new_corner_orientation = cube.corner_orientation_index();
-                let new_edge_orientation = cube.edge_orientation_index();
-                let new_equatorial_slice = cube.equatorial_edge_slice_index();
+                let new_corner_orientation = cube.corner_orientation_index() as usize;
+                let new_edge_orientation = cube.edge_orientation_index() as usize;
+                let new_equatorial_slice = cube.equatorial_edge_slice_index() as usize;
 
                 // Update move tables
                 let mut has_new_info = self.edge_orientation_move_table.update(
@@ -136,19 +136,19 @@ impl TableGenerator {
                 }
 
                 // Get old indicies so that we know where we came from
-                let old_corner_permutation = cube.corner_permutation_index();
-                let old_edge_permutation = cube.phase_2_edge_permutation_index();
+                let old_corner_permutation = cube.corner_permutation_index() as usize;
+                let old_edge_permutation = cube.phase_2_edge_permutation_index() as usize;
                 let old_equatorial_edge_permutation =
-                    cube.phase_2_equatorial_edge_permutation_index();
+                    cube.phase_2_equatorial_edge_permutation_index() as usize;
 
                 // Perform the move
                 cube.do_move(mv);
 
                 // Get new indicies for this state
-                let new_corner_permutation = cube.corner_permutation_index();
-                let new_edge_permutation = cube.phase_2_edge_permutation_index();
+                let new_corner_permutation = cube.corner_permutation_index() as usize;
+                let new_edge_permutation = cube.phase_2_edge_permutation_index() as usize;
                 let new_equatorial_edge_permutation =
-                    cube.phase_2_equatorial_edge_permutation_index();
+                    cube.phase_2_equatorial_edge_permutation_index() as usize;
 
                 // Update move tables
                 let mut has_new_info = self.phase_2_edge_permutation_move_table.update(

@@ -52,6 +52,10 @@ pub(crate) const CUBE4_PHASE_2_CENTERS_PRUNE_TABLE: &'static [u8] =
     include_bytes!("4x4x4_phase_2_centers_prune_table.bin");
 pub(crate) const CUBE4_PHASE_3_CENTERS_PRUNE_TABLE: &'static [u8] =
     include_bytes!("4x4x4_phase_3_centers_prune_table.bin");
+pub(crate) const CUBE4_PHASE_3_LOW_EDGE_PAIR_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("4x4x4_phase_3_low_edge_pair_prune_table.bin");
+pub(crate) const CUBE4_PHASE_3_HIGH_EDGE_PAIR_PRUNE_TABLE: &'static [u8] =
+    include_bytes!("4x4x4_phase_3_high_edge_pair_prune_table.bin");
 pub(crate) const CUBE4_PHASE_4_CENTERS_PRUNE_TABLE: &'static [u8] =
     include_bytes!("4x4x4_phase_4_centers_prune_table.bin");
 pub(crate) const CUBE4_PHASE_4_EDGE_PAIR_PRUNE_TABLE: &'static [u8] =
