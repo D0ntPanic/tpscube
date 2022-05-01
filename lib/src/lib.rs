@@ -559,4 +559,44 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn solve_4x4x4() {
+        let mut rng = SimpleSeededRandomSource::new();
+        for _ in 0..10 {
+            let mut cube = Cube4x4x4::sourced_random(&mut rng);
+            let solution = cube.solve().unwrap();
+            let initial = cube.clone();
+            for mv in &solution {
+                cube.do_move(*mv);
+            }
+            assert!(
+                cube.is_solved(),
+                "cube solution invalid\n\
+                Initial state:\n{}\
+                Solution:\n{:?}\
+                Final state:\n{}",
+                initial,
+                solution,
+                cube
+            );
+        }
+
+        for _ in 0..10 {
+            let mut cube = Cube4x4x4::sourced_random(&mut rng);
+            let solution = cube.solve_fast().unwrap();
+            let initial = cube.clone();
+            cube.do_moves(&solution);
+            assert!(
+                cube.is_solved(),
+                "cube solution invalid\n\
+                Initial state:\n{}\
+                Solution:\n{:?}\
+                Final state:\n{}",
+                initial,
+                solution,
+                cube
+            );
+        }
+    }
 }

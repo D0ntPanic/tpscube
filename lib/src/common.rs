@@ -53,6 +53,24 @@ pub(crate) struct CornerOrientationPruneTable;
 #[cfg(not(feature = "no_solver"))]
 pub(crate) struct CornerPermutationPruneTable;
 
+pub(crate) const fn n_choose_k(n: usize, k: usize) -> usize {
+    if n < k {
+        return 0;
+    }
+    let k = if k > n / 2 { n - k } else { k };
+
+    let mut result = 1;
+    let mut denom = 1;
+    let mut i = n;
+    while i > n - k {
+        result *= i;
+        result /= denom;
+        denom += 1;
+        i -= 1;
+    }
+    result
+}
+
 impl Color {
     pub fn face(&self) -> CubeFace {
         match self {
@@ -196,7 +214,7 @@ impl Solve {
 #[cfg(not(feature = "no_solver"))]
 impl CornerOrientationMoveTable {
     pub fn get(idx: u16, mv: Move) -> u16 {
-        let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
+        let offset = idx as usize * Move::count_4x4x4() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
             crate::tables::solve::CUBE_CORNER_ORIENTATION_MOVE_TABLE[offset..offset + 2]
                 .try_into()
@@ -208,7 +226,7 @@ impl CornerOrientationMoveTable {
 #[cfg(not(feature = "no_solver"))]
 impl CornerPermutationMoveTable {
     pub fn get(idx: u16, mv: Move) -> u16 {
-        let offset = idx as usize * Move::count_3x3x3() * 2 + mv as u8 as usize * 2;
+        let offset = idx as usize * Move::count_4x4x4() * 2 + mv as u8 as usize * 2;
         u16::from_le_bytes(
             crate::tables::solve::CUBE_CORNER_PERMUTATION_MOVE_TABLE[offset..offset + 2]
                 .try_into()

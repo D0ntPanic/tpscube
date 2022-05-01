@@ -87,7 +87,8 @@ impl<const N: usize, const M: usize> MoveTable<N, M> {
         let mut out = BufWriter::new(File::create(Path::new(name)).unwrap());
         for i in self.as_ref() {
             for j in i {
-                out.write(&(j.unwrap_or(0) as u16).to_le_bytes()).unwrap();
+                out.write(&(j.unwrap_or(0xffff) as u16).to_le_bytes())
+                    .unwrap();
             }
         }
     }
@@ -126,6 +127,15 @@ impl<const N: usize> PruneTable1D<N> {
         }
     }
 
+    pub fn update_as_solution(&mut self, new: u16) -> bool {
+        if self.get(new).is_none() || Some(0) < self.get(new) {
+            self.set(new, 0);
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn progress(&self) -> Progress {
         let mut filled = 0;
         let mut total = 0;
@@ -141,7 +151,7 @@ impl<const N: usize> PruneTable1D<N> {
     pub fn write(&self, name: &str) {
         let mut out = BufWriter::new(File::create(Path::new(name)).unwrap());
         for i in self.as_ref() {
-            out.write(&[i.unwrap() as u8]).unwrap();
+            out.write(&[i.unwrap_or(0xff) as u8]).unwrap();
         }
     }
 }
@@ -179,6 +189,15 @@ impl<const A: usize, const B: usize> PruneTable2D<A, B> {
         }
     }
 
+    pub fn update_as_solution(&mut self, new_a: u16, new_b: u16) -> bool {
+        if self.get(new_a, new_b).is_none() || Some(0) < self.get(new_a, new_b) {
+            self.set(new_a, new_b, 0);
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn progress(&self) -> Progress {
         let mut filled = 0;
         let mut total = 0;
@@ -197,7 +216,7 @@ impl<const A: usize, const B: usize> PruneTable2D<A, B> {
         let mut out = BufWriter::new(File::create(Path::new(name)).unwrap());
         for i in self.as_ref() {
             for j in i {
-                out.write(&[j.unwrap() as u8]).unwrap();
+                out.write(&[j.unwrap_or(0xff) as u8]).unwrap();
             }
         }
     }

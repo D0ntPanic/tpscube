@@ -102,7 +102,7 @@ impl Solver {
                 continue;
             }
 
-            // Proceed further into phase 1
+            // Proceed further into search
             self.moves.push(*mv);
             self.search(new_cube, depth - 1);
             self.moves.pop();
