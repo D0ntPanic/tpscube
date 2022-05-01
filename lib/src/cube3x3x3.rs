@@ -194,24 +194,6 @@ impl Phase2EdgePermutationPruneTable {
     }
 }
 
-const fn n_choose_k(n: usize, k: usize) -> usize {
-    if n < k {
-        return 0;
-    }
-    let k = if k > n / 2 { n - k } else { k };
-
-    let mut result = 1;
-    let mut denom = 1;
-    let mut i = n;
-    while i > n - k {
-        result *= i;
-        result /= denom;
-        denom += 1;
-        i -= 1;
-    }
-    result
-}
-
 #[cfg(not(feature = "no_solver"))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct Phase1IndexCube {
@@ -497,12 +479,17 @@ impl Solver {
 }
 
 impl Cube3x3x3 {
-    pub const CORNER_ORIENTATION_INDEX_COUNT: usize = 2187; // 3**7
-    pub const CORNER_PERMUTATION_INDEX_COUNT: usize = 40320; // 8!
-    pub const EDGE_ORIENTATION_INDEX_COUNT: usize = 2048; // 2**11
-    pub const PHASE_2_EDGE_PERMUTATION_INDEX_COUNT: usize = 40320; // 8!
-    pub const EDGE_SLICE_INDEX_COUNT: usize = n_choose_k(12, 4);
-    pub const PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT: usize = 24; // 4!
+    pub const CORNER_ORIENTATION_INDEX_COUNT: usize =
+        crate::tables::CUBE_CORNER_ORIENTATION_INDEX_COUNT;
+    pub const CORNER_PERMUTATION_INDEX_COUNT: usize =
+        crate::tables::CUBE_CORNER_PERMUTATION_INDEX_COUNT;
+    pub const EDGE_ORIENTATION_INDEX_COUNT: usize =
+        crate::tables::CUBE3_EDGE_ORIENTATION_INDEX_COUNT;
+    pub const PHASE_2_EDGE_PERMUTATION_INDEX_COUNT: usize =
+        crate::tables::CUBE3_PHASE_2_EDGE_PERMUTATION_INDEX_COUNT;
+    pub const EDGE_SLICE_INDEX_COUNT: usize = crate::tables::CUBE3_EDGE_SLICE_INDEX_COUNT;
+    pub const PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT: usize =
+        crate::tables::CUBE3_PHASE_2_EQUATORIAL_EDGE_PERMUTATION_INDEX_COUNT;
 
     const MAX_PHASE_1_MOVES: usize = 12;
     const MAX_PHASE_2_MOVES: usize = 18;
@@ -609,11 +596,11 @@ impl Cube3x3x3 {
             }
         }
         // Compute an index using the combinatorial number system. This will be an integer
-        // between zero (solved) and NChooseK(12, 4).
-        (n_choose_k(edge_piece_pos[0], 1)
-            + n_choose_k(edge_piece_pos[1], 2)
-            + n_choose_k(edge_piece_pos[2], 3)
-            + n_choose_k(edge_piece_pos[3], 4)) as u16
+        // between zero (solved) and n_choose_k(12, 4).
+        (crate::common::n_choose_k(edge_piece_pos[0], 1)
+            + crate::common::n_choose_k(edge_piece_pos[1], 2)
+            + crate::common::n_choose_k(edge_piece_pos[2], 3)
+            + crate::common::n_choose_k(edge_piece_pos[3], 4)) as u16
     }
 
     /// This index is only valid for phase 2 (equatorial edge pieces are already in the slice
