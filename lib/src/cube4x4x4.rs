@@ -1619,18 +1619,11 @@ impl InitialCubeState for Cube4x4x4 {
     fn sourced_random<T: RandomSource>(rng: &mut T) -> Self {
         let mut cube = Self::new();
 
-        for _ in 0..400 {
-            cube.do_move(Move::try_from(rng.next(Move::count_4x4x4() as u32) as u8).unwrap());
-        }
-
-        // FIXME: Implement the below correctly
         // Randomize the corner pieces
-        /*        for i in 0..7 {
+        for i in 0..7 {
             let n = rng.next(8) as usize;
             if i != n {
-                // Must swap two corners at a time to avoid parity violation
                 cube.corners.swap(i, n);
-                cube.corners.swap(6, 7);
             }
         }
 
@@ -1638,9 +1631,7 @@ impl InitialCubeState for Cube4x4x4 {
         for i in 0..23 {
             let n = rng.next(24) as usize;
             if i != n {
-                // Must swap two edges at a time to avoid parity violation
                 cube.edges.swap(i, n);
-                cube.edges.swap(22, 23);
             }
         }
 
@@ -1648,9 +1639,7 @@ impl InitialCubeState for Cube4x4x4 {
         for i in 0..23 {
             let n = rng.next(24) as usize;
             if i != n {
-                // Must swap two edges at a time to avoid parity violation
                 cube.centers.swap(i, n);
-                cube.centers.swap(22, 23);
             }
         }
 
@@ -1661,18 +1650,13 @@ impl InitialCubeState for Cube4x4x4 {
             corner_orientation_sum += cube.corners[i].orientation;
         }
 
-        // Randomize the edge orientations
-        let mut edge_orientation_sum = 0;
-        for i in 0..23 {
-            cube.edges[i].orientation = rng.next(2) as u8;
-            edge_orientation_sum += cube.edges[i].orientation;
+        // Compute the edge orientations
+        for i in 0..24 {
+            cube.edges[i].orientation = (cube.edges[i].piece as u8 & 1) ^ (i as u8 & 1);
         }
 
         // Make sure all corner orientations add up to a multiple of 3 (otherwise it is not solvable)
         cube.corners[7].orientation = (3 - (corner_orientation_sum % 3)) % 3;
-
-        // Make sure all edge orientations add up to a multiple of 2 (otherwise it is not solvable)
-        cube.edges[23].orientation = (2 - (edge_orientation_sum % 2)) % 2;*/
 
         cube
     }
