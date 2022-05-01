@@ -89,6 +89,10 @@ struct Phase2CentersPruneTable;
 #[cfg(not(feature = "no_solver"))]
 struct Phase3CentersPruneTable;
 #[cfg(not(feature = "no_solver"))]
+struct Phase3LowEdgePairPruneTable;
+#[cfg(not(feature = "no_solver"))]
+struct Phase3HighEdgePairPruneTable;
+#[cfg(not(feature = "no_solver"))]
 struct Phase4CentersPruneTable;
 #[cfg(not(feature = "no_solver"))]
 struct Phase4EdgePairPruneTable;
@@ -210,6 +214,20 @@ impl Phase3CentersPruneTable {
 }
 
 #[cfg(not(feature = "no_solver"))]
+impl Phase3LowEdgePairPruneTable {
+    pub fn get(idx: u32) -> usize {
+        crate::tables::solve::CUBE4_PHASE_3_LOW_EDGE_PAIR_PRUNE_TABLE[idx as usize] as usize
+    }
+}
+
+#[cfg(not(feature = "no_solver"))]
+impl Phase3HighEdgePairPruneTable {
+    pub fn get(idx: u32) -> usize {
+        crate::tables::solve::CUBE4_PHASE_3_HIGH_EDGE_PAIR_PRUNE_TABLE[idx as usize] as usize
+    }
+}
+
+#[cfg(not(feature = "no_solver"))]
 impl Phase4CentersPruneTable {
     pub fn get(idx: u16) -> usize {
         crate::tables::solve::CUBE4_PHASE_4_CENTERS_PRUNE_TABLE[idx as usize] as usize
@@ -255,13 +273,11 @@ impl Phase1IndexCube {
     }
 }
 
-#[cfg(not(feature = "no_solver"))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct EdgePieces {
     edges: [u8; 24],
 }
 
-#[cfg(not(feature = "no_solver"))]
 impl EdgePieces {
     fn new(pieces: &Cube4x4x4) -> Self {
         let mut edges = [0; 24];
@@ -273,6 +289,7 @@ impl EdgePieces {
         Self { edges }
     }
 
+    #[cfg(not(feature = "no_solver"))]
     fn do_move(&self, mv: Move) -> Self {
         // Determine face, direction, and width of the move
         let face_idx = mv.face() as u8 as usize;
@@ -319,6 +336,7 @@ impl EdgePieces {
         Self { edges: new_edges }
     }
 
+    #[cfg(not(feature = "no_solver"))]
     fn edges_separated(&self) -> bool {
         // Edges are separated if the edge pieces in the even positions do not share any
         // edge pairs.
@@ -332,6 +350,7 @@ impl EdgePieces {
         true
     }
 
+    #[cfg(not(feature = "no_solver"))]
     fn oll_parity(&self) -> bool {
         // OLL parity exists if there are an odd number of edges flipped (an edge is flipped
         // if the lower bit of the edge piece index does not match the lower bit of the
@@ -343,6 +362,7 @@ impl EdgePieces {
         (flips & 1) != 0
     }
 
+    #[cfg(not(feature = "no_solver"))]
     fn edge_permutation_parity(&self) -> bool {
         // Permutation parity is defined using the number of piece swaps required to arrive
         // at a state with solved edges
@@ -371,6 +391,48 @@ impl EdgePieces {
                 == self.edges[Edge4x4x4::LBU as u8 as usize] / 2
             && self.edges[Edge4x4x4::RBU as u8 as usize] / 2
                 == self.edges[Edge4x4x4::RBD as u8 as usize] / 2
+    }
+
+    fn phase_3_edge_pair_index(&self) -> (u32, u32) {
+        let mut edge_pair_index: [u8; 12] = [0; 12];
+        let mut odd_edges_from: [u8; 12] = [0; 12];
+        for i in 0..12 {
+            odd_edges_from[self.edges[i * 2 + 1] as usize / 2] = i as u8;
+        }
+        for i in 0..12 {
+            edge_pair_index[i] = odd_edges_from[self.edges[i * 2] as usize / 2];
+        }
+
+        let mut a = 0;
+        for i in 0..6 {
+            // Get index in set of remaining options by checking how many of the entries
+            // are greater than this one (which is the index in the sorted list of
+            // remaining options)
+            let mut cur = edge_pair_index[i] as u32;
+            for j in 0..i {
+                if (edge_pair_index[i] as u8) > (edge_pair_index[j] as u8) {
+                    cur -= 1;
+                }
+            }
+            a += cur * ((crate::common::factorial(11 - i) / crate::common::factorial(6)) as u32);
+        }
+
+        let mut b = 0;
+        for i in 6..12 {
+            // Get index in set of remaining options by checking how many of the entries
+            // are greater than this one (which is the index in the sorted list of
+            // remaining options)
+            let mut cur = edge_pair_index[i] as u32;
+            for j in 6..i {
+                if (edge_pair_index[i] as u8) > (edge_pair_index[j] as u8) {
+                    cur -= 1;
+                }
+            }
+            b +=
+                cur * ((crate::common::factorial(11 - i + 6) / crate::common::factorial(6)) as u32);
+        }
+
+        (a, b)
     }
 }
 
@@ -632,6 +694,14 @@ impl Solver {
             // Check prune tables to see if a solution to this phase is impossible within the
             // given search depth
             if center_prune >= depth {
+                continue;
+            }
+
+            let (low_idx, high_idx) = new_cube.edges.phase_3_edge_pair_index();
+            if Phase3LowEdgePairPruneTable::get(low_idx) >= depth {
+                continue;
+            }
+            if Phase3HighEdgePairPruneTable::get(high_idx) >= depth {
                 continue;
             }
 
@@ -928,6 +998,8 @@ impl Cube4x4x4 {
         crate::tables::CUBE4_PHASE_3_RED_ORANGE_CENTERS_INDEX_COUNT;
     pub const PHASE_3_GREEN_BLUE_CENTERS_INDEX_COUNT: usize =
         crate::tables::CUBE4_PHASE_3_GREEN_BLUE_CENTERS_INDEX_COUNT;
+    pub const PHASE_3_EDGE_PAIR_INDEX_COUNT: usize =
+        crate::tables::CUBE4_PHASE_3_EDGE_PAIR_INDEX_COUNT;
     pub const PHASE_4_RED_ORANGE_CENTERS_INDEX_COUNT: usize =
         crate::tables::CUBE4_PHASE_4_RED_ORANGE_CENTERS_INDEX_COUNT;
     pub const PHASE_4_GREEN_BLUE_CENTERS_INDEX_COUNT: usize =
@@ -1181,6 +1253,23 @@ impl Cube4x4x4 {
             + crate::common::n_choose_k(center_piece_pos[1], 2)
             + crate::common::n_choose_k(center_piece_pos[2], 3)
             + crate::common::n_choose_k(center_piece_pos[3], 4)) as u16
+    }
+
+    /// Index for the edge pairing is the representation of the state in the
+    /// factorial number system (each digit in the number decreases in base, with the
+    /// digits representing the index of the choice in the remaining possible choices).
+    /// This is the phase 3 edge pairing index, which includes all edges. This is too
+    /// large a space for a single precomputed table, so it is divided into two pruning
+    /// tables to approximate the result with a much smaller space requirement.
+    pub fn phase_3_edge_pair_index(&self) -> (u32, u32) {
+        let edges = EdgePieces::new(self);
+        edges.phase_3_edge_pair_index()
+    }
+
+    /// Determines if the equatorial edges are paired up
+    pub fn equatorial_edges_paired(&self) -> bool {
+        let edges = EdgePieces::new(self);
+        edges.equatorial_edges_paired()
     }
 
     /// Find the positions of the red and orange centers. It is known at this point that

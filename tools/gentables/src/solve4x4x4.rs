@@ -37,6 +37,8 @@ pub struct TableGenerator {
         { Cube4x4x4::PHASE_3_RED_ORANGE_CENTERS_INDEX_COUNT },
         { Cube4x4x4::PHASE_3_GREEN_BLUE_CENTERS_INDEX_COUNT },
     >,
+    phase_3_low_edge_pair_prune_table: PruneTable1D<{ Cube4x4x4::PHASE_3_EDGE_PAIR_INDEX_COUNT }>,
+    phase_3_high_edge_pair_prune_table: PruneTable1D<{ Cube4x4x4::PHASE_3_EDGE_PAIR_INDEX_COUNT }>,
     phase_4_centers_prune_table: PruneTable1D<{ Cube4x4x4::PHASE_4_CENTERS_INDEX_COUNT }>,
     phase_4_edge_pair_prune_table: PruneTable1D<{ Cube4x4x4::PHASE_4_EDGE_PAIR_INDEX_COUNT }>,
 }
@@ -50,6 +52,8 @@ impl TableGenerator {
         tables.phase_1_orange_centers_prune_table.set(0, 0);
         tables.phase_2_centers_prune_table.set(0, 0, 0);
         tables.phase_3_centers_prune_table.set(0, 0, 0);
+        tables.phase_3_low_edge_pair_prune_table.set(0, 0);
+        tables.phase_3_high_edge_pair_prune_table.set(0, 0);
         tables.phase_4_centers_prune_table.set(0, 0);
         tables.phase_4_edge_pair_prune_table.set(0, 0);
         tables
@@ -64,19 +68,19 @@ impl TableGenerator {
                 let mv = Move::try_from(move_idx as u8).unwrap();
 
                 // Get old indicies so that we know where we came from
-                let old_corner_orientation = cube.corner_orientation_index();
-                let old_corner_permutation = cube.corner_permutation_index();
-                let old_red_centers = cube.phase_1_red_centers_index();
-                let old_orange_centers = cube.phase_1_orange_centers_index();
+                let old_corner_orientation = cube.corner_orientation_index() as usize;
+                let old_corner_permutation = cube.corner_permutation_index() as usize;
+                let old_red_centers = cube.phase_1_red_centers_index() as usize;
+                let old_orange_centers = cube.phase_1_orange_centers_index() as usize;
 
                 // Perform the move
                 cube.do_move(mv);
 
                 // Get new indicies for this state
-                let new_corner_orientation = cube.corner_orientation_index();
-                let new_corner_permutation = cube.corner_permutation_index();
-                let new_red_centers = cube.phase_1_red_centers_index();
-                let new_orange_centers = cube.phase_1_orange_centers_index();
+                let new_corner_orientation = cube.corner_orientation_index() as usize;
+                let new_corner_permutation = cube.corner_permutation_index() as usize;
+                let new_red_centers = cube.phase_1_red_centers_index() as usize;
+                let new_orange_centers = cube.phase_1_orange_centers_index() as usize;
 
                 // Update move tables
                 let mut has_new_info = self.corner_orientation_move_table.update(
@@ -166,15 +170,15 @@ impl TableGenerator {
                 }
 
                 // Get old indicies so that we know where we came from
-                let old_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index();
-                let old_green_blue_centers = cube.phase_2_green_blue_centers_index();
+                let old_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index() as usize;
+                let old_green_blue_centers = cube.phase_2_green_blue_centers_index() as usize;
 
                 // Perform the move
                 cube.do_move(mv);
 
                 // Get new indicies for this state
-                let new_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index();
-                let new_green_blue_centers = cube.phase_2_green_blue_centers_index();
+                let new_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index() as usize;
+                let new_green_blue_centers = cube.phase_2_green_blue_centers_index() as usize;
 
                 // Update move tables
                 let mut has_new_info = self.phase_2_red_orange_centers_move_table.update(
@@ -251,15 +255,17 @@ impl TableGenerator {
                 }
 
                 // Get old indicies so that we know where we came from
-                let old_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index();
-                let old_green_blue_centers = cube.phase_3_green_blue_centers_index();
+                let old_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index() as usize;
+                let old_green_blue_centers = cube.phase_3_green_blue_centers_index() as usize;
+                let (old_low_edge_pair, old_high_edge_pair) = cube.phase_3_edge_pair_index();
 
                 // Perform the move
                 cube.do_move(mv);
 
                 // Get new indicies for this state
-                let new_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index();
-                let new_green_blue_centers = cube.phase_3_green_blue_centers_index();
+                let new_red_orange_centers = cube.phase_2_and_3_red_orange_centers_index() as usize;
+                let new_green_blue_centers = cube.phase_3_green_blue_centers_index() as usize;
+                let (new_low_edge_pair, new_high_edge_pair) = cube.phase_3_edge_pair_index();
 
                 // Update move tables
                 let mut has_new_info = self.phase_3_green_blue_centers_move_table.update(
@@ -277,6 +283,18 @@ impl TableGenerator {
                         .update_as_solution(new_red_orange_centers, new_green_blue_centers);
                 }
 
+                // Set prune table to zero if new state has edges in a state that is
+                // valid for the rest of the solve. This will allow easy detection of
+                // this case by looking for the zero in the prune table.
+                if cube.equatorial_edges_paired() {
+                    has_new_info |= self
+                        .phase_3_low_edge_pair_prune_table
+                        .update_as_solution(new_low_edge_pair as usize);
+                    has_new_info |= self
+                        .phase_3_high_edge_pair_prune_table
+                        .update_as_solution(new_high_edge_pair as usize);
+                }
+
                 // Update prune tables to keep track of minimum number of moves to reach this state from solved
                 has_new_info |= self.phase_3_centers_prune_table.update(
                     old_red_orange_centers,
@@ -284,6 +302,12 @@ impl TableGenerator {
                     new_red_orange_centers,
                     new_green_blue_centers,
                 );
+                has_new_info |= self
+                    .phase_3_low_edge_pair_prune_table
+                    .update(old_low_edge_pair as usize, new_low_edge_pair as usize);
+                has_new_info |= self
+                    .phase_3_high_edge_pair_prune_table
+                    .update(old_high_edge_pair as usize, new_high_edge_pair as usize);
 
                 // If there was new information discovered with this state, add it to the queue for processing
                 if has_new_info {
@@ -337,15 +361,15 @@ impl TableGenerator {
                 }
 
                 // Get old indicies so that we know where we came from
-                let old_centers = cube.phase_4_centers_index();
-                let old_edge_pair = cube.phase_4_edge_pair_index();
+                let old_centers = cube.phase_4_centers_index() as usize;
+                let old_edge_pair = cube.phase_4_edge_pair_index() as usize;
 
                 // Perform the move
                 cube.do_move(mv);
 
                 // Get new indicies for this state
-                let new_centers = cube.phase_4_centers_index();
-                let new_edge_pair = cube.phase_4_edge_pair_index();
+                let new_centers = cube.phase_4_centers_index() as usize;
+                let new_edge_pair = cube.phase_4_edge_pair_index() as usize;
 
                 // Update move tables
                 let mut has_new_info =
@@ -460,6 +484,14 @@ impl TableGenerator {
                 "    {} centers prune table",
                 self.phase_3_centers_prune_table.progress()
             );
+            println!(
+                "    {} low edge pair prune table",
+                self.phase_3_low_edge_pair_prune_table.progress()
+            );
+            println!(
+                "    {} high edge pair prune table",
+                self.phase_3_high_edge_pair_prune_table.progress()
+            );
         }
 
         // Generate all tables for phase 4 of the solve
@@ -528,6 +560,11 @@ impl TableGenerator {
         // Phase 3 centers not verified, as not every state is actually reachable (the
         // index has more states than actually necessary).
         // assert!(self.phase_3_centers_prune_table.progress().complete());
+        assert!(self.phase_3_low_edge_pair_prune_table.progress().complete());
+        assert!(self
+            .phase_3_high_edge_pair_prune_table
+            .progress()
+            .complete());
         assert!(self.phase_4_centers_prune_table.progress().complete());
         // Phase 4 edge pairing only fills half because of solved parity
         // assert!(self.phase_4_edge_pair_prune_table.progress().complete());
@@ -563,6 +600,10 @@ impl TableGenerator {
             .write("../../lib/src/tables/4x4x4_phase_2_centers_prune_table.bin");
         self.phase_3_centers_prune_table
             .write("../../lib/src/tables/4x4x4_phase_3_centers_prune_table.bin");
+        self.phase_3_low_edge_pair_prune_table
+            .write("../../lib/src/tables/4x4x4_phase_3_low_edge_pair_prune_table.bin");
+        self.phase_3_high_edge_pair_prune_table
+            .write("../../lib/src/tables/4x4x4_phase_3_high_edge_pair_prune_table.bin");
         self.phase_4_centers_prune_table
             .write("../../lib/src/tables/4x4x4_phase_4_centers_prune_table.bin");
         self.phase_4_edge_pair_prune_table

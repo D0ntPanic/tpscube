@@ -5,7 +5,7 @@ use egui::{widgets::Label, Color32, Pos2, Response, Sense, Stroke, Ui, Vec2};
 use tpscube_core::Move;
 
 const MIN_SCRAMBLE_LINES: usize = 2;
-const MAX_SCRAMBLE_LINES: usize = 5;
+const MAX_SCRAMBLE_LINES: usize = 7;
 
 pub trait CustomWidgets {
     fn header_label(&mut self, icon: &str, text: &str, landscape: bool, active: bool) -> Response;

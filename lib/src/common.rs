@@ -71,6 +71,15 @@ pub(crate) const fn n_choose_k(n: usize, k: usize) -> usize {
     result
 }
 
+pub(crate) const fn factorial(mut n: usize) -> usize {
+    let mut result = 1;
+    while n > 1 {
+        result *= n;
+        n -= 1;
+    }
+    result
+}
+
 impl Color {
     pub fn face(&self) -> CubeFace {
         match self {
