@@ -16,8 +16,8 @@ use egui::{
 };
 use instant::Instant;
 use tpscube_core::{
-    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube2x2x2, Cube3x3x3, CubeWithSolution,
-    InitialCubeState, Solve, SolveType,
+    Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube2x2x2, Cube3x3x3, Cube4x4x4,
+    CubeWithSolution, InitialCubeState, Solve, SolveType,
 };
 
 const TARGET_MIN_WIDTH: f32 = 280.0;
@@ -84,6 +84,24 @@ impl SolveDetailsWindow {
                     unsolved_state: Box::new(unsolved_state),
                     analysis,
                     summary,
+                    renderer,
+                    replay_time: 0.0,
+                    replay_move_idx: 0,
+                    playing: false,
+                    last_frame: Instant::now(),
+                    mode: SolveDetailsMode::Replay,
+                }
+            }
+            SolveType::Standard4x4x4 | SolveType::Blind4x4x4 => {
+                let mut unsolved_state = Cube4x4x4::new();
+                unsolved_state.do_moves(&solve.scramble);
+                let renderer = CubeRenderer::new(Box::new(unsolved_state.clone()));
+
+                Self {
+                    solve,
+                    unsolved_state: Box::new(unsolved_state),
+                    analysis: Analysis::default(),
+                    summary: Vec::new(),
                     renderer,
                     replay_time: 0.0,
                     replay_move_idx: 0,

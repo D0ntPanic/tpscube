@@ -10,8 +10,8 @@ use crate::widgets::fit_scramble;
 use anyhow::Result;
 use egui::{CtxRef, Pos2, Rect, Response, Sense, Ui, Vec2};
 use tpscube_core::{
-    scramble_2x2x2, scramble_3x3x3, Cube, Cube2x2x2, Cube3x3x3, InitialCubeState, Move,
-    MoveSequence, SolveType,
+    scramble_2x2x2, scramble_3x3x3, scramble_4x4x4, Cube, Cube2x2x2, Cube3x3x3, Cube4x4x4,
+    InitialCubeState, Move, MoveSequence, SolveType,
 };
 
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
@@ -80,6 +80,7 @@ impl TimerCube {
             SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => {
                 scramble_3x3x3()
             }
+            SolveType::Standard4x4x4 | SolveType::Blind4x4x4 => scramble_4x4x4(),
         }
     }
 
@@ -382,6 +383,12 @@ impl TimerCube {
 
         let scramble_padding = 8.0;
 
+        let scramble_font = if self.displayed_scramble.len() > 25 {
+            FontSize::Section
+        } else {
+            FontSize::Scramble
+        };
+
         let (fix, scramble) = if self.bluetooth_active && self.scramble_fix_moves.len() > 0 {
             (
                 true,
@@ -397,16 +404,11 @@ impl TimerCube {
         } else {
             (
                 false,
-                fit_scramble(
-                    ui,
-                    FontSize::Scramble,
-                    &self.displayed_scramble,
-                    rect.width(),
-                ),
+                fit_scramble(ui, scramble_font, &self.displayed_scramble, rect.width()),
             )
         };
 
-        let scramble_line_height = ui.fonts().row_height(FontSize::Scramble.into());
+        let scramble_line_height = ui.fonts().row_height(scramble_font.into());
         let min_scramble_height = scramble_line_height * scramble.len() as f32;
         let scramble_height = min_scramble_height.max(target_scramble_height);
 
@@ -434,13 +436,13 @@ impl TimerCube {
             let mut tokens = Vec::new();
             if fix && line_idx == 0 {
                 tokens.push(ui.fonts().layout_single_line(
-                    FontSize::Scramble.into(),
+                    scramble_font.into(),
                     "Scramble incorrect, fix with".into(),
                 ));
             } else {
                 for (idx, mv) in line.iter().enumerate() {
                     tokens.push(ui.fonts().layout_single_line(
-                        FontSize::Scramble.into(),
+                        scramble_font.into(),
                         if idx == 0 {
                             mv.to_string()
                         } else {
@@ -615,6 +617,9 @@ impl TimerCube {
             SolveType::Standard2x2x2 => CubeRenderer::new(Box::new(Cube2x2x2::new())),
             SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => {
                 CubeRenderer::new(Box::new(Cube3x3x3::new()))
+            }
+            SolveType::Standard4x4x4 | SolveType::Blind4x4x4 => {
+                CubeRenderer::new(Box::new(Cube4x4x4::new()))
             }
         };
         self.next_scramble = None;

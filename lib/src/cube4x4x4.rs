@@ -753,7 +753,9 @@ impl Solver {
 
         // Search for phase 1 moves and add to full solution. In this phase we try to get
         // all red and orange center pieces onto the red and orange faces.
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_1_start = std::time::Instant::now();
+
         let index_cube = Phase1IndexCube::new(&self.initial_state);
         if !index_cube.is_phase_solved() {
             let mut depth = 1;
@@ -769,6 +771,8 @@ impl Solver {
             solution.append(self.phase_solution.as_mut().unwrap());
             self.phase_solution = None;
         }
+
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_1_end = std::time::Instant::now();
 
         // Search for phase 2 moves and add to full solution. In this phase we get red and
@@ -777,7 +781,9 @@ impl Solver {
         // separate the edges so that each edge's pair is not on the same side, eliminate
         // OLL parity, and ensure matching edge permutation parity such that the last two
         // edges will be solvable.
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_2_start = std::time::Instant::now();
+
         let index_cube = Phase2IndexCube::new(&self.initial_state);
         if !index_cube.is_phase_solved() {
             let mut depth = 1;
@@ -793,12 +799,16 @@ impl Solver {
             solution.append(self.phase_solution.as_mut().unwrap());
             self.phase_solution = None;
         }
+
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_2_end = std::time::Instant::now();
 
         // Search for phase 3 moves and add to full solution. In this phase we get red/orange
         // and blue/green centers into vertical columns and pair up the four edge pairs on
         // the equator.
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_3_start = std::time::Instant::now();
+
         let index_cube = Phase3IndexCube::new(&self.initial_state);
         if !index_cube.is_phase_solved() {
             let mut depth = 1;
@@ -814,11 +824,15 @@ impl Solver {
             solution.append(self.phase_solution.as_mut().unwrap());
             self.phase_solution = None;
         }
+
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_3_end = std::time::Instant::now();
 
         // Search for phase 4 moves and add to full solution. In this phase we solve the
         // centers, pair up all edges, and eliminate PLL parity.
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_4_start = std::time::Instant::now();
+
         let index_cube = Phase4IndexCube::new(&self.initial_state);
         if !index_cube.is_phase_solved() {
             let mut depth = 1;
@@ -834,10 +848,14 @@ impl Solver {
             solution.append(self.phase_solution.as_mut().unwrap());
             self.phase_solution = None;
         }
+
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_4_end = std::time::Instant::now();
 
         // Convert the 4x4x4 to a 3x3x3 and solve the rest with the 3x3x3 solver
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_5_start = std::time::Instant::now();
+
         let cube = self.initial_state.as_faces();
         let mut colors: [Color; 6 * 9] = [Color::White; 6 * 9];
         for face in &[
@@ -877,8 +895,11 @@ impl Solver {
             None => return None,
         };
         solution.append(&mut moves);
+
+        #[cfg(not(target_arch = "wasm32"))]
         let phase_5_end = std::time::Instant::now();
 
+        #[cfg(not(target_arch = "wasm32"))]
         println!(
             "P1 {}ms  P2 {}ms  P3 {}ms  P4 {}ms  P5 {}ms",
             (phase_1_end - phase_1_start).as_millis(),
