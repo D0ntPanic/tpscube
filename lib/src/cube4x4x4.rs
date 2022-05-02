@@ -273,6 +273,74 @@ impl Phase1IndexCube {
     }
 }
 
+struct EdgeMovementTable {
+    edge_moves: Vec<Vec<(usize, usize)>>,
+}
+
+impl EdgeMovementTable {
+    fn new() -> Self {
+        let mut edge_moves: Vec<Vec<(usize, usize)>> = Vec::new();
+
+        for mv in 0..Move::count_4x4x4() {
+            // Determine face, direction, and width of the move
+            let mv = Move::try_from(mv as u8).unwrap();
+            let face_idx = mv.face() as u8 as usize;
+            let rotation = mv.rotation();
+            let width = mv.width();
+            let dir = if rotation < 0 {
+                RotationDirection::CCW
+            } else {
+                RotationDirection::CW
+            };
+            let dir_idx = dir as u8 as usize;
+            let mut new_edges: [u8; 24] = [0; 24];
+            for i in 0..24 {
+                new_edges[i] = i as u8;
+            }
+
+            // Perform rotation of the correct count for the move
+            for _ in 0..rotation.abs() {
+                // Save existing cube state so that it can be looked up during rotation
+                let old_edges = new_edges;
+
+                // Apply outer edge movement using lookup table
+                for i in 0..8 {
+                    let (dest, src) =
+                        crate::tables::table4x4x4::CUBE4_EDGE_PIECE_ROTATION[dir_idx][face_idx][i];
+                    new_edges[dest as u8 as usize] = old_edges[src.piece as u8 as usize];
+                }
+
+                if width == 2 {
+                    // Wide move, apply inner slice edge movement using lookup table. Inner edge pieces
+                    // always invert orientation no matter which face (this is an invariant that must
+                    // be true for the edge piece indexes to work properly).
+                    let edge_offset = match dir {
+                        RotationDirection::CW => 3,
+                        RotationDirection::CCW => 1,
+                    };
+                    for i in 0..4 {
+                        let dest = crate::tables::table4x4x4::CUBE4_SLICED_EDGE_PIECE_ROTATION
+                            [face_idx][i];
+                        let src = crate::tables::table4x4x4::CUBE4_SLICED_EDGE_PIECE_ROTATION
+                            [face_idx][(i + edge_offset) % 4];
+                        new_edges[dest as u8 as usize] = old_edges[src as u8 as usize];
+                    }
+                }
+            }
+
+            let mut moves = Vec::new();
+            for i in 0..24 {
+                if new_edges[i] != i as u8 {
+                    moves.push((i, new_edges[i] as usize));
+                }
+            }
+            edge_moves.push(moves);
+        }
+
+        Self { edge_moves }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 struct EdgePieces {
     edges: [u8; 24],
@@ -290,50 +358,20 @@ impl EdgePieces {
     }
 
     #[cfg(not(feature = "no_solver"))]
-    fn do_move(&self, mv: Move) -> Self {
-        // Determine face, direction, and width of the move
-        let face_idx = mv.face() as u8 as usize;
-        let rotation = mv.rotation();
-        let width = mv.width();
-        let dir = if rotation < 0 {
-            RotationDirection::CCW
-        } else {
-            RotationDirection::CW
-        };
-        let dir_idx = dir as u8 as usize;
+    fn do_move(&self, mv: Move, table: &EdgeMovementTable) -> Self {
         let mut new_edges = self.edges;
-
-        // Perform rotation of the correct count for the move
-        for _ in 0..rotation.abs() {
-            // Save existing cube state so that it can be looked up during rotation
-            let old_edges = new_edges;
-
-            // Apply outer edge movement using lookup table
-            for i in 0..8 {
-                let (dest, src) =
-                    crate::tables::table4x4x4::CUBE4_EDGE_PIECE_ROTATION[dir_idx][face_idx][i];
-                new_edges[dest as u8 as usize] = old_edges[src.piece as u8 as usize];
-            }
-
-            if width == 2 {
-                // Wide move, apply inner slice edge movement using lookup table. Inner edge pieces
-                // always invert orientation no matter which face (this is an invariant that must
-                // be true for the edge piece indexes to work properly).
-                let edge_offset = match dir {
-                    RotationDirection::CW => 3,
-                    RotationDirection::CCW => 1,
-                };
-                for i in 0..4 {
-                    let dest =
-                        crate::tables::table4x4x4::CUBE4_SLICED_EDGE_PIECE_ROTATION[face_idx][i];
-                    let src = crate::tables::table4x4x4::CUBE4_SLICED_EDGE_PIECE_ROTATION[face_idx]
-                        [(i + edge_offset) % 4];
-                    new_edges[dest as u8 as usize] = old_edges[src as u8 as usize];
-                }
-            }
+        for (dest, src) in &table.edge_moves[mv as u8 as usize] {
+            new_edges[*dest] = self.edges[*src];
         }
-
         Self { edges: new_edges }
+    }
+
+    #[cfg(not(feature = "no_solver"))]
+    fn in_place_move(&mut self, mv: Move, table: &EdgeMovementTable) {
+        let old_edges = self.edges;
+        for (dest, src) in &table.edge_moves[mv as u8 as usize] {
+            self.edges[*dest] = old_edges[*src];
+        }
     }
 
     #[cfg(not(feature = "no_solver"))]
@@ -380,6 +418,10 @@ impl EdgePieces {
             }
         }
         (swaps & 1) != 0
+    }
+
+    fn phase_2_edges_ready(&self) -> bool {
+        self.edges_separated() && !self.oll_parity() && !self.edge_permutation_parity()
     }
 
     fn equatorial_edges_paired(&self) -> bool {
@@ -441,7 +483,6 @@ impl EdgePieces {
 struct Phase2IndexCube {
     red_orange_centers: u16,
     green_blue_centers: u16,
-    edges: EdgePieces,
 }
 
 #[cfg(not(feature = "no_solver"))]
@@ -450,7 +491,6 @@ impl Phase2IndexCube {
         Self {
             red_orange_centers: pieces.phase_2_and_3_red_orange_centers_index(),
             green_blue_centers: pieces.phase_2_green_blue_centers_index(),
-            edges: EdgePieces::new(pieces),
         }
     }
 
@@ -461,14 +501,7 @@ impl Phase2IndexCube {
                 mv,
             ),
             green_blue_centers: Phase2GreenBlueCentersMoveTable::get(self.green_blue_centers, mv),
-            edges: self.edges.do_move(mv),
         }
-    }
-
-    fn edges_ready(&self) -> bool {
-        self.edges.edges_separated()
-            && !self.edges.oll_parity()
-            && !self.edges.edge_permutation_parity()
     }
 
     fn is_phase_solved(&self) -> bool {
@@ -476,7 +509,6 @@ impl Phase2IndexCube {
         // table to determine if it is solved (the checks are precomputed and
         // baked into this table).
         Phase2CentersPruneTable::get(self.red_orange_centers, self.green_blue_centers) == 0
-            && self.edges_ready()
     }
 }
 
@@ -498,14 +530,14 @@ impl Phase3IndexCube {
         }
     }
 
-    fn do_move(&self, mv: Move) -> Self {
+    fn do_move(&self, mv: Move, table: &EdgeMovementTable) -> Self {
         Self {
             red_orange_centers: Phase2And3RedOrangeCentersMoveTable::get(
                 self.red_orange_centers,
                 mv,
             ),
             green_blue_centers: Phase3GreenBlueCentersMoveTable::get(self.green_blue_centers, mv),
-            edges: self.edges.do_move(mv),
+            edges: self.edges.do_move(mv, table),
         }
     }
 
@@ -556,6 +588,7 @@ struct Solver {
     moves: Vec<Move>,
     optimal: bool,
     phase_solution: Option<Vec<Move>>,
+    movement_table: EdgeMovementTable,
 }
 
 #[cfg(not(feature = "no_solver"))]
@@ -566,6 +599,7 @@ impl Solver {
             moves: Vec::new(),
             optimal,
             phase_solution: None,
+            movement_table: EdgeMovementTable::new(),
         }
     }
 
@@ -634,7 +668,17 @@ impl Solver {
                 new_cube.red_orange_centers,
                 new_cube.green_blue_centers,
             );
-            if center_prune == 0 && new_cube.edges_ready() {
+            if center_prune == 0 {
+                // Check edge state before accepting solution
+                let mut edges = EdgePieces::new(&self.initial_state);
+                for mv in &self.moves {
+                    edges.in_place_move(*mv, &self.movement_table);
+                }
+                edges.in_place_move(*mv, &self.movement_table);
+                if !edges.phase_2_edges_ready() {
+                    continue;
+                }
+
                 let mut moves = self.moves.clone();
                 moves.push(*mv);
                 self.phase_solution = Some(moves);
@@ -672,7 +716,7 @@ impl Solver {
         };
 
         for mv in possible_moves {
-            let new_cube = cube.do_move(*mv);
+            let new_cube = cube.do_move(*mv, &self.movement_table);
 
             // Check for solutions. This phase has multiple solved states, so fetch the
             // prune tables early to check for completion.
@@ -823,9 +867,6 @@ impl Solver {
 
         // Search for phase 1 moves and add to full solution. In this phase we try to get
         // all red and orange center pieces onto the red and orange faces.
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_1_start = std::time::Instant::now();
-
         let index_cube = Phase1IndexCube::new(&self.initial_state);
         if !index_cube.is_phase_solved() {
             let mut depth = 1;
@@ -842,20 +883,15 @@ impl Solver {
             self.phase_solution = None;
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_1_end = std::time::Instant::now();
-
         // Search for phase 2 moves and add to full solution. In this phase we get red and
         // orange centers into a state that is solvable using a reduced moveset, get green/blue
         // and white/yellow centers onto the green/blue and white/yellow faces respectively,
         // separate the edges so that each edge's pair is not on the same side, eliminate
         // OLL parity, and ensure matching edge permutation parity such that the last two
         // edges will be solvable.
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_2_start = std::time::Instant::now();
-
         let index_cube = Phase2IndexCube::new(&self.initial_state);
-        if !index_cube.is_phase_solved() {
+        let edges = EdgePieces::new(&self.initial_state);
+        if !index_cube.is_phase_solved() || !edges.phase_2_edges_ready() {
             let mut depth = 1;
             loop {
                 self.search_phase_2(index_cube, depth);
@@ -870,15 +906,9 @@ impl Solver {
             self.phase_solution = None;
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_2_end = std::time::Instant::now();
-
         // Search for phase 3 moves and add to full solution. In this phase we get red/orange
         // and blue/green centers into vertical columns and pair up the four edge pairs on
         // the equator.
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_3_start = std::time::Instant::now();
-
         let index_cube = Phase3IndexCube::new(&self.initial_state);
         if !index_cube.is_phase_solved() {
             let mut depth = 1;
@@ -895,14 +925,8 @@ impl Solver {
             self.phase_solution = None;
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_3_end = std::time::Instant::now();
-
         // Search for phase 4 moves and add to full solution. In this phase we solve the
         // centers, pair up all edges, and eliminate PLL parity.
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_4_start = std::time::Instant::now();
-
         let index_cube = Phase4IndexCube::new(&self.initial_state);
         if !index_cube.is_phase_solved() {
             let mut depth = 1;
@@ -919,13 +943,7 @@ impl Solver {
             self.phase_solution = None;
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_4_end = std::time::Instant::now();
-
         // Convert the 4x4x4 to a 3x3x3 and solve the rest with the 3x3x3 solver
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_5_start = std::time::Instant::now();
-
         let cube = self.initial_state.as_faces();
         let mut colors: [Color; 6 * 9] = [Color::White; 6 * 9];
         for face in &[
@@ -966,19 +984,6 @@ impl Solver {
         };
         solution.append(&mut moves);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let phase_5_end = std::time::Instant::now();
-
-        #[cfg(not(target_arch = "wasm32"))]
-        println!(
-            "P1 {}ms  P2 {}ms  P3 {}ms  P4 {}ms  P5 {}ms",
-            (phase_1_end - phase_1_start).as_millis(),
-            (phase_2_end - phase_2_start).as_millis(),
-            (phase_3_end - phase_3_start).as_millis(),
-            (phase_4_end - phase_4_start).as_millis(),
-            (phase_5_end - phase_5_start).as_millis()
-        );
-
         Some(solution)
     }
 }
@@ -1009,6 +1014,10 @@ impl Cube4x4x4 {
     pub const PHASE_4_CENTERS_INDEX_COUNT: usize = crate::tables::CUBE4_PHASE_4_CENTERS_INDEX_COUNT;
     pub const PHASE_4_EDGE_PAIR_INDEX_COUNT: usize =
         crate::tables::CUBE4_PHASE_4_EDGE_PAIR_INDEX_COUNT;
+
+    // Fetched from table generator valid states in phase 3
+    pub const PHASE_2_EXPECTED_RED_ORANGE_CENTER_INDEX: [u16; 12] =
+        [0, 9, 14, 20, 23, 28, 41, 46, 49, 55, 60, 69];
 
     pub fn from_corners_edges_and_centers(
         corners: [CornerPiece; 8],
@@ -1455,10 +1464,13 @@ impl Cube4x4x4 {
         if self.phase_2_green_blue_centers_index() != 0 {
             return false;
         }
-        self.center_color(CubeFace::Right, 0, 0) == self.center_color(CubeFace::Right, 1, 0)
-            && self.center_color(CubeFace::Right, 0, 1) == self.center_color(CubeFace::Right, 1, 1)
-            && self.center_color(CubeFace::Left, 0, 0) == self.center_color(CubeFace::Left, 1, 0)
-            && self.center_color(CubeFace::Left, 0, 1) == self.center_color(CubeFace::Left, 1, 1)
+        let idx = self.phase_2_and_3_red_orange_centers_index();
+        for i in Self::PHASE_2_EXPECTED_RED_ORANGE_CENTER_INDEX {
+            if i == idx {
+                return true;
+            }
+        }
+        false
     }
 
     /// Determine if the red, orange, green, and blue center pieces are in a configuration
