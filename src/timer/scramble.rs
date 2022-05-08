@@ -538,11 +538,12 @@ impl TimerCube {
             state.current_time_color(),
         );
 
-        // Render move count below timer is analysis is present
+        // Render details below timer if analysis is present
         if analysis.present() {
+            let tps: f32 = analysis.move_count() as f32 / (state.current_time() as f32 / 1000.0);
             let move_count_galley = ui.fonts().layout_single_line(
                 FontSize::Normal.into(),
-                format!("{} moves", analysis.move_count()),
+                format!("{} moves  {:.2} TPS", analysis.move_count(), tps),
             );
             let move_count_width = move_count_galley.size.x;
             ui.painter().galley(
