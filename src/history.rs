@@ -157,8 +157,9 @@ impl HistoryRegion for NoSolvesRegion {
 }
 
 impl AllTimeBestRegion {
-    fn columns(&self) -> usize {
+    fn columns(&self) -> (usize, usize) {
         let mut best_count = 0;
+        let mut running_best_count = 0;
         if self.best_solve.is_some() {
             best_count += 1;
         }
@@ -175,24 +176,48 @@ impl AllTimeBestRegion {
             best_count += 1;
         }
         if self.running_best_ao50.is_some() {
-            best_count += 1;
+            running_best_count += 1;
         }
         if self.running_best_ao100.is_some() {
-            best_count += 1;
+            running_best_count += 1;
         }
-        best_count
+        (best_count, running_best_count)
     }
 }
 
 impl HistoryRegion for AllTimeBestRegion {
     fn height(&self, ui: &Ui, layout_metrics: &SolveLayoutMetrics) -> f32 {
-        let rows = (self.columns() + layout_metrics.best_columns - 1) / layout_metrics.best_columns;
-        rows as f32
-            * (ui.fonts().row_height(FontSize::Normal.into())
-                + ui.fonts().row_height(FontSize::Section.into())
-                + ui.fonts().row_height(FontSize::BestTime.into())
-                + BEST_TIME_ROW_PADDING)
-            - BEST_TIME_ROW_PADDING
+        let (best_columns, running_best_columns) = self.columns();
+        if running_best_columns == 0 {
+            let rows =
+                (best_columns + layout_metrics.best_columns - 1) / layout_metrics.best_columns;
+            rows as f32
+                * (ui.fonts().row_height(FontSize::Normal.into())
+                    + ui.fonts().row_height(FontSize::BestTime.into())
+                    + BEST_TIME_ROW_PADDING)
+                - BEST_TIME_ROW_PADDING
+        } else if layout_metrics.best_columns == 1 {
+            best_columns as f32
+                * (ui.fonts().row_height(FontSize::Normal.into())
+                    + ui.fonts().row_height(FontSize::BestTime.into())
+                    + BEST_TIME_ROW_PADDING)
+                + running_best_columns as f32
+                    * (ui.fonts().row_height(FontSize::Normal.into())
+                        + 2.0 * ui.fonts().row_height(FontSize::Section.into())
+                        + BEST_TIME_ROW_PADDING)
+                - BEST_TIME_ROW_PADDING
+        } else {
+            let rows = (best_columns + running_best_columns + layout_metrics.best_columns - 1)
+                / layout_metrics.best_columns;
+            (rows - 1) as f32
+                * (ui.fonts().row_height(FontSize::Normal.into())
+                    + ui.fonts().row_height(FontSize::BestTime.into())
+                    + BEST_TIME_ROW_PADDING)
+                + (ui.fonts().row_height(FontSize::Normal.into())
+                    + 2.0 * ui.fonts().row_height(FontSize::Section.into())
+                    + BEST_TIME_ROW_PADDING)
+                - BEST_TIME_ROW_PADDING
+        }
     }
 
     fn paint(
@@ -205,16 +230,19 @@ impl HistoryRegion for AllTimeBestRegion {
         _all_time_best: &Option<AllTimeBestRegion>,
         details: &mut Option<SolveDetails>,
     ) {
-        let mut best_count = self.columns();
-        let mut row_columns_left = if best_count <= layout_metrics.best_columns {
-            best_count
-        } else if layout_metrics.best_columns == 2 {
-            layout_metrics
-                .best_columns
-                .min(best_count - layout_metrics.best_columns)
-        } else {
-            layout_metrics.best_columns
-        };
+        let (mut best_count, mut running_best_count) = self.columns();
+        let mut row_columns_left =
+            if (best_count + running_best_count) <= layout_metrics.best_columns {
+                best_count + running_best_count
+            } else if best_count <= layout_metrics.best_columns {
+                best_count
+            } else if layout_metrics.best_columns == 2 {
+                layout_metrics
+                    .best_columns
+                    .min(best_count - layout_metrics.best_columns)
+            } else {
+                layout_metrics.best_columns
+            };
 
         let mut x = rect.center().x
             - (row_columns_left as f32 * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
@@ -268,7 +296,13 @@ impl HistoryRegion for AllTimeBestRegion {
         }
 
         if row_columns_left == 0 {
-            row_columns_left = best_count.min(layout_metrics.best_columns);
+            row_columns_left = if (best_count + running_best_count) <= layout_metrics.best_columns {
+                best_count + running_best_count
+            } else if best_count == 0 {
+                running_best_count.min(layout_metrics.best_columns)
+            } else {
+                best_count.min(layout_metrics.best_columns)
+            };
             x = rect.center().x
                 - (row_columns_left as f32
                     * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
@@ -325,7 +359,13 @@ impl HistoryRegion for AllTimeBestRegion {
         }
 
         if row_columns_left == 0 {
-            row_columns_left = best_count.min(layout_metrics.best_columns);
+            row_columns_left = if (best_count + running_best_count) <= layout_metrics.best_columns {
+                best_count + running_best_count
+            } else if best_count == 0 {
+                running_best_count.min(layout_metrics.best_columns)
+            } else {
+                best_count.min(layout_metrics.best_columns)
+            };
             x = rect.center().x
                 - (row_columns_left as f32
                     * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
@@ -382,7 +422,13 @@ impl HistoryRegion for AllTimeBestRegion {
         }
 
         if row_columns_left == 0 {
-            row_columns_left = best_count.min(layout_metrics.best_columns);
+            row_columns_left = if (best_count + running_best_count) <= layout_metrics.best_columns {
+                best_count + running_best_count
+            } else if best_count == 0 {
+                running_best_count.min(layout_metrics.best_columns)
+            } else {
+                best_count.min(layout_metrics.best_columns)
+            };
             x = rect.center().x
                 - (row_columns_left as f32
                     * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
@@ -439,7 +485,13 @@ impl HistoryRegion for AllTimeBestRegion {
         }
 
         if row_columns_left == 0 {
-            row_columns_left = best_count.min(layout_metrics.best_columns);
+            row_columns_left = if (best_count + running_best_count) <= layout_metrics.best_columns {
+                best_count + running_best_count
+            } else if best_count == 0 {
+                running_best_count.min(layout_metrics.best_columns)
+            } else {
+                best_count.min(layout_metrics.best_columns)
+            };
             x = rect.center().x
                 - (row_columns_left as f32
                     * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
@@ -491,12 +543,11 @@ impl HistoryRegion for AllTimeBestRegion {
             }
 
             x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
-            best_count -= 1;
             row_columns_left -= 1;
         }
 
         if row_columns_left == 0 {
-            row_columns_left = best_count.min(layout_metrics.best_columns);
+            row_columns_left = running_best_count.min(layout_metrics.best_columns);
             x = rect.center().x
                 - (row_columns_left as f32
                     * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
@@ -582,27 +633,20 @@ impl HistoryRegion for AllTimeBestRegion {
             }
 
             x += layout_metrics.best_solve_width + BEST_TIME_COL_PADDING;
-            best_count -= 1;
+            running_best_count -= 1;
             row_columns_left -= 1;
         }
 
         if row_columns_left == 0 {
-            row_columns_left = best_count.min(layout_metrics.best_columns);
+            row_columns_left = running_best_count.min(layout_metrics.best_columns);
             x = rect.center().x
                 - (row_columns_left as f32
                     * (layout_metrics.best_solve_width + BEST_TIME_COL_PADDING)
                     - BEST_TIME_COL_PADDING)
                     / 2.0;
-            if row_columns_left == 1 {
-                y += ui.fonts().row_height(FontSize::Normal.into())
-                    + ui.fonts().row_height(FontSize::BestTime.into())
-                    + BEST_TIME_ROW_PADDING;
-            } else {
-                y += ui.fonts().row_height(FontSize::Normal.into())
-                    + ui.fonts().row_height(FontSize::Section.into())
-                    + ui.fonts().row_height(FontSize::BestTime.into())
-                    + BEST_TIME_ROW_PADDING;
-            }
+            y += ui.fonts().row_height(FontSize::Normal.into())
+                + 2.0 * ui.fonts().row_height(FontSize::Section.into())
+                + BEST_TIME_ROW_PADDING;
         }
 
         // Draw running best average of 100
