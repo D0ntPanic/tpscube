@@ -1,8 +1,8 @@
 use crate::graph::plot::{Plot, SinglePlot, YAxis};
 use crate::theme::Theme;
 use tpscube_core::{
-    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, ListAverage, Solve,
-    SolveType,
+    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, ListAverage, Penalty,
+    Solve, SolveType,
 };
 
 pub struct GraphData {
@@ -19,6 +19,7 @@ pub enum Statistic {
     MoveCount,
     TurnsPerSecond,
     ExecutionTurnsPerSecond,
+    SuccessRate,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -43,6 +44,7 @@ impl Statistic {
             }
             Statistic::MoveCount => YAxis::MoveCount,
             Statistic::TurnsPerSecond | Statistic::ExecutionTurnsPerSecond => YAxis::TurnsPerSecond,
+            Statistic::SuccessRate => YAxis::SuccessRate,
         }
     }
 }
@@ -122,6 +124,13 @@ impl GraphData {
                     None
                 }
             }
+            Statistic::SuccessRate => {
+                if matches!(solve.penalty, Penalty::DNF) {
+                    Some(0)
+                } else {
+                    Some(1)
+                }
+            }
             _ => match phase {
                 Phase::EntireSolve => match statistic {
                     Statistic::TotalTime => solve.final_time(),
@@ -183,7 +192,9 @@ impl GraphData {
                             None
                         }
                     }
-                    Statistic::TurnsPerSecond | Statistic::ExecutionTurnsPerSecond => {
+                    Statistic::TurnsPerSecond
+                    | Statistic::ExecutionTurnsPerSecond
+                    | Statistic::SuccessRate => {
                         unreachable!()
                     }
                 },
@@ -199,7 +210,8 @@ impl GraphData {
                                         Some(cfop.cross.moves.len() as u32 * 1000)
                                     }
                                     Statistic::TurnsPerSecond
-                                    | Statistic::ExecutionTurnsPerSecond => {
+                                    | Statistic::ExecutionTurnsPerSecond
+                                    | Statistic::SuccessRate => {
                                         unreachable!()
                                     }
                                 },
@@ -215,7 +227,8 @@ impl GraphData {
                                             sum + pair.moves.len() as u32 * 1000
                                         }
                                         Statistic::TurnsPerSecond
-                                        | Statistic::ExecutionTurnsPerSecond => unreachable!(),
+                                        | Statistic::ExecutionTurnsPerSecond
+                                        | Statistic::SuccessRate => unreachable!(),
                                     },
                                 )),
                                 CFOPPhase::OLL => {
@@ -235,7 +248,8 @@ impl GraphData {
                                                 sum + alg.moves.len() as u32 * 1000
                                             }
                                             Statistic::TurnsPerSecond
-                                            | Statistic::ExecutionTurnsPerSecond => unreachable!(),
+                                            | Statistic::ExecutionTurnsPerSecond
+                                            | Statistic::SuccessRate => unreachable!(),
                                         }))
                                     }
                                 }
@@ -266,7 +280,8 @@ impl GraphData {
                                                 }) + cfop.alignment.moves.len() as u32 * 1000
                                             }
                                             Statistic::TurnsPerSecond
-                                            | Statistic::ExecutionTurnsPerSecond => unreachable!(),
+                                            | Statistic::ExecutionTurnsPerSecond
+                                            | Statistic::SuccessRate => unreachable!(),
                                         })
                                     }
                                 }
@@ -292,6 +307,7 @@ impl GraphData {
                 Statistic::MoveCount => "Move Count",
                 Statistic::TurnsPerSecond => "Turns per Second",
                 Statistic::ExecutionTurnsPerSecond => "Execution TPS",
+                Statistic::SuccessRate => "Success Rate",
             },
             match self.phase {
                 Phase::EntireSolve => "Entire Solve",
@@ -331,7 +347,13 @@ impl GraphData {
                 window.remove(0);
             }
             if window.len() >= self.average_size {
-                if let Some(average) = window.as_slice().average() {
+                if self.statistic == Statistic::SuccessRate {
+                    plot.push(
+                        solve.created,
+                        window.iter().fold(0, |sum, pt| sum + pt.unwrap_or(0)) as f32 * 100.0
+                            / window.len() as f32,
+                    );
+                } else if let Some(average) = window.as_slice().average() {
                     plot.push(solve.created, average as f32 / 1000.0);
                 }
             }

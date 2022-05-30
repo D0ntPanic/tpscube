@@ -39,7 +39,7 @@ impl GraphWidget {
         }
     }
 
-    fn statistic_options(&mut self, ui: &mut Ui, history: &mut History) {
+    fn statistic_options(&mut self, ui: &mut Ui, history: &mut History, is_3x3x3: bool) {
         if ui
             .mode_label("Total time", self.statistic == Statistic::TotalTime)
             .clicked()
@@ -49,56 +49,67 @@ impl GraphWidget {
             let _ = self.save_settings(history);
         }
 
-        if ui
-            .mode_label(
-                "Recognition time",
-                self.statistic == Statistic::RecognitionTime,
-            )
-            .clicked()
-        {
-            self.statistic = Statistic::RecognitionTime;
-            self.plot = None;
-            let _ = self.save_settings(history);
+        if is_3x3x3 {
+            if ui
+                .mode_label(
+                    "Recognition time",
+                    self.statistic == Statistic::RecognitionTime,
+                )
+                .clicked()
+            {
+                self.statistic = Statistic::RecognitionTime;
+                self.plot = None;
+                let _ = self.save_settings(history);
+            }
+
+            if ui
+                .mode_label("Execution time", self.statistic == Statistic::ExecutionTime)
+                .clicked()
+            {
+                self.statistic = Statistic::ExecutionTime;
+                self.plot = None;
+                let _ = self.save_settings(history);
+            }
+
+            if ui
+                .mode_label("Move count", self.statistic == Statistic::MoveCount)
+                .clicked()
+            {
+                self.statistic = Statistic::MoveCount;
+                self.plot = None;
+                let _ = self.save_settings(history);
+            }
+
+            if ui
+                .mode_label(
+                    "Turns per second",
+                    self.statistic == Statistic::TurnsPerSecond,
+                )
+                .clicked()
+            {
+                self.statistic = Statistic::TurnsPerSecond;
+                self.plot = None;
+                let _ = self.save_settings(history);
+            }
+
+            if ui
+                .mode_label(
+                    "Execution TPS",
+                    self.statistic == Statistic::ExecutionTurnsPerSecond,
+                )
+                .clicked()
+            {
+                self.statistic = Statistic::ExecutionTurnsPerSecond;
+                self.plot = None;
+                let _ = self.save_settings(history);
+            }
         }
 
         if ui
-            .mode_label("Execution time", self.statistic == Statistic::ExecutionTime)
+            .mode_label("Success Rate", self.statistic == Statistic::SuccessRate)
             .clicked()
         {
-            self.statistic = Statistic::ExecutionTime;
-            self.plot = None;
-            let _ = self.save_settings(history);
-        }
-
-        if ui
-            .mode_label("Move count", self.statistic == Statistic::MoveCount)
-            .clicked()
-        {
-            self.statistic = Statistic::MoveCount;
-            self.plot = None;
-            let _ = self.save_settings(history);
-        }
-
-        if ui
-            .mode_label(
-                "Turns per second",
-                self.statistic == Statistic::TurnsPerSecond,
-            )
-            .clicked()
-        {
-            self.statistic = Statistic::TurnsPerSecond;
-            self.plot = None;
-            let _ = self.save_settings(history);
-        }
-
-        if ui
-            .mode_label(
-                "Execution TPS",
-                self.statistic == Statistic::ExecutionTurnsPerSecond,
-            )
-            .clicked()
-        {
-            self.statistic = Statistic::ExecutionTurnsPerSecond;
+            self.statistic = Statistic::SuccessRate;
             self.plot = None;
             let _ = self.save_settings(history);
         }
@@ -226,15 +237,20 @@ impl GraphWidget {
                     .id_source("left_graph_options_scroll")
                     .show(ui, |ui| {
                         ui.vertical(|ui| {
-                            if solve_type.is_3x3x3() {
-                                ui.section("Statistic");
-                                self.statistic_options(ui, history);
+                            ui.section("Statistic");
+                            self.statistic_options(ui, history, solve_type.is_3x3x3());
 
+                            if solve_type.is_3x3x3() {
                                 ui.add_space(8.0);
                                 ui.section("Phase");
                                 self.phase_options(ui, history);
                             } else {
-                                self.statistic = Statistic::TotalTime;
+                                if !matches!(
+                                    self.statistic,
+                                    Statistic::TotalTime | Statistic::SuccessRate
+                                ) {
+                                    self.statistic = Statistic::TotalTime;
+                                }
                                 self.phase = Phase::EntireSolve;
                             }
 
@@ -252,30 +268,27 @@ impl GraphWidget {
                 ui.with_layout(
                     Layout::from_main_dir_and_cross_align(Direction::LeftToRight, Align::TOP),
                     |ui| {
+                        ui.allocate_ui(
+                            Vec2::new((ui.max_rect().width() - 48.0) / 2.0, ui.max_rect().height()),
+                            |ui| {
+                                ui.vertical(|ui| {
+                                    ui.section("Statistic");
+                                    self.statistic_options(ui, history, solve_type.is_3x3x3());
+                                    ui.add_space(4.0);
+                                });
+                            },
+                        );
+
+                        // Show separator between sections
+                        ui.scope(|ui| {
+                            ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Disabled.into(),
+                            };
+                            ui.separator();
+                        });
+
                         if solve_type.is_3x3x3() {
-                            ui.allocate_ui(
-                                Vec2::new(
-                                    (ui.max_rect().width() - 48.0) / 2.0,
-                                    ui.max_rect().height(),
-                                ),
-                                |ui| {
-                                    ui.vertical(|ui| {
-                                        ui.section("Statistic");
-                                        self.statistic_options(ui, history);
-                                        ui.add_space(4.0);
-                                    });
-                                },
-                            );
-
-                            // Show separator between sections
-                            ui.scope(|ui| {
-                                ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
-                                    width: 1.0,
-                                    color: Theme::Disabled.into(),
-                                };
-                                ui.separator();
-                            });
-
                             ui.allocate_ui(
                                 Vec2::new(
                                     (ui.max_rect().width() - 48.0) / 3.0,
@@ -298,6 +311,14 @@ impl GraphWidget {
                                 };
                                 ui.separator();
                             });
+                        } else {
+                            if !matches!(
+                                self.statistic,
+                                Statistic::TotalTime | Statistic::SuccessRate
+                            ) {
+                                self.statistic = Statistic::TotalTime;
+                            }
+                            self.phase = Phase::EntireSolve;
                         }
 
                         ui.allocate_ui(
@@ -329,6 +350,7 @@ impl GraphWidget {
             Some("move_count") => Statistic::MoveCount,
             Some("tps") => Statistic::TurnsPerSecond,
             Some("etps") => Statistic::ExecutionTurnsPerSecond,
+            Some("success") => Statistic::SuccessRate,
             Some(_) | None => Statistic::TotalTime,
         };
         self.phase = match history
@@ -357,6 +379,7 @@ impl GraphWidget {
                 Statistic::MoveCount => "move_count",
                 Statistic::TurnsPerSecond => "tps",
                 Statistic::ExecutionTurnsPerSecond => "etps",
+                Statistic::SuccessRate => "success",
             },
         )?;
         history.set_string_setting(
@@ -376,7 +399,7 @@ impl GraphWidget {
         match self.phase {
             Phase::CFOP(_) => true,
             _ => match self.statistic {
-                Statistic::TotalTime => false,
+                Statistic::TotalTime | Statistic::SuccessRate => false,
                 _ => true,
             },
         }

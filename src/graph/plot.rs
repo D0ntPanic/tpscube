@@ -44,6 +44,7 @@ pub enum YAxis {
     Time,
     MoveCount,
     TurnsPerSecond,
+    SuccessRate,
 }
 
 struct PlotZoom {
@@ -135,7 +136,11 @@ impl SinglePlot {
 
     pub fn update(&mut self, ctxt: &CtxRef, ui: &mut Ui, rect: Rect, interact: Response) {
         let painter = ui.painter();
-        let max_value = self.points.iter().fold(0.0, |max, value| value.1.max(max));
+        let max_value = if self.y_axis == YAxis::SuccessRate {
+            100.0
+        } else {
+            self.points.iter().fold(0.0, |max, value| value.1.max(max))
+        };
 
         let points_to_show = (self.points.len() as f32 * self.zoom.zoom) as usize;
 
@@ -206,7 +211,7 @@ impl SinglePlot {
         let mut y_axis_labels = Vec::new();
         let mut value = step;
         let mut max_width = 0.0;
-        while (value as f32) < max_value {
+        while (value as f32) <= max_value {
             let galley = ui.fonts().layout_single_line(
                 FontSize::Normal.into(),
                 match self.y_axis {
@@ -216,6 +221,9 @@ impl SinglePlot {
                         } else {
                             format!("{}", value)
                         }
+                    }
+                    YAxis::SuccessRate => {
+                        format!("{}%", value)
                     }
                     _ => format!("{}", value),
                 },
