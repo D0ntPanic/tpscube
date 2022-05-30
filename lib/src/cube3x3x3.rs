@@ -1,6 +1,6 @@
 use crate::{
     Color, Corner, CornerPiece, Cube, CubeFace, FaceRotation, InitialCubeState, Move, RandomSource,
-    RotationDirection,
+    RotationDirection, StandardRandomSource,
 };
 use num_enum::TryFromPrimitive;
 use std::collections::BTreeMap;
@@ -497,6 +497,134 @@ impl Cube3x3x3 {
 
     pub fn from_corners_and_edges(corners: [CornerPiece; 8], edges: [EdgePiece3x3x3; 12]) -> Self {
         Self { corners, edges }
+    }
+
+    fn random_last_layer_pieces<T: RandomSource>(rng: &mut T, last_layer: CubeFace) -> Self {
+        let mut cube = Self::new();
+        let corners = &crate::tables::corner::CUBE_LAST_LAYER_CORNERS[last_layer as usize];
+        let edges = &crate::tables::table3x3x3::CUBE3_LAST_LAYER_EDGES[last_layer as usize];
+
+        // Randomize the corner pieces
+        for i in 0..3 {
+            let n = rng.next(4) as usize;
+            if i != n {
+                // Must swap two corners at a time to avoid parity violation
+                cube.corners.swap(corners[i] as usize, corners[n] as usize);
+                cube.corners.swap(corners[2] as usize, corners[3] as usize);
+            }
+        }
+
+        // Randomize the edge pieces
+        for i in 0..3 {
+            let n = rng.next(4) as usize;
+            if i != n {
+                // Must swap two edges at a time to avoid parity violation
+                cube.edges.swap(edges[i] as usize, edges[n] as usize);
+                cube.edges.swap(edges[2] as usize, edges[3] as usize);
+            }
+        }
+
+        cube
+    }
+
+    pub fn random_last_layer(last_layer: CubeFace) -> Self {
+        Self::sourced_random_last_layer(&mut StandardRandomSource, last_layer)
+    }
+
+    pub fn sourced_random_last_layer<T: RandomSource>(rng: &mut T, last_layer: CubeFace) -> Self {
+        'outer: loop {
+            let mut cube = Self::random_last_layer_pieces(rng, last_layer);
+            let corners = &crate::tables::corner::CUBE_LAST_LAYER_CORNERS[last_layer as usize];
+            let edges = &crate::tables::table3x3x3::CUBE3_LAST_LAYER_EDGES[last_layer as usize];
+
+            // Randomize the corner orientations
+            let mut corner_orientation_sum = 0;
+            for i in 0..3 {
+                cube.corners[corners[i] as usize].orientation = rng.next(3) as u8;
+                corner_orientation_sum += cube.corners[corners[i] as usize].orientation;
+            }
+
+            // Randomize the edge orientations
+            let mut edge_orientation_sum = 0;
+            for i in 0..3 {
+                cube.edges[edges[i] as usize].orientation = rng.next(2) as u8;
+                edge_orientation_sum += cube.edges[edges[i] as usize].orientation;
+            }
+
+            // Make sure all corner orientations add up to a multiple of 3 (otherwise it is not solvable)
+            cube.corners[corners[3] as usize].orientation = (3 - (corner_orientation_sum % 3)) % 3;
+
+            // Make sure all edge orientations add up to a multiple of 2 (otherwise it is not solvable)
+            cube.edges[edges[3] as usize].orientation = edge_orientation_sum & 1;
+
+            // Ensure last layer isn't solved already
+            let mut solve_check = cube.clone();
+            for _ in 0..4 {
+                if solve_check.is_solved() {
+                    continue 'outer;
+                }
+                solve_check.rotate(last_layer, RotationDirection::CW);
+            }
+
+            return cube;
+        }
+    }
+
+    pub fn random_pll(last_layer: CubeFace) -> Self {
+        Self::sourced_random_pll(&mut StandardRandomSource, last_layer)
+    }
+
+    pub fn sourced_random_pll<T: RandomSource>(rng: &mut T, last_layer: CubeFace) -> Self {
+        'outer: loop {
+            let mut cube = Self::random_last_layer_pieces(rng, last_layer);
+            let corners = &crate::tables::corner::CUBE_LAST_LAYER_CORNERS[last_layer as usize];
+            let edges = &crate::tables::table3x3x3::CUBE3_LAST_LAYER_EDGES[last_layer as usize];
+
+            // Set corner orientations to orient last layer corners
+            for corner_idx in 0..4 {
+                let piece = cube.corners[corners[corner_idx] as usize];
+                let pos_idx = crate::tables::corner::CUBE3_CORNER_INDICIES
+                    [corners[corner_idx] as usize]
+                    .iter()
+                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                    .unwrap();
+                let piece_idx = crate::tables::corner::CUBE3_CORNER_INDICIES
+                    [piece.piece as u8 as usize]
+                    .iter()
+                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                    .unwrap();
+                cube.corners[corners[corner_idx] as usize].orientation =
+                    ((pos_idx + 3 - piece_idx) % 3) as u8;
+            }
+
+            // Set edge orientations to orient last layer edges
+            for edge_idx in 0..4 {
+                let piece = cube.edges[edges[edge_idx] as usize];
+                let pos_idx = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES
+                    [edges[edge_idx] as usize]
+                    .iter()
+                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                    .unwrap();
+                let piece_idx = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES
+                    [piece.piece as u8 as usize]
+                    .iter()
+                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                    .unwrap();
+                cube.edges[edges[edge_idx] as usize].orientation =
+                    ((pos_idx + 2 - piece_idx) & 1) as u8;
+            }
+
+            // Ensure last layer isn't solved already
+            let mut solve_check = cube.clone();
+            for _ in 0..4 {
+                if solve_check.is_solved() {
+                    continue 'outer;
+                }
+                solve_check.rotate(last_layer, RotationDirection::CW);
+            }
+
+            return cube;
+        }
     }
 
     /// Gets the piece at a given corner

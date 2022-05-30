@@ -562,3 +562,18 @@ pub(crate) const CUBE3_EDGE_COLORS: [[Color; 2]; 12] = [
     // BR
     [Color::Blue, Color::Red],
 ];
+
+pub(crate) const CUBE3_LAST_LAYER_EDGES: [[Edge3x3x3; 4]; 6] = [
+    // Top
+    [Edge3x3x3::UR, Edge3x3x3::UF, Edge3x3x3::UL, Edge3x3x3::UB],
+    // Front
+    [Edge3x3x3::UF, Edge3x3x3::DF, Edge3x3x3::FR, Edge3x3x3::FL],
+    // Right
+    [Edge3x3x3::UR, Edge3x3x3::DR, Edge3x3x3::FR, Edge3x3x3::BR],
+    // Back
+    [Edge3x3x3::UB, Edge3x3x3::DB, Edge3x3x3::BL, Edge3x3x3::BR],
+    // Left
+    [Edge3x3x3::UL, Edge3x3x3::DL, Edge3x3x3::FL, Edge3x3x3::BL],
+    // Bottom
+    [Edge3x3x3::DR, Edge3x3x3::DF, Edge3x3x3::DL, Edge3x3x3::DB],
+];

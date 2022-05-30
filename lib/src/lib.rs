@@ -67,7 +67,8 @@ pub use cube4x4x4::{scramble_4x4x4, scramble_4x4x4_fast};
 mod tests {
     use crate::{
         Cube, Cube2x2x2, Cube2x2x2Faces, Cube3x3x3, Cube3x3x3Faces, Cube4x4x4, Cube4x4x4Faces,
-        InitialCubeState, Move, MoveSequence, SimpleSeededRandomSource,
+        CubeFace, InitialCubeState, Move, MoveSequence, OLLAlgorithm, PLLAlgorithm, RandomSource,
+        SimpleSeededRandomSource,
     };
     use std::convert::TryFrom;
 
@@ -597,6 +598,36 @@ mod tests {
                 solution,
                 cube
             );
+        }
+    }
+
+    #[test]
+    fn oll_algorithm_detection() {
+        let mut rng = SimpleSeededRandomSource::new();
+        for _ in 0..1000000 {
+            let face = CubeFace::try_from(rng.next(6) as u8).unwrap();
+            let cube = Cube3x3x3::sourced_random_last_layer(&mut rng, face);
+            let oll_alg = OLLAlgorithm::from_cube(&cube.as_faces(), face);
+            let pll_alg = PLLAlgorithm::from_cube(&cube.as_faces(), face);
+            assert!(
+                oll_alg.is_some() ^ pll_alg.is_some(),
+                "Bad OLL/PLL for face {:?}\n{}\nOLL: {:?}\nPLL: {:?}",
+                face,
+                cube,
+                oll_alg,
+                pll_alg,
+            );
+        }
+    }
+
+    #[test]
+    fn pll_algorithm_detection() {
+        let mut rng = SimpleSeededRandomSource::new();
+        for _ in 0..1000000 {
+            let face = CubeFace::try_from(rng.next(6) as u8).unwrap();
+            let cube = Cube3x3x3::sourced_random_pll(&mut rng, face);
+            let pll_alg = PLLAlgorithm::from_cube(&cube.as_faces(), face);
+            assert!(pll_alg.is_some(), "Bad PLL for face {:?}\n{}", face, cube,);
         }
     }
 }

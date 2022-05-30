@@ -26,7 +26,7 @@ impl SimpleSeededRandomSource {
 impl RandomSource for SimpleSeededRandomSource {
     fn next(&mut self, range: u32) -> u32 {
         self.seed = self.seed.wrapping_mul(1103515245).wrapping_add(12345);
-        self.seed % range
+        (self.seed >> 16) % range
     }
 }
 

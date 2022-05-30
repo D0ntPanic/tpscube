@@ -40,7 +40,7 @@ pub trait CFOPAnalysisStages {
 }
 
 /// Analysis of the cross phase of a CFOP solution.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CrossAnalysis {
     /// Color of the first layer cross
     pub color: Color,
@@ -51,7 +51,7 @@ pub struct CrossAnalysis {
 }
 
 /// Analysis of a single F2L pair insertion in a CFOP solution.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct F2LPairAnalysis {
     /// Time spent recognizing the state
     pub recognition_time: u32,
@@ -67,7 +67,7 @@ pub struct F2LPairAnalysis {
 /// one of these in a solve in the case of a two-look solution, a
 /// choice of algorithm that goes through multiple states, or a
 /// mistake during solution.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OLLAnalysis {
     /// The algorithm that needs to be performed to solve OLL in a single step
     pub one_look_algorithm: OLLAlgorithm,
@@ -88,7 +88,7 @@ pub struct OLLAnalysis {
 
 /// OLL algorithm used during solve. Two-look algorithms are named and
 /// others use their standard number.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum OLLAlgorithm {
     H,
     Pi,
@@ -104,7 +104,7 @@ pub enum OLLAlgorithm {
 /// one of these in a solve in the case of a two-look solution, a
 /// choice of algorithm that goes through multiple states, or a
 /// mistake during solution.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PLLAnalysis {
     /// The algorithm that needs to be performed to solve the cube in a single step
     pub one_look_algorithm: PLLAlgorithm,
@@ -124,7 +124,7 @@ pub struct PLLAnalysis {
 }
 
 /// PLL algorithm used during solve.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum PLLAlgorithm {
     Aa,
     Ab,

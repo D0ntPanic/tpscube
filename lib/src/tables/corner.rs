@@ -605,3 +605,18 @@ pub(crate) const CUBE_CORNER_COLORS: [[Color; 3]; 8] = [
     // DRB
     [Color::Yellow, Color::Red, Color::Blue],
 ];
+
+pub(crate) const CUBE_LAST_LAYER_CORNERS: [[Corner; 4]; 6] = [
+    // Top
+    [Corner::URF, Corner::UFL, Corner::ULB, Corner::UBR],
+    // Front
+    [Corner::URF, Corner::UFL, Corner::DFR, Corner::DLF],
+    // Right
+    [Corner::URF, Corner::UBR, Corner::DFR, Corner::DRB],
+    // Back
+    [Corner::ULB, Corner::UBR, Corner::DBL, Corner::DRB],
+    // Left
+    [Corner::UFL, Corner::ULB, Corner::DLF, Corner::DBL],
+    // Bottom
+    [Corner::DFR, Corner::DLF, Corner::DBL, Corner::DRB],
+];
