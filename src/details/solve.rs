@@ -389,11 +389,23 @@ impl SolveDetailsWindow {
             for line in scramble_lines {
                 let line: Vec<String> = line.iter().map(|mv| mv.to_string()).collect();
                 let line = line.join(" ");
-                ui.add(
-                    Label::new(line)
-                        .text_style(FontSize::Section.into())
-                        .text_color(Theme::Blue),
-                );
+                if ui
+                    .add(
+                        Label::new(line)
+                            .text_style(FontSize::Section.into())
+                            .text_color(Theme::Blue)
+                            .sense(Sense::click()),
+                    )
+                    .clicked()
+                {
+                    ui.output().copied_text = self
+                        .solve
+                        .scramble
+                        .iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" ");
+                };
             }
 
             // Add final time below scramble
