@@ -1,4 +1,5 @@
 mod action;
+mod algorithms;
 mod analysis;
 mod common;
 mod cube2x2x2;
@@ -29,6 +30,10 @@ mod index_generated;
 
 pub use crate::rand::{RandomSource, SimpleSeededRandomSource, StandardRandomSource};
 pub use action::{Action, StoredAction};
+pub use algorithms::known::KnownAlgorithms;
+pub use algorithms::moves::{
+    CubeRotation, ExtendedMove, ExtendedMoveContext, ExtendedMoveSequence, SliceMove, WideMove,
+};
 pub use analysis::{
     Analysis, AnalysisStepSummary, AnalysisSubstepTime, AnalysisSummary, CFOPAnalysis,
     CFOPPartialAnalysis, CFOPProgress, CrossAnalysis, CubeWithSolution, F2LPairAnalysis,
@@ -67,7 +72,8 @@ pub use cube4x4x4::{scramble_4x4x4, scramble_4x4x4_fast};
 mod tests {
     use crate::{
         Cube, Cube2x2x2, Cube2x2x2Faces, Cube3x3x3, Cube3x3x3Faces, Cube4x4x4, Cube4x4x4Faces,
-        CubeFace, InitialCubeState, Move, MoveSequence, OLLAlgorithm, PLLAlgorithm, RandomSource,
+        CubeFace, ExtendedMove, ExtendedMoveContext, ExtendedMoveSequence, InitialCubeState,
+        KnownAlgorithms, Move, MoveSequence, OLLAlgorithm, PLLAlgorithm, RandomSource,
         SimpleSeededRandomSource,
     };
     use std::convert::TryFrom;
@@ -628,6 +634,82 @@ mod tests {
             let cube = Cube3x3x3::sourced_random_pll(&mut rng, face);
             let pll_alg = PLLAlgorithm::from_cube(&cube.as_faces(), face);
             assert!(pll_alg.is_some(), "Bad PLL for face {:?}\n{}", face, cube,);
+        }
+    }
+
+    #[test]
+    fn pll_known_algorithms() {
+        for case in &[
+            PLLAlgorithm::Aa,
+            PLLAlgorithm::Ab,
+            PLLAlgorithm::F,
+            PLLAlgorithm::Ga,
+            PLLAlgorithm::Gb,
+            PLLAlgorithm::Gc,
+            PLLAlgorithm::Gd,
+            PLLAlgorithm::Ja,
+            PLLAlgorithm::Jb,
+            PLLAlgorithm::Ra,
+            PLLAlgorithm::Rb,
+            PLLAlgorithm::T,
+            PLLAlgorithm::E,
+            PLLAlgorithm::Na,
+            PLLAlgorithm::Nb,
+            PLLAlgorithm::V,
+            PLLAlgorithm::Y,
+            PLLAlgorithm::H,
+            PLLAlgorithm::Ua,
+            PLLAlgorithm::Ub,
+            PLLAlgorithm::Z,
+        ] {
+            let algs = KnownAlgorithms::pll(*case);
+            for alg in algs {
+                // Perform inverse algorithm and check to see if the correct PLL case
+                // is present after the inverted algorithm.
+                let mut cube = Cube3x3x3::new();
+                let mut state = ExtendedMoveContext::new(&mut cube);
+                state.do_moves(&alg.inverse());
+
+                let pll = PLLAlgorithm::from_cube(&cube.as_faces(), CubeFace::Top);
+
+                assert!(
+                    pll == Some(*case),
+                    "PLL case {:?} algorithm {} not valid (detected {:?})\n{}",
+                    *case,
+                    alg.iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    pll,
+                    cube,
+                );
+
+                // Perform algroithm forward and check for missing rotation at the end
+                // of the algorithm (all algorithms should leave the cube with the last
+                // layer on top).
+                let mut cube = Cube3x3x3::new();
+                let mut state = ExtendedMoveContext::new(&mut cube);
+                state.do_moves(&alg);
+                let ending_rotation = state.inverse_rotation();
+
+                assert!(
+                    ending_rotation.is_empty(),
+                    "PLL case {:?} algorithm {} ends rotated (hint: add {} to end)",
+                    *case,
+                    alg.iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    ending_rotation
+                        .iter()
+                        .map(|mv| ExtendedMove::Rotation(*mv))
+                        .collect::<Vec<ExtendedMove>>()
+                        .iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                );
+            }
         }
     }
 }
