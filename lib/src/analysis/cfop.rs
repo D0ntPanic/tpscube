@@ -220,6 +220,10 @@ impl OLLAlgorithm {
         }
     }
 
+    pub fn from_number(n: u8) -> Self {
+        Self::from_index(n as usize - 1)
+    }
+
     pub fn is_cross(&self) -> bool {
         match self {
             OLLAlgorithm::H

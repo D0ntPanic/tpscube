@@ -638,6 +638,63 @@ mod tests {
     }
 
     #[test]
+    fn oll_known_algorithms() {
+        for case in 1..=57 {
+            let case = OLLAlgorithm::from_number(case);
+            let algs = KnownAlgorithms::oll(case);
+            assert!(!algs.is_empty());
+
+            for alg in algs {
+                // Perform inverse algorithm and check to see if the correct OLL case
+                // is present after the inverted algorithm.
+                let mut cube = Cube3x3x3::new();
+                let mut state = ExtendedMoveContext::new(&mut cube);
+                state.do_moves(&alg.inverse());
+
+                let oll = OLLAlgorithm::from_cube(&cube.as_faces(), CubeFace::Top);
+
+                assert!(
+                    oll == Some(case),
+                    "OLL case {:?} algorithm {} not valid (detected {:?})\n{}",
+                    case,
+                    alg.iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    oll,
+                    cube,
+                );
+
+                // Perform algroithm forward and check for missing rotation at the end
+                // of the algorithm (all algorithms should leave the cube with the last
+                // layer on top).
+                let mut cube = Cube3x3x3::new();
+                let mut state = ExtendedMoveContext::new(&mut cube);
+                state.do_moves(&alg);
+                let ending_rotation = state.inverse_rotation();
+
+                assert!(
+                    ending_rotation.is_empty(),
+                    "OLL case {:?} algorithm {} ends rotated (hint: add {} to end)",
+                    case,
+                    alg.iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    ending_rotation
+                        .iter()
+                        .map(|mv| ExtendedMove::Rotation(*mv))
+                        .collect::<Vec<ExtendedMove>>()
+                        .iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                );
+            }
+        }
+    }
+
+    #[test]
     fn pll_known_algorithms() {
         for case in &[
             PLLAlgorithm::Aa,
@@ -663,6 +720,8 @@ mod tests {
             PLLAlgorithm::Z,
         ] {
             let algs = KnownAlgorithms::pll(*case);
+            assert!(!algs.is_empty());
+
             for alg in algs {
                 // Perform inverse algorithm and check to see if the correct PLL case
                 // is present after the inverted algorithm.
