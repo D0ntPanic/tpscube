@@ -594,7 +594,13 @@ impl<'a, C: FaceRotation> ExtendedMoveContext<'a, C> {
     pub fn rotation(&self) -> Vec<CubeRotation> {
         let mut result = Vec::new();
         match self.face(CubeFace::Top) {
-            CubeFace::Top => (),
+            CubeFace::Top => match self.face(CubeFace::Front) {
+                CubeFace::Front => (),
+                CubeFace::Right => result.push(CubeRotation::Y),
+                CubeFace::Left => result.push(CubeRotation::Yp),
+                CubeFace::Back => result.push(CubeRotation::Y2),
+                _ => unreachable!(),
+            },
             CubeFace::Front => {
                 result.push(CubeRotation::X);
                 match self.face(CubeFace::Front) {
@@ -654,6 +660,31 @@ impl<'a, C: FaceRotation> ExtendedMoveContext<'a, C> {
     /// on top, and the green face being in front.
     pub fn inverse_rotation(&self) -> Vec<CubeRotation> {
         self.rotation()
+            .iter()
+            .rev()
+            .map(|mv| mv.inverse())
+            .collect()
+    }
+
+    /// Returns the required moves to arrive at the current rotation of the cube starting
+    /// from the initial state (white on top). This function only matches the top and
+    /// bottom faces, ignoring the sides.
+    pub fn rotation_top_only(&self) -> Vec<CubeRotation> {
+        match self.face(CubeFace::Top) {
+            CubeFace::Top => Vec::new(),
+            CubeFace::Front => vec![CubeRotation::X],
+            CubeFace::Right => vec![CubeRotation::Zp],
+            CubeFace::Back => vec![CubeRotation::Xp],
+            CubeFace::Left => vec![CubeRotation::Z],
+            CubeFace::Bottom => vec![CubeRotation::X2],
+        }
+    }
+
+    /// Returns the required moves to arrive at initial cube rotation given the current
+    /// rotation of the cube. Applying these moves will result in the white face being
+    /// on top. This function only matches the top and bottom faces, ignoring the sides.
+    pub fn inverse_rotation_top_only(&self) -> Vec<CubeRotation> {
+        self.rotation_top_only()
             .iter()
             .rev()
             .map(|mv| mv.inverse())

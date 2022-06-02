@@ -671,7 +671,7 @@ mod tests {
                 let mut cube = Cube3x3x3::new();
                 let mut state = ExtendedMoveContext::new(&mut cube);
                 state.do_moves(&alg);
-                let ending_rotation = state.inverse_rotation();
+                let ending_rotation = state.inverse_rotation_top_only();
 
                 assert!(
                     ending_rotation.is_empty(),
@@ -749,7 +749,7 @@ mod tests {
                 let mut cube = Cube3x3x3::new();
                 let mut state = ExtendedMoveContext::new(&mut cube);
                 state.do_moves(&alg);
-                let ending_rotation = state.inverse_rotation();
+                let ending_rotation = state.inverse_rotation_top_only();
 
                 assert!(
                     ending_rotation.is_empty(),
