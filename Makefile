@@ -3,13 +3,27 @@
 native:
 	cargo build --release
 
-mac: native
+mac: mac_bundle
+	codesign -f -o runtime --timestamp -s - TPS\ Cube.app
+
+mac_release: mac_bundle
+	codesign -f -o runtime --timestamp -s "Developer ID" TPS\ Cube.app
+	rm -f TPS\ Cube.zip
+	zip -r TPS\ Cube.zip TPS\ Cube.app
+	xcrun notarytool submit TPS\ Cube.zip --wait --keychain-profile "personal"
+	rm -f TPS\ Cube.zip
+	sleep 30
+	xcrun stapler staple TPS\ Cube.app
+	dmgbuild -s dmgbuild.py TPS\ Cube tpscube.dmg
+	rm -rf TPS\ Cube.app
+	codesign --timestamp -s "Developer ID" tpscube.dmg
+
+mac_bundle: native
 	mkdir -p TPS\ Cube.app/Contents/MacOS
 	mkdir -p TPS\ Cube.app/Contents/Resources
 	cp Info.plist TPS\ Cube.app/Contents/
 	cp target/release/tpscube TPS\ Cube.app/Contents/MacOS/
 	cp images/icon.icns TPS\ Cube.app/Contents/Resources/
-	codesign -f -o runtime --timestamp -s - TPS\ Cube.app
 
 web:
 	RUSTFLAGS=--cfg=web_sys_unstable_apis cargo build --release --lib --target wasm32-unknown-unknown --no-default-features --features wasm

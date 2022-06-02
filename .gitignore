@@ -1,6 +1,8 @@
 .vscode/
 tpscube
 TPS\ Cube.app/
+TPS\ Cube.zip
+tpscube.dmg
 target/
 lambda.zip
 web/tpscube.js
