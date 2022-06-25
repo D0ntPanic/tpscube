@@ -1,6 +1,7 @@
 use crate::{
-    Color, Corner, CornerPiece, Cube, CubeFace, FaceRotation, InitialCubeState, Move, RandomSource,
-    RotationDirection, StandardRandomSource,
+    Color, Corner, CornerPiece, Cube, CubeFace, CubeRotation, CubeRotationAxis, ExtendedMove,
+    ExtendedMoveContext, ExtendedMoveSequence, FaceRotation, InitialCubeState, KnownAlgorithms,
+    Move, OLLAlgorithm, PLLAlgorithm, RandomSource, RotationDirection, StandardRandomSource,
 };
 use num_enum::TryFromPrimitive;
 use std::collections::BTreeMap;
@@ -478,6 +479,29 @@ impl Solver {
     }
 }
 
+pub enum LastLayerRandomization {
+    /// Fully random state of the last layer (may be solved)
+    RandomState,
+    /// Fully random state of the last layer that requires an OLL and/or PLL algorithm to solve
+    RandomStateUnsolved,
+    /// Fully random oriented state of the last layer (may be solved)
+    OrientedRandomState,
+    /// Fully random oriented state of the last layer that requires a PLL algorithm to solve
+    OrientedRandomStateUnsolved,
+    /// Random OLL case with equal probability for each case (last layer permutation is random)
+    RandomOLL(Vec<OLLAlgorithm>),
+    /// Random OLL case with equal probability for each case (solved permutation for given algorithms)
+    RandomInvertedOLLAlgorithm(BTreeMap<OLLAlgorithm, Vec<ExtendedMove>>),
+    /// Random PLL case with equal probability for each case
+    RandomPLL(Vec<PLLAlgorithm>),
+    /// Random OLL case with realistic probability for each case (last layer permutation is random)
+    WeightedRandomOLL(Vec<OLLAlgorithm>),
+    /// Random OLL case with realistic probability for each case (solved permutation for given algorithms)
+    WeightedRandomInvertedOLLAlgorithm(BTreeMap<OLLAlgorithm, Vec<ExtendedMove>>),
+    /// Random PLL case with realistic probability for each case
+    WeightedRandomPLL(Vec<PLLAlgorithm>),
+}
+
 impl Cube3x3x3 {
     pub const CORNER_ORIENTATION_INDEX_COUNT: usize =
         crate::tables::CUBE_CORNER_ORIENTATION_INDEX_COUNT;
@@ -527,103 +551,292 @@ impl Cube3x3x3 {
         cube
     }
 
-    pub fn random_last_layer(last_layer: CubeFace) -> Self {
-        Self::sourced_random_last_layer(&mut StandardRandomSource, last_layer)
+    fn random_last_layer_orientation<T: RandomSource>(
+        &mut self,
+        rng: &mut T,
+        last_layer: CubeFace,
+    ) {
+        let corners = &crate::tables::corner::CUBE_LAST_LAYER_CORNERS[last_layer as usize];
+        let edges = &crate::tables::table3x3x3::CUBE3_LAST_LAYER_EDGES[last_layer as usize];
+
+        // Randomize the corner orientations
+        let mut corner_orientation_sum = 0;
+        for i in 0..3 {
+            self.corners[corners[i] as usize].orientation = rng.next(3) as u8;
+            corner_orientation_sum += self.corners[corners[i] as usize].orientation;
+        }
+
+        // Randomize the edge orientations
+        let mut edge_orientation_sum = 0;
+        for i in 0..3 {
+            self.edges[edges[i] as usize].orientation = rng.next(2) as u8;
+            edge_orientation_sum += self.edges[edges[i] as usize].orientation;
+        }
+
+        // Make sure all corner orientations add up to a multiple of 3 (otherwise it is not solvable)
+        self.corners[corners[3] as usize].orientation = (3 - (corner_orientation_sum % 3)) % 3;
+
+        // Make sure all edge orientations add up to a multiple of 2 (otherwise it is not solvable)
+        self.edges[edges[3] as usize].orientation = edge_orientation_sum & 1;
     }
 
-    pub fn sourced_random_last_layer<T: RandomSource>(rng: &mut T, last_layer: CubeFace) -> Self {
-        'outer: loop {
-            let mut cube = Self::random_last_layer_pieces(rng, last_layer);
-            let corners = &crate::tables::corner::CUBE_LAST_LAYER_CORNERS[last_layer as usize];
-            let edges = &crate::tables::table3x3x3::CUBE3_LAST_LAYER_EDGES[last_layer as usize];
+    fn oriented_last_layer(&mut self, last_layer: CubeFace) {
+        let corners = &crate::tables::corner::CUBE_LAST_LAYER_CORNERS[last_layer as usize];
+        let edges = &crate::tables::table3x3x3::CUBE3_LAST_LAYER_EDGES[last_layer as usize];
 
-            // Randomize the corner orientations
-            let mut corner_orientation_sum = 0;
-            for i in 0..3 {
-                cube.corners[corners[i] as usize].orientation = rng.next(3) as u8;
-                corner_orientation_sum += cube.corners[corners[i] as usize].orientation;
-            }
+        // Set corner orientations to orient last layer corners
+        for corner_idx in 0..4 {
+            let piece = self.corners[corners[corner_idx] as usize];
+            let pos_idx = crate::tables::corner::CUBE3_CORNER_INDICIES
+                [corners[corner_idx] as usize]
+                .iter()
+                .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                .unwrap();
+            let piece_idx = crate::tables::corner::CUBE3_CORNER_INDICIES
+                [piece.piece as u8 as usize]
+                .iter()
+                .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                .unwrap();
+            self.corners[corners[corner_idx] as usize].orientation =
+                ((pos_idx + 3 - piece_idx) % 3) as u8;
+        }
 
-            // Randomize the edge orientations
-            let mut edge_orientation_sum = 0;
-            for i in 0..3 {
-                cube.edges[edges[i] as usize].orientation = rng.next(2) as u8;
-                edge_orientation_sum += cube.edges[edges[i] as usize].orientation;
-            }
-
-            // Make sure all corner orientations add up to a multiple of 3 (otherwise it is not solvable)
-            cube.corners[corners[3] as usize].orientation = (3 - (corner_orientation_sum % 3)) % 3;
-
-            // Make sure all edge orientations add up to a multiple of 2 (otherwise it is not solvable)
-            cube.edges[edges[3] as usize].orientation = edge_orientation_sum & 1;
-
-            // Ensure last layer isn't solved already
-            let mut solve_check = cube.clone();
-            for _ in 0..4 {
-                if solve_check.is_solved() {
-                    continue 'outer;
-                }
-                solve_check.rotate(last_layer, RotationDirection::CW);
-            }
-
-            return cube;
+        // Set edge orientations to orient last layer edges
+        for edge_idx in 0..4 {
+            let piece = self.edges[edges[edge_idx] as usize];
+            let pos_idx = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES[edges[edge_idx] as usize]
+                .iter()
+                .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                .unwrap();
+            let piece_idx = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES
+                [piece.piece as u8 as usize]
+                .iter()
+                .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
+                .unwrap();
+            self.edges[edges[edge_idx] as usize].orientation =
+                ((pos_idx + 2 - piece_idx) & 1) as u8;
         }
     }
 
-    pub fn random_pll(last_layer: CubeFace) -> Self {
-        Self::sourced_random_pll(&mut StandardRandomSource, last_layer)
+    fn last_layer_cube_rotation(last_layer: CubeFace, count: u32) -> Vec<ExtendedMove> {
+        let axis = match last_layer {
+            CubeFace::Left | CubeFace::Right => CubeRotationAxis::X,
+            CubeFace::Top | CubeFace::Bottom => CubeRotationAxis::Y,
+            CubeFace::Front | CubeFace::Back => CubeRotationAxis::Z,
+        };
+        match CubeRotation::from_axis_and_count(axis, count as i32) {
+            Some(rotation) => vec![ExtendedMove::Rotation(rotation)],
+            None => Vec::new(),
+        }
     }
 
-    pub fn sourced_random_pll<T: RandomSource>(rng: &mut T, last_layer: CubeFace) -> Self {
-        'outer: loop {
-            let mut cube = Self::random_last_layer_pieces(rng, last_layer);
-            let corners = &crate::tables::corner::CUBE_LAST_LAYER_CORNERS[last_layer as usize];
-            let edges = &crate::tables::table3x3x3::CUBE3_LAST_LAYER_EDGES[last_layer as usize];
-
-            // Set corner orientations to orient last layer corners
-            for corner_idx in 0..4 {
-                let piece = cube.corners[corners[corner_idx] as usize];
-                let pos_idx = crate::tables::corner::CUBE3_CORNER_INDICIES
-                    [corners[corner_idx] as usize]
-                    .iter()
-                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
-                    .unwrap();
-                let piece_idx = crate::tables::corner::CUBE3_CORNER_INDICIES
-                    [piece.piece as u8 as usize]
-                    .iter()
-                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
-                    .unwrap();
-                cube.corners[corners[corner_idx] as usize].orientation =
-                    ((pos_idx + 3 - piece_idx) % 3) as u8;
+    pub fn last_layer_solved(&self, last_layer: CubeFace) -> bool {
+        let mut solve_check = self.clone();
+        for _ in 0..4 {
+            if solve_check.is_solved() {
+                return true;
             }
+            solve_check.rotate(last_layer, RotationDirection::CW);
+        }
+        false
+    }
 
-            // Set edge orientations to orient last layer edges
-            for edge_idx in 0..4 {
-                let piece = cube.edges[edges[edge_idx] as usize];
-                let pos_idx = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES
-                    [edges[edge_idx] as usize]
-                    .iter()
-                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
-                    .unwrap();
-                let piece_idx = crate::tables::table3x3x3::CUBE3_EDGE_INDICIES
-                    [piece.piece as u8 as usize]
-                    .iter()
-                    .position(|i| Cube3x3x3Faces::face_for_idx(*i) == last_layer)
-                    .unwrap();
-                cube.edges[edges[edge_idx] as usize].orientation =
-                    ((pos_idx + 2 - piece_idx) & 1) as u8;
+    pub fn random_last_layer(last_layer: CubeFace, randomization: LastLayerRandomization) -> Self {
+        Self::sourced_random_last_layer(&mut StandardRandomSource, last_layer, randomization)
+    }
+
+    pub fn sourced_random_last_layer<T: RandomSource>(
+        rng: &mut T,
+        last_layer: CubeFace,
+        randomization: LastLayerRandomization,
+    ) -> Self {
+        match randomization {
+            LastLayerRandomization::RandomState => {
+                let mut cube = Self::random_last_layer_pieces(rng, last_layer);
+                cube.random_last_layer_orientation(rng, last_layer);
+                cube
             }
-
-            // Ensure last layer isn't solved already
-            let mut solve_check = cube.clone();
-            for _ in 0..4 {
-                if solve_check.is_solved() {
-                    continue 'outer;
+            LastLayerRandomization::RandomStateUnsolved => loop {
+                let mut cube = Self::random_last_layer_pieces(rng, last_layer);
+                cube.random_last_layer_orientation(rng, last_layer);
+                if !cube.last_layer_solved(last_layer) {
+                    break cube;
                 }
-                solve_check.rotate(last_layer, RotationDirection::CW);
+            },
+            LastLayerRandomization::OrientedRandomState => {
+                let mut cube = Self::random_last_layer_pieces(rng, last_layer);
+                cube.oriented_last_layer(last_layer);
+                cube
             }
+            LastLayerRandomization::OrientedRandomStateUnsolved => loop {
+                let mut cube = Self::random_last_layer_pieces(rng, last_layer);
+                cube.oriented_last_layer(last_layer);
+                if !cube.last_layer_solved(last_layer) {
+                    break cube;
+                }
+            },
+            LastLayerRandomization::RandomOLL(oll_choices) => {
+                // Start with a random oriented state
+                let mut cube = Self::random_last_layer_pieces(rng, last_layer);
+                cube.oriented_last_layer(last_layer);
 
-            return cube;
+                // Pick a random cube orientation to start from
+                let orientation = rng.next(4);
+                let mut moves = Self::last_layer_cube_rotation(last_layer, orientation);
+
+                if oll_choices.len() > 0 {
+                    // Pick the OLL to use
+                    let oll = oll_choices[rng.next(oll_choices.len() as u32) as usize];
+
+                    // Get a valid algorithm to perform the OLL permutation and insert it into
+                    // the move list as an inverse, so that we arrive at the correct OLL case.
+                    let mut oll_alg = KnownAlgorithms::oll(oll)[0].inverse();
+                    moves.append(&mut oll_alg);
+                }
+
+                // Pick a random orientation of the last layer face
+                let orientation = rng.next(4);
+                let orient_moves =
+                    match Move::from_face_and_rotation(last_layer, orientation as i32) {
+                        Some(mv) => vec![mv],
+                        None => Vec::new(),
+                    };
+
+                // Apply moves to the cube state
+                let mut context = ExtendedMoveContext::new(&mut cube);
+                context.do_moves(&moves);
+                cube.do_moves(&orient_moves);
+
+                cube
+            }
+            LastLayerRandomization::RandomInvertedOLLAlgorithm(oll_choices) => {
+                // Pick a random cube orientation to start from
+                let mut cube = Self::new();
+                let orientation = rng.next(4);
+                let mut moves = Self::last_layer_cube_rotation(last_layer, orientation);
+
+                if oll_choices.len() > 0 {
+                    // Pick the OLL to use
+                    let oll_algs: Vec<OLLAlgorithm> = oll_choices.keys().map(|x| *x).collect();
+                    let oll = oll_algs[rng.next(oll_algs.len() as u32) as usize];
+
+                    // Get the desired algorithm to perform the OLL permutation and insert it into
+                    // the move list as an inverse, so that we arrive at the correct OLL case.
+                    let mut oll_alg = oll_choices.get(&oll).unwrap().inverse();
+                    moves.append(&mut oll_alg);
+                }
+
+                // Pick a random orientation of the last layer face
+                let orientation = rng.next(4);
+                let orient_moves =
+                    match Move::from_face_and_rotation(last_layer, orientation as i32) {
+                        Some(mv) => vec![mv],
+                        None => Vec::new(),
+                    };
+
+                // Apply moves to the cube state
+                let mut context = ExtendedMoveContext::new(&mut cube);
+                context.do_moves(&moves);
+                cube.do_moves(&orient_moves);
+
+                cube
+            }
+            LastLayerRandomization::RandomPLL(pll_choices) => {
+                // Pick a random cube orientation to start from
+                let mut cube = Self::new();
+                let orientation = rng.next(4);
+                let mut moves = Self::last_layer_cube_rotation(last_layer, orientation);
+
+                if pll_choices.len() > 0 {
+                    // Pick the PLL to use
+                    let pll = pll_choices[rng.next(pll_choices.len() as u32) as usize];
+
+                    // Get a valid algorithm to perform the PLL and insert it into the move
+                    // list as an inverse, so that we arrive at the correct PLL case.
+                    let mut pll_alg = KnownAlgorithms::pll(pll)[0].inverse();
+                    moves.append(&mut pll_alg);
+                }
+
+                // Pick a random orientation of the last layer face
+                let orientation = rng.next(4);
+                let orient_moves =
+                    match Move::from_face_and_rotation(last_layer, orientation as i32) {
+                        Some(mv) => vec![mv],
+                        None => Vec::new(),
+                    };
+
+                // Apply moves to the cube state
+                let mut context = ExtendedMoveContext::new(&mut cube);
+                context.do_moves(&moves);
+                cube.do_moves(&orient_moves);
+
+                cube
+            }
+            LastLayerRandomization::WeightedRandomOLL(oll_choices) => {
+                let mut weighted_cases = Vec::new();
+                for oll in oll_choices {
+                    for _ in 0..oll.probability_weight() {
+                        weighted_cases.push(oll);
+                    }
+                }
+                Self::sourced_random_last_layer(
+                    rng,
+                    last_layer,
+                    LastLayerRandomization::RandomOLL(weighted_cases),
+                )
+            }
+            LastLayerRandomization::WeightedRandomInvertedOLLAlgorithm(oll_choices) => {
+                // Pick a random cube orientation to start from
+                let mut cube = Self::new();
+                let orientation = rng.next(4);
+                let mut moves = Self::last_layer_cube_rotation(last_layer, orientation);
+
+                // Pick the OLL to use
+                let oll_algs: Vec<OLLAlgorithm> = oll_choices.keys().map(|x| *x).collect();
+                let mut weighted_oll_algs = Vec::new();
+                for oll in oll_algs {
+                    for _ in 0..oll.probability_weight() {
+                        weighted_oll_algs.push(oll);
+                    }
+                }
+
+                if weighted_oll_algs.len() > 0 {
+                    let oll = weighted_oll_algs[rng.next(weighted_oll_algs.len() as u32) as usize];
+
+                    // Get the desired algorithm to perform the OLL permutation and insert it into
+                    // the move list as an inverse, so that we arrive at the correct OLL case.
+                    let mut oll_alg = oll_choices.get(&oll).unwrap().inverse();
+                    moves.append(&mut oll_alg);
+                }
+
+                // Pick a random orientation of the last layer face
+                let orientation = rng.next(4);
+                let orient_moves =
+                    match Move::from_face_and_rotation(last_layer, orientation as i32) {
+                        Some(mv) => vec![mv],
+                        None => Vec::new(),
+                    };
+
+                // Apply moves to the cube state
+                let mut context = ExtendedMoveContext::new(&mut cube);
+                context.do_moves(&moves);
+                cube.do_moves(&orient_moves);
+
+                cube
+            }
+            LastLayerRandomization::WeightedRandomPLL(pll_choices) => {
+                let mut weighted_cases = Vec::new();
+                for pll in pll_choices {
+                    for _ in 0..pll.probability_weight() {
+                        weighted_cases.push(pll);
+                    }
+                }
+                Self::sourced_random_last_layer(
+                    rng,
+                    last_layer,
+                    LastLayerRandomization::RandomPLL(weighted_cases),
+                )
+            }
         }
     }
 

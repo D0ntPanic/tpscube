@@ -32,7 +32,8 @@ pub use crate::rand::{RandomSource, SimpleSeededRandomSource, StandardRandomSour
 pub use action::{Action, StoredAction};
 pub use algorithms::known::KnownAlgorithms;
 pub use algorithms::moves::{
-    CubeRotation, ExtendedMove, ExtendedMoveContext, ExtendedMoveSequence, SliceMove, WideMove,
+    CubeRotation, CubeRotationAxis, ExtendedMove, ExtendedMoveContext, ExtendedMoveSequence,
+    SliceMove, SliceMoveAxis, WideMove,
 };
 pub use analysis::{
     Analysis, AnalysisStepSummary, AnalysisSubstepTime, AnalysisSummary, CFOPAnalysis,
@@ -46,7 +47,7 @@ pub use common::{
     RotationDirection, Solve, SolveList, SolveType, TimedMove,
 };
 pub use cube2x2x2::{Cube2x2x2, Cube2x2x2Faces};
-pub use cube3x3x3::{Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3};
+pub use cube3x3x3::{Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3, LastLayerRandomization};
 pub use cube4x4x4::{Cube4x4x4, Cube4x4x4Faces, Edge4x4x4, EdgePiece4x4x4};
 pub use request::{SyncRequest, SyncResponse, SYNC_API_VERSION};
 
@@ -73,8 +74,8 @@ mod tests {
     use crate::{
         Cube, Cube2x2x2, Cube2x2x2Faces, Cube3x3x3, Cube3x3x3Faces, Cube4x4x4, Cube4x4x4Faces,
         CubeFace, ExtendedMove, ExtendedMoveContext, ExtendedMoveSequence, InitialCubeState,
-        KnownAlgorithms, Move, MoveSequence, OLLAlgorithm, PLLAlgorithm, RandomSource,
-        SimpleSeededRandomSource,
+        KnownAlgorithms, LastLayerRandomization, Move, MoveSequence, OLLAlgorithm, PLLAlgorithm,
+        RandomSource, SimpleSeededRandomSource,
     };
     use std::convert::TryFrom;
 
@@ -612,7 +613,11 @@ mod tests {
         let mut rng = SimpleSeededRandomSource::new();
         for _ in 0..1000000 {
             let face = CubeFace::try_from(rng.next(6) as u8).unwrap();
-            let cube = Cube3x3x3::sourced_random_last_layer(&mut rng, face);
+            let cube = Cube3x3x3::sourced_random_last_layer(
+                &mut rng,
+                face,
+                LastLayerRandomization::RandomStateUnsolved,
+            );
             let oll_alg = OLLAlgorithm::from_cube(&cube.as_faces(), face);
             let pll_alg = PLLAlgorithm::from_cube(&cube.as_faces(), face);
             assert!(
@@ -631,7 +636,11 @@ mod tests {
         let mut rng = SimpleSeededRandomSource::new();
         for _ in 0..1000000 {
             let face = CubeFace::try_from(rng.next(6) as u8).unwrap();
-            let cube = Cube3x3x3::sourced_random_pll(&mut rng, face);
+            let cube = Cube3x3x3::sourced_random_last_layer(
+                &mut rng,
+                face,
+                LastLayerRandomization::OrientedRandomStateUnsolved,
+            );
             let pll_alg = PLLAlgorithm::from_cube(&cube.as_faces(), face);
             assert!(pll_alg.is_some(), "Bad PLL for face {:?}\n{}", face, cube,);
         }
@@ -639,9 +648,8 @@ mod tests {
 
     #[test]
     fn oll_known_algorithms() {
-        for case in 1..=57 {
-            let case = OLLAlgorithm::from_number(case);
-            let algs = KnownAlgorithms::oll(case);
+        for case in OLLAlgorithm::all() {
+            let algs = KnownAlgorithms::oll(*case);
             assert!(!algs.is_empty());
 
             for alg in algs {
@@ -654,7 +662,7 @@ mod tests {
                 let oll = OLLAlgorithm::from_cube(&cube.as_faces(), CubeFace::Top);
 
                 assert!(
-                    oll == Some(case),
+                    oll == Some(*case),
                     "OLL case {:?} algorithm {} not valid (detected {:?})\n{}",
                     case,
                     alg.iter()
@@ -676,7 +684,7 @@ mod tests {
                 assert!(
                     ending_rotation.is_empty(),
                     "OLL case {:?} algorithm {} ends rotated (hint: add {} to end)",
-                    case,
+                    *case,
                     alg.iter()
                         .map(|mv| mv.to_string())
                         .collect::<Vec<String>>()
@@ -696,29 +704,7 @@ mod tests {
 
     #[test]
     fn pll_known_algorithms() {
-        for case in &[
-            PLLAlgorithm::Aa,
-            PLLAlgorithm::Ab,
-            PLLAlgorithm::F,
-            PLLAlgorithm::Ga,
-            PLLAlgorithm::Gb,
-            PLLAlgorithm::Gc,
-            PLLAlgorithm::Gd,
-            PLLAlgorithm::Ja,
-            PLLAlgorithm::Jb,
-            PLLAlgorithm::Ra,
-            PLLAlgorithm::Rb,
-            PLLAlgorithm::T,
-            PLLAlgorithm::E,
-            PLLAlgorithm::Na,
-            PLLAlgorithm::Nb,
-            PLLAlgorithm::V,
-            PLLAlgorithm::Y,
-            PLLAlgorithm::H,
-            PLLAlgorithm::Ua,
-            PLLAlgorithm::Ub,
-            PLLAlgorithm::Z,
-        ] {
+        for case in PLLAlgorithm::all() {
             let algs = KnownAlgorithms::pll(*case);
             assert!(!algs.is_empty());
 

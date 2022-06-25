@@ -207,7 +207,84 @@ impl CFOPAnalysis {
 }
 
 impl OLLAlgorithm {
-    fn from_index(idx: usize) -> Self {
+    pub const TOTAL_PROBABILITY_WEIGHT: usize = 216;
+
+    pub const fn all() -> &'static [Self] {
+        const CASES: &'static [OLLAlgorithm] = &[
+            OLLAlgorithm::from_number(1),
+            OLLAlgorithm::from_number(2),
+            OLLAlgorithm::from_number(3),
+            OLLAlgorithm::from_number(4),
+            OLLAlgorithm::from_number(5),
+            OLLAlgorithm::from_number(6),
+            OLLAlgorithm::from_number(7),
+            OLLAlgorithm::from_number(8),
+            OLLAlgorithm::from_number(9),
+            OLLAlgorithm::from_number(10),
+            OLLAlgorithm::from_number(11),
+            OLLAlgorithm::from_number(12),
+            OLLAlgorithm::from_number(13),
+            OLLAlgorithm::from_number(14),
+            OLLAlgorithm::from_number(15),
+            OLLAlgorithm::from_number(16),
+            OLLAlgorithm::from_number(17),
+            OLLAlgorithm::from_number(18),
+            OLLAlgorithm::from_number(19),
+            OLLAlgorithm::from_number(20),
+            OLLAlgorithm::from_number(21),
+            OLLAlgorithm::from_number(22),
+            OLLAlgorithm::from_number(23),
+            OLLAlgorithm::from_number(24),
+            OLLAlgorithm::from_number(25),
+            OLLAlgorithm::from_number(26),
+            OLLAlgorithm::from_number(27),
+            OLLAlgorithm::from_number(28),
+            OLLAlgorithm::from_number(29),
+            OLLAlgorithm::from_number(30),
+            OLLAlgorithm::from_number(31),
+            OLLAlgorithm::from_number(32),
+            OLLAlgorithm::from_number(33),
+            OLLAlgorithm::from_number(34),
+            OLLAlgorithm::from_number(35),
+            OLLAlgorithm::from_number(36),
+            OLLAlgorithm::from_number(37),
+            OLLAlgorithm::from_number(38),
+            OLLAlgorithm::from_number(39),
+            OLLAlgorithm::from_number(40),
+            OLLAlgorithm::from_number(41),
+            OLLAlgorithm::from_number(42),
+            OLLAlgorithm::from_number(43),
+            OLLAlgorithm::from_number(44),
+            OLLAlgorithm::from_number(45),
+            OLLAlgorithm::from_number(46),
+            OLLAlgorithm::from_number(47),
+            OLLAlgorithm::from_number(48),
+            OLLAlgorithm::from_number(49),
+            OLLAlgorithm::from_number(50),
+            OLLAlgorithm::from_number(51),
+            OLLAlgorithm::from_number(52),
+            OLLAlgorithm::from_number(53),
+            OLLAlgorithm::from_number(54),
+            OLLAlgorithm::from_number(55),
+            OLLAlgorithm::from_number(56),
+            OLLAlgorithm::from_number(57),
+        ];
+        CASES
+    }
+
+    pub const fn two_look() -> &'static [Self] {
+        &[
+            OLLAlgorithm::H,
+            OLLAlgorithm::Pi,
+            OLLAlgorithm::U,
+            OLLAlgorithm::T,
+            OLLAlgorithm::L,
+            OLLAlgorithm::Antisune,
+            OLLAlgorithm::Sune,
+        ]
+    }
+
+    const fn from_index(idx: usize) -> Self {
         match idx + 1 {
             21 => OLLAlgorithm::H,
             22 => OLLAlgorithm::Pi,
@@ -220,11 +297,11 @@ impl OLLAlgorithm {
         }
     }
 
-    pub fn from_number(n: u8) -> Self {
+    pub const fn from_number(n: u8) -> Self {
         Self::from_index(n as usize - 1)
     }
 
-    pub fn is_cross(&self) -> bool {
+    pub const fn is_cross(&self) -> bool {
         match self {
             OLLAlgorithm::H
             | OLLAlgorithm::Pi
@@ -237,7 +314,7 @@ impl OLLAlgorithm {
         }
     }
 
-    pub fn as_number(&self) -> u8 {
+    pub const fn as_number(&self) -> u8 {
         match self {
             OLLAlgorithm::H => 21,
             OLLAlgorithm::Pi => 22,
@@ -247,6 +324,69 @@ impl OLLAlgorithm {
             OLLAlgorithm::Antisune => 26,
             OLLAlgorithm::Sune => 27,
             OLLAlgorithm::OLL(num) => *num,
+        }
+    }
+
+    pub const fn probability_weight(&self) -> usize {
+        match self {
+            OLLAlgorithm::OLL(1) => 2,
+            OLLAlgorithm::OLL(2) => 4,
+            OLLAlgorithm::OLL(3) => 4,
+            OLLAlgorithm::OLL(4) => 4,
+            OLLAlgorithm::OLL(5) => 4,
+            OLLAlgorithm::OLL(6) => 4,
+            OLLAlgorithm::OLL(7) => 4,
+            OLLAlgorithm::OLL(8) => 4,
+            OLLAlgorithm::OLL(9) => 4,
+            OLLAlgorithm::OLL(10) => 4,
+            OLLAlgorithm::OLL(11) => 4,
+            OLLAlgorithm::OLL(12) => 4,
+            OLLAlgorithm::OLL(13) => 4,
+            OLLAlgorithm::OLL(14) => 4,
+            OLLAlgorithm::OLL(15) => 4,
+            OLLAlgorithm::OLL(16) => 4,
+            OLLAlgorithm::OLL(17) => 4,
+            OLLAlgorithm::OLL(18) => 4,
+            OLLAlgorithm::OLL(19) => 4,
+            OLLAlgorithm::OLL(20) => 1,
+            OLLAlgorithm::H => 2,
+            OLLAlgorithm::Pi => 4,
+            OLLAlgorithm::U => 4,
+            OLLAlgorithm::T => 4,
+            OLLAlgorithm::L => 4,
+            OLLAlgorithm::Antisune => 4,
+            OLLAlgorithm::Sune => 4,
+            OLLAlgorithm::OLL(28) => 4,
+            OLLAlgorithm::OLL(29) => 4,
+            OLLAlgorithm::OLL(30) => 4,
+            OLLAlgorithm::OLL(31) => 4,
+            OLLAlgorithm::OLL(32) => 4,
+            OLLAlgorithm::OLL(33) => 4,
+            OLLAlgorithm::OLL(34) => 4,
+            OLLAlgorithm::OLL(35) => 4,
+            OLLAlgorithm::OLL(36) => 4,
+            OLLAlgorithm::OLL(37) => 4,
+            OLLAlgorithm::OLL(38) => 4,
+            OLLAlgorithm::OLL(39) => 4,
+            OLLAlgorithm::OLL(40) => 4,
+            OLLAlgorithm::OLL(41) => 4,
+            OLLAlgorithm::OLL(42) => 4,
+            OLLAlgorithm::OLL(43) => 4,
+            OLLAlgorithm::OLL(44) => 4,
+            OLLAlgorithm::OLL(45) => 4,
+            OLLAlgorithm::OLL(46) => 4,
+            OLLAlgorithm::OLL(47) => 4,
+            OLLAlgorithm::OLL(48) => 4,
+            OLLAlgorithm::OLL(49) => 4,
+            OLLAlgorithm::OLL(50) => 4,
+            OLLAlgorithm::OLL(51) => 4,
+            OLLAlgorithm::OLL(52) => 4,
+            OLLAlgorithm::OLL(53) => 4,
+            OLLAlgorithm::OLL(54) => 4,
+            OLLAlgorithm::OLL(55) => 2,
+            OLLAlgorithm::OLL(56) => 2,
+            OLLAlgorithm::OLL(57) => 2,
+            _ => 0,
         }
     }
 
@@ -348,7 +488,46 @@ impl OLLAlgorithm {
 }
 
 impl PLLAlgorithm {
-    fn from_index(idx: usize) -> Self {
+    pub const TOTAL_PROBABILITY_WEIGHT: usize = 72;
+
+    pub const fn all() -> &'static [Self] {
+        &[
+            PLLAlgorithm::Aa,
+            PLLAlgorithm::Ab,
+            PLLAlgorithm::F,
+            PLLAlgorithm::Ga,
+            PLLAlgorithm::Gb,
+            PLLAlgorithm::Gc,
+            PLLAlgorithm::Gd,
+            PLLAlgorithm::Ja,
+            PLLAlgorithm::Jb,
+            PLLAlgorithm::Ra,
+            PLLAlgorithm::Rb,
+            PLLAlgorithm::T,
+            PLLAlgorithm::E,
+            PLLAlgorithm::Na,
+            PLLAlgorithm::Nb,
+            PLLAlgorithm::V,
+            PLLAlgorithm::Y,
+            PLLAlgorithm::H,
+            PLLAlgorithm::Ua,
+            PLLAlgorithm::Ub,
+            PLLAlgorithm::Z,
+        ]
+    }
+
+    pub const fn two_look() -> &'static [Self] {
+        &[
+            PLLAlgorithm::T,
+            PLLAlgorithm::Y,
+            PLLAlgorithm::H,
+            PLLAlgorithm::Ua,
+            PLLAlgorithm::Ub,
+            PLLAlgorithm::Z,
+        ]
+    }
+
+    const fn from_index(idx: usize) -> Self {
         match idx {
             0 => PLLAlgorithm::Aa,
             1 => PLLAlgorithm::Ab,
@@ -375,7 +554,33 @@ impl PLLAlgorithm {
         }
     }
 
-    pub fn to_str(&self) -> &'static str {
+    pub const fn probability_weight(&self) -> usize {
+        match self {
+            PLLAlgorithm::Aa => 4,
+            PLLAlgorithm::Ab => 4,
+            PLLAlgorithm::F => 4,
+            PLLAlgorithm::Ga => 4,
+            PLLAlgorithm::Gb => 4,
+            PLLAlgorithm::Gc => 4,
+            PLLAlgorithm::Gd => 4,
+            PLLAlgorithm::Ja => 4,
+            PLLAlgorithm::Jb => 4,
+            PLLAlgorithm::Ra => 4,
+            PLLAlgorithm::Rb => 4,
+            PLLAlgorithm::T => 4,
+            PLLAlgorithm::E => 2,
+            PLLAlgorithm::Na => 1,
+            PLLAlgorithm::Nb => 1,
+            PLLAlgorithm::V => 4,
+            PLLAlgorithm::Y => 4,
+            PLLAlgorithm::H => 1,
+            PLLAlgorithm::Ua => 4,
+            PLLAlgorithm::Ub => 4,
+            PLLAlgorithm::Z => 2,
+        }
+    }
+
+    pub const fn to_str(&self) -> &'static str {
         match self {
             PLLAlgorithm::Aa => "Aa",
             PLLAlgorithm::Ab => "Ab",
