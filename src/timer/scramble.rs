@@ -10,8 +10,9 @@ use crate::widgets::fit_scramble;
 use anyhow::Result;
 use egui::{CtxRef, Pos2, Rect, Response, Sense, Ui, Vec2};
 use tpscube_core::{
-    scramble_2x2x2, scramble_3x3x3, scramble_4x4x4, Cube, Cube2x2x2, Cube3x3x3, Cube4x4x4,
-    InitialCubeState, Move, MoveSequence, SolveType,
+    scramble_2x2x2, scramble_3x3x3, scramble_4x4x4, scramble_last_layer, Cube, Cube2x2x2,
+    Cube3x3x3, Cube4x4x4, History, InitialCubeState, LastLayerRandomization, Move, MoveSequence,
+    Penalty, SolveType,
 };
 
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
@@ -19,6 +20,9 @@ const TARGET_ANALYSIS_SCRAMBLE_FRACTION: f32 = 0.15;
 const TARGET_TIMER_FRACTION: f32 = 0.2;
 
 const NEW_SCRAMBLE_PADDING: f32 = 4.0;
+
+const TRAINING_PENALTY_SPACING: f32 = 32.0;
+const TRAINING_PENALTY_PADDING: f32 = 16.0;
 
 const ANALYSIS_MIN_PADDING: f32 = 24.0;
 const ANALYSIS_MAX_PADDING: f32 = 64.0;
@@ -35,6 +39,7 @@ pub struct TimerCube {
     scramble_pending_move: Option<Move>,
     scramble_fix_moves: Vec<Move>,
     solve_type: SolveType,
+    last_layer_training: LastLayerTrainingSettings,
 }
 
 enum ScrambleMoveResult {
@@ -42,6 +47,44 @@ enum ScrambleMoveResult {
     Bad,
     BadWithPending(Move),
     Pending,
+}
+
+#[derive(Clone, Debug)]
+pub struct LastLayerTrainingSettings {
+    pub algorithms: LastLayerAlgorithmSelection,
+    pub realistic_weights: bool,
+    pub learning_multiplier: usize,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LastLayerAlgorithmSelection {
+    Known,
+    Learning,
+    KnownAndLearning,
+    All,
+}
+
+impl LastLayerAlgorithmSelection {
+    pub fn from_str(string: &str) -> Option<Self> {
+        match string {
+            "Known" => Some(LastLayerAlgorithmSelection::Known),
+            "Learning" => Some(LastLayerAlgorithmSelection::Learning),
+            "Known + Learning" => Some(LastLayerAlgorithmSelection::KnownAndLearning),
+            "All" => Some(LastLayerAlgorithmSelection::All),
+            _ => None,
+        }
+    }
+}
+
+impl ToString for LastLayerAlgorithmSelection {
+    fn to_string(&self) -> String {
+        match self {
+            LastLayerAlgorithmSelection::Known => "Known".to_string(),
+            LastLayerAlgorithmSelection::Learning => "Learning".to_string(),
+            LastLayerAlgorithmSelection::KnownAndLearning => "Known + Learning".to_string(),
+            LastLayerAlgorithmSelection::All => "All".to_string(),
+        }
+    }
 }
 
 impl TimerCube {
@@ -63,6 +106,11 @@ impl TimerCube {
             scramble_pending_move: None,
             scramble_fix_moves: Vec::new(),
             solve_type: SolveType::Standard3x3x3,
+            last_layer_training: LastLayerTrainingSettings {
+                algorithms: LastLayerAlgorithmSelection::All,
+                realistic_weights: true,
+                learning_multiplier: 1,
+            },
         }
     }
 
@@ -81,6 +129,12 @@ impl TimerCube {
                 scramble_3x3x3()
             }
             SolveType::Standard4x4x4 | SolveType::Blind4x4x4 => scramble_4x4x4(),
+            SolveType::OLLTraining => {
+                scramble_last_layer(LastLayerRandomization::RandomStateUnsolved)
+            }
+            SolveType::PLLTraining => {
+                scramble_last_layer(LastLayerRandomization::OrientedRandomStateUnsolved)
+            }
         }
     }
 
@@ -352,6 +406,150 @@ impl TimerCube {
         *center = rect.center();
     }
 
+    pub fn training_penalty_buttons(
+        &mut self,
+        ui: &mut Ui,
+        history: &mut History,
+        state: &mut TimerState,
+        rect: &mut Rect,
+        center: &mut Pos2,
+    ) {
+        if let TimerState::Inactive(_, Some(last_solve)) = state {
+            if last_solve.solve_type != self.solve_type
+                || !last_solve.solve_type.is_last_layer_training()
+            {
+                return;
+            }
+
+            let ok_galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "✔  Solve OK".into());
+            let misrecognize_galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "👁  Misrecognized".into());
+            let misexecute_galley = ui
+                .fonts()
+                .layout_single_line(FontSize::Normal.into(), "✖  Misexecuted".into());
+
+            let total_width = ok_galley.size.x
+                + misrecognize_galley.size.x
+                + misexecute_galley.size.x
+                + TRAINING_PENALTY_SPACING * 2.0;
+            let mut x = rect.center().x - total_width / 2.0;
+            let bottom_padding = TRAINING_PENALTY_PADDING + 32.0;
+
+            let ok_rect;
+            let misrecognize_rect;
+            let misexecute_rect;
+            if x < TRAINING_PENALTY_SPACING {
+                // Too wide to fit, place on two lines
+                ok_rect = Rect::from_min_size(
+                    Pos2::new(
+                        rect.center().x - ok_galley.size.x / 2.0,
+                        rect.bottom() - bottom_padding - ok_galley.size.y * 2.5,
+                    ),
+                    ok_galley.size,
+                );
+
+                let total_width = misrecognize_galley.size.x
+                    + misexecute_galley.size.x
+                    + TRAINING_PENALTY_SPACING;
+                x = rect.center().x - total_width / 2.0;
+                misrecognize_rect = Rect::from_min_size(
+                    Pos2::new(
+                        x,
+                        rect.bottom() - bottom_padding - misrecognize_galley.size.y,
+                    ),
+                    misrecognize_galley.size,
+                );
+                x += misrecognize_galley.size.x + TRAINING_PENALTY_SPACING;
+                misexecute_rect = Rect::from_min_size(
+                    Pos2::new(x, rect.bottom() - bottom_padding - misexecute_galley.size.y),
+                    misexecute_galley.size,
+                );
+            } else {
+                ok_rect = Rect::from_min_size(
+                    Pos2::new(x, rect.bottom() - bottom_padding - ok_galley.size.y),
+                    ok_galley.size,
+                );
+                x += ok_galley.size.x + TRAINING_PENALTY_SPACING;
+                misrecognize_rect = Rect::from_min_size(
+                    Pos2::new(
+                        x,
+                        rect.bottom() - bottom_padding - misrecognize_galley.size.y,
+                    ),
+                    misrecognize_galley.size,
+                );
+                x += misrecognize_galley.size.x + TRAINING_PENALTY_SPACING;
+                misexecute_rect = Rect::from_min_size(
+                    Pos2::new(x, rect.bottom() - bottom_padding - misexecute_galley.size.y),
+                    misexecute_galley.size,
+                );
+            }
+
+            let ok_interact = ui.allocate_rect(ok_rect, Sense::click());
+            ui.painter().galley(
+                ok_rect.left_top(),
+                ok_galley,
+                if ok_interact.hovered() || last_solve.penalty == Penalty::None {
+                    Theme::Green.into()
+                } else {
+                    Theme::Light.into()
+                },
+            );
+
+            let misrecognize_interact = ui.allocate_rect(misrecognize_rect, Sense::click());
+            ui.painter().galley(
+                misrecognize_rect.left_top(),
+                misrecognize_galley,
+                if misrecognize_interact.hovered() || last_solve.penalty == Penalty::RecognitionDNF
+                {
+                    Theme::Red.into()
+                } else {
+                    Theme::Light.into()
+                },
+            );
+
+            let misexecute_interact = ui.allocate_rect(misexecute_rect, Sense::click());
+            ui.painter().galley(
+                misexecute_rect.left_top(),
+                misexecute_galley,
+                if misexecute_interact.hovered() || last_solve.penalty == Penalty::ExecutionDNF {
+                    Theme::Red.into()
+                } else {
+                    Theme::Light.into()
+                },
+            );
+
+            // Check for clicks
+            if ok_interact.clicked() {
+                history.penalty(last_solve.id.clone(), Penalty::None);
+                let _ = history.local_commit();
+                last_solve.penalty = Penalty::None;
+            }
+
+            if misrecognize_interact.clicked() {
+                history.penalty(last_solve.id.clone(), Penalty::RecognitionDNF);
+                let _ = history.local_commit();
+                last_solve.penalty = Penalty::RecognitionDNF;
+            }
+
+            if misexecute_interact.clicked() {
+                history.penalty(last_solve.id.clone(), Penalty::ExecutionDNF);
+                let _ = history.local_commit();
+                last_solve.penalty = Penalty::ExecutionDNF;
+            }
+
+            // Adjust remaining rectangle to remove new scramble button area
+            let bottom_left = Pos2::new(rect.left(), ok_rect.top() - TRAINING_PENALTY_PADDING);
+            *rect = Rect::from_min_size(
+                rect.left_top(),
+                Vec2::new(rect.width(), bottom_left.y - rect.top()),
+            );
+            *center = rect.center();
+        }
+    }
+
     pub fn scramble_ui(
         &mut self,
         ui: &mut Ui,
@@ -425,11 +623,19 @@ impl TimerCube {
             16.0
         };
 
+        let show_cube = !self.solve_type.is_last_layer_training();
         let cube_height = rect.height()
             - (scramble_padding + scramble_height + timer_height + timer_padding - timer_overlap);
 
+        let margin = if show_cube {
+            0.0
+        } else {
+            (cube_height - min_timer_height * 0.25) / 2.0
+        };
+
         // Render scramble
-        let mut y = rect.top() + scramble_padding + (scramble_height - min_scramble_height) / 2.0;
+        let mut y =
+            rect.top() + margin + scramble_padding + (scramble_height - min_scramble_height) / 2.0;
         let mut move_idx = 0;
         for (line_idx, line) in scramble.iter().enumerate() {
             // Layout individual moves in the scramble
@@ -486,15 +692,19 @@ impl TimerCube {
 
         // Allocate space for the cube rendering. This is 3D so it will be rendered
         // with OpenGL after egui is done painting.
-        let computed_cube_rect = Rect::from_min_size(
-            Pos2::new(center.x - cube_height / 2.0, y),
-            Vec2::new(cube_height, cube_height),
-        );
-        if computed_cube_rect.width() > 0.0 && computed_cube_rect.height() > 0.0 {
-            *cube_rect = Some(computed_cube_rect);
-            if self.animating() {
-                framerate.request_max();
+        if show_cube {
+            let computed_cube_rect = Rect::from_min_size(
+                Pos2::new(center.x - cube_height / 2.0, y),
+                Vec2::new(cube_height, cube_height),
+            );
+            if computed_cube_rect.width() > 0.0 && computed_cube_rect.height() > 0.0 {
+                *cube_rect = Some(computed_cube_rect);
+                if self.animating() {
+                    framerate.request_max();
+                }
             }
+        } else {
+            *cube_rect = None;
         }
 
         // Layout timer
@@ -524,6 +734,7 @@ impl TimerCube {
         let timer_width = timer_galley.size.x;
         let move_count_height = ui.fonts().row_height(FontSize::Normal.into());
         let timer_y = rect.bottom()
+            - margin
             - (timer_height / 2.0 + timer_padding)
             - (min_timer_height
                 + if analysis.present() {
@@ -606,22 +817,109 @@ impl TimerCube {
         }
     }
 
-    pub fn check_solve_type(&mut self, solve_type: SolveType) {
+    pub fn check_solve_type(&mut self, solve_type: SolveType, history: &mut History) {
         if self.solve_type == solve_type {
             return;
         }
 
         self.solve_type = solve_type;
 
+        if solve_type.is_last_layer_training() {
+            self.last_layer_training.algorithms = LastLayerAlgorithmSelection::from_str(
+                &history
+                    .setting_as_string("last_layer_training_algorithms")
+                    .unwrap_or("All".into()),
+            )
+            .unwrap_or(LastLayerAlgorithmSelection::All);
+            self.last_layer_training.realistic_weights = history
+                .setting_as_bool("last_layer_training_realistic_weights")
+                .unwrap_or(true);
+            self.last_layer_training.learning_multiplier = history
+                .setting_as_i64("last_layer_training_learning_multiplier")
+                .unwrap_or(1)
+                .clamp(1, 32) as usize;
+        }
+
         self.renderer = match solve_type {
             SolveType::Standard2x2x2 => CubeRenderer::new(Box::new(Cube2x2x2::new())),
-            SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => {
-                CubeRenderer::new(Box::new(Cube3x3x3::new()))
-            }
+            SolveType::Standard3x3x3
+            | SolveType::OneHanded3x3x3
+            | SolveType::Blind3x3x3
+            | SolveType::OLLTraining
+            | SolveType::PLLTraining => CubeRenderer::new(Box::new(Cube3x3x3::new())),
             SolveType::Standard4x4x4 | SolveType::Blind4x4x4 => {
                 CubeRenderer::new(Box::new(Cube4x4x4::new()))
             }
         };
+        self.next_scramble = None;
+        self.new_scramble();
+    }
+
+    pub fn solve_type(&self) -> SolveType {
+        self.solve_type
+    }
+
+    pub fn last_layer_training_algorithms(&self) -> LastLayerAlgorithmSelection {
+        self.last_layer_training.algorithms
+    }
+
+    pub fn last_layer_training_realistic_weights(&self) -> bool {
+        self.last_layer_training.realistic_weights
+    }
+
+    pub fn last_layer_training_learning_multiplier(&self) -> usize {
+        self.last_layer_training.learning_multiplier
+    }
+
+    pub fn set_last_layer_training_algorithms(
+        &mut self,
+        algorithms: LastLayerAlgorithmSelection,
+        history: &mut History,
+    ) {
+        if self.last_layer_training.algorithms == algorithms {
+            return;
+        }
+
+        self.last_layer_training.algorithms = algorithms;
+        let _ =
+            history.set_string_setting("last_layer_training_algorithms", &algorithms.to_string());
+
+        self.next_scramble = None;
+        self.new_scramble();
+    }
+
+    pub fn set_last_layer_training_realistic_weights(
+        &mut self,
+        realistic_weights: bool,
+        history: &mut History,
+    ) {
+        if self.last_layer_training.realistic_weights == realistic_weights {
+            return;
+        }
+
+        self.last_layer_training.realistic_weights = realistic_weights;
+        let _ =
+            history.set_bool_setting("last_layer_training_realistic_weights", realistic_weights);
+
+        self.next_scramble = None;
+        self.new_scramble();
+    }
+
+    pub fn set_last_layer_training_learning_multiplier(
+        &mut self,
+        learning_multplier: usize,
+        history: &mut History,
+    ) {
+        if self.last_layer_training.learning_multiplier == learning_multplier {
+            return;
+        }
+
+        self.last_layer_training.learning_multiplier = learning_multplier;
+        let _ = history.set_i64_setting(
+            "last_layer_training_learning_multiplier",
+            learning_multplier as i64,
+        );
+
         self.next_scramble = None;
         self.new_scramble();
     }

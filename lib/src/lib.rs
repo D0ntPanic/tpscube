@@ -30,7 +30,7 @@ mod index_generated;
 
 pub use crate::rand::{RandomSource, SimpleSeededRandomSource, StandardRandomSource};
 pub use action::{Action, StoredAction};
-pub use algorithms::known::KnownAlgorithms;
+pub use algorithms::known::{Algorithm, AlgorithmType, KnownAlgorithms};
 pub use algorithms::moves::{
     CubeRotation, CubeRotationAxis, ExtendedMove, ExtendedMoveContext, ExtendedMoveSequence,
     SliceMove, SliceMoveAxis, WideMove,
@@ -65,7 +65,7 @@ pub use bluetooth::{
 #[cfg(not(feature = "no_solver"))]
 pub use cube2x2x2::scramble_2x2x2;
 #[cfg(not(feature = "no_solver"))]
-pub use cube3x3x3::{scramble_3x3x3, scramble_3x3x3_fast};
+pub use cube3x3x3::{scramble_3x3x3, scramble_3x3x3_fast, scramble_last_layer};
 #[cfg(not(feature = "no_solver"))]
 pub use cube4x4x4::{scramble_4x4x4, scramble_4x4x4_fast};
 

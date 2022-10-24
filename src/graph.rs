@@ -113,6 +113,32 @@ impl GraphWidget {
             self.plot = None;
             let _ = self.save_settings(history);
         }
+
+        if self.solve_type.is_last_layer_training() {
+            if ui
+                .mode_label(
+                    "Recognition Accuracy",
+                    self.statistic == Statistic::RecognitionAccuracy,
+                )
+                .clicked()
+            {
+                self.statistic = Statistic::RecognitionAccuracy;
+                self.plot = None;
+                let _ = self.save_settings(history);
+            }
+
+            if ui
+                .mode_label(
+                    "Execution Accuracy",
+                    self.statistic == Statistic::ExecutionAccuracy,
+                )
+                .clicked()
+            {
+                self.statistic = Statistic::ExecutionAccuracy;
+                self.plot = None;
+                let _ = self.save_settings(history);
+            }
+        }
     }
 
     fn phase_options(&mut self, ui: &mut Ui, history: &mut History) {
@@ -244,6 +270,17 @@ impl GraphWidget {
                                 ui.add_space(8.0);
                                 ui.section("Phase");
                                 self.phase_options(ui, history);
+                            } else if solve_type.is_last_layer_training() {
+                                if !matches!(
+                                    self.statistic,
+                                    Statistic::TotalTime
+                                        | Statistic::SuccessRate
+                                        | Statistic::RecognitionAccuracy
+                                        | Statistic::ExecutionAccuracy
+                                ) {
+                                    self.statistic = Statistic::TotalTime;
+                                }
+                                self.phase = Phase::EntireSolve;
                             } else {
                                 if !matches!(
                                     self.statistic,
@@ -351,6 +388,8 @@ impl GraphWidget {
             Some("tps") => Statistic::TurnsPerSecond,
             Some("etps") => Statistic::ExecutionTurnsPerSecond,
             Some("success") => Statistic::SuccessRate,
+            Some("recognition_accuracy") => Statistic::RecognitionAccuracy,
+            Some("execution_accuracy") => Statistic::ExecutionAccuracy,
             Some(_) | None => Statistic::TotalTime,
         };
         self.phase = match history
@@ -380,6 +419,8 @@ impl GraphWidget {
                 Statistic::TurnsPerSecond => "tps",
                 Statistic::ExecutionTurnsPerSecond => "etps",
                 Statistic::SuccessRate => "success",
+                Statistic::RecognitionAccuracy => "recognition_accuracy",
+                Statistic::ExecutionAccuracy => "execution_accuracy",
             },
         )?;
         history.set_string_setting(
@@ -399,7 +440,10 @@ impl GraphWidget {
         match self.phase {
             Phase::CFOP(_) => true,
             _ => match self.statistic {
-                Statistic::TotalTime | Statistic::SuccessRate => false,
+                Statistic::TotalTime
+                | Statistic::SuccessRate
+                | Statistic::RecognitionAccuracy
+                | Statistic::ExecutionAccuracy => false,
                 _ => true,
             },
         }

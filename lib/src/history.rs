@@ -538,11 +538,16 @@ impl History {
             for solve in session.iter(self) {
                 let mut value = json!({
                     "id": solve.id,
-                    "ok": if let Penalty::DNF = solve.penalty { false } else { true },
+                    "ok": !matches!(solve.penalty,
+                        Penalty::DNF
+                        | Penalty::RecognitionDNF
+                        | Penalty::ExecutionDNF),
                     "penalty": match solve.penalty {
                         Penalty::None => 0,
                         Penalty::Time(time) => time,
                         Penalty::DNF => 0,
+                        Penalty::RecognitionDNF => 1,
+                        Penalty::ExecutionDNF=> 2,
                     },
                     "scramble": solve.scramble.to_string(),
                     "time": solve.time,

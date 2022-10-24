@@ -1,6 +1,7 @@
-use super::{AlgorithmCounts, AlgorithmStats, AlgorithmType, Sort, SortColumn, SortOrder};
+use super::{
+    Algorithm, AlgorithmCounts, AlgorithmStats, AlgorithmType, Sort, SortColumn, SortOrder,
+};
 use egui::Ui;
-use tpscube_core::{OLLAlgorithm, PLLAlgorithm};
 
 const REQUIRED_COUNT: usize = 10;
 
@@ -17,11 +18,6 @@ struct AlgorithmRow {
     execution_time: f32,
     tps: f32,
     execution_tps: f32,
-}
-
-enum Algorithm {
-    OLL(OLLAlgorithm),
-    PLL(PLLAlgorithm),
 }
 
 impl<'a> TPSReport<'a> {
@@ -88,15 +84,6 @@ impl<'a> TPSReport<'a> {
                 ));
             }
         });
-    }
-}
-
-impl Algorithm {
-    fn to_string(&self) -> String {
-        match self {
-            Algorithm::OLL(oll) => oll.to_string(),
-            Algorithm::PLL(pll) => pll.to_str().into(),
-        }
     }
 }
 

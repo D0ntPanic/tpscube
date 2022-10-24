@@ -17,7 +17,7 @@ use egui::{
 use instant::Instant;
 use tpscube_core::{
     Analysis, AnalysisStepSummary, AnalysisSummary, Cube, Cube2x2x2, Cube3x3x3, Cube4x4x4,
-    CubeWithSolution, InitialCubeState, Solve, SolveType,
+    CubeWithSolution, InitialCubeState, Penalty, Solve, SolveType,
 };
 
 const TARGET_MIN_WIDTH: f32 = 280.0;
@@ -64,7 +64,11 @@ impl SolveDetailsWindow {
                     mode: SolveDetailsMode::Replay,
                 }
             }
-            SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3 => {
+            SolveType::Standard3x3x3
+            | SolveType::OneHanded3x3x3
+            | SolveType::Blind3x3x3
+            | SolveType::OLLTraining
+            | SolveType::PLLTraining => {
                 let mut unsolved_state = Cube3x3x3::new();
                 unsolved_state.do_moves(&solve.scramble);
                 let renderer = CubeRenderer::new(Box::new(unsolved_state.clone()));
@@ -412,11 +416,23 @@ impl SolveDetailsWindow {
             if let Some(time) = self.solve.final_time() {
                 ui.add(Label::new(solve_time_string(time)).text_style(FontSize::Scramble.into()));
             } else {
-                ui.add(
-                    Label::new("DNF")
-                        .text_style(FontSize::Scramble.into())
-                        .text_color(Theme::Red),
-                );
+                match self.solve.penalty {
+                    Penalty::RecognitionDNF => ui.add(
+                        Label::new("Misrecognized")
+                            .text_style(FontSize::Scramble.into())
+                            .text_color(Theme::Red),
+                    ),
+                    Penalty::ExecutionDNF => ui.add(
+                        Label::new("Misexecuted")
+                            .text_style(FontSize::Scramble.into())
+                            .text_color(Theme::Red),
+                    ),
+                    _ => ui.add(
+                        Label::new("DNF")
+                            .text_style(FontSize::Scramble.into())
+                            .text_color(Theme::Red),
+                    ),
+                };
             }
 
             // Allocate space for the cube rendering, this will be rendered using

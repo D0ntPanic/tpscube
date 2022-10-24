@@ -1,15 +1,21 @@
+use crate::algorithms::AlgorithmRender;
 use crate::app::SolveDetails;
 use crate::font::{FontSize, LabelFontSize};
 use crate::theme::Theme;
+use crate::timer::scramble::TimerCube;
+use crate::timer::state::TimerState;
 use crate::widgets::{solve_time_string, CustomWidgets};
 use chrono::{DateTime, Local};
 use egui::{
-    popup_below_widget, Align2, CtxRef, CursorIcon, Label, Layout, ScrollArea, SelectableLabel,
-    Sense, SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
+    popup_below_widget, Align, Align2, CtxRef, CursorIcon, Label, Layout, ScrollArea,
+    SelectableLabel, Sense, SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
 };
 use tpscube_core::{
-    Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList, SolveType,
+    Algorithm, Average, BestSolve, Cube, Cube3x3x3, CubeFace, History, InitialCubeState,
+    KnownAlgorithms, ListAverage, OLLAlgorithm, PLLAlgorithm, Penalty, Solve, SolveList, SolveType,
 };
+
+use super::scramble::LastLayerAlgorithmSelection;
 
 pub struct TimerSession {
     update_id: Option<u64>,
@@ -157,18 +163,13 @@ impl TimerSession {
         });
     }
 
-    fn add_solve(
+    fn add_standard_solve(
         ui: &mut Ui,
         idx: usize,
         solve: &Solve,
         history: &mut History,
         details: &mut Option<SolveDetails>,
     ) {
-        // Change window theme so that popup menu stands out
-        let old_visuals = ui.ctx().style().visuals.clone();
-        ui.ctx().set_visuals(crate::style::popup_visuals());
-
-        ui.style_mut().spacing.item_spacing.x = 0.0;
         ui.horizontal(|ui| {
             ui.add(Label::new(format!("{}.", idx + 1)).text_color(Theme::Disabled));
             ui.with_layout(Layout::right_to_left(), |ui| {
@@ -287,9 +288,458 @@ impl TimerSession {
                 }
             });
         });
+    }
+
+    fn training_penalty_menu(ui: &mut Ui, solve: &Solve, history: &mut History) {
+        let popup_id = ui.make_persistent_id(format!("timer-{}", solve.id));
+        let response = ui.add(Label::new("  ☰").small().sense(Sense::click()));
+        if response.clicked() {
+            ui.memory().toggle_popup(popup_id);
+        }
+        popup_below_widget(ui, popup_id, &response, |ui| {
+            ui.set_min_width(180.0);
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::None => true,
+                            _ => false,
+                        },
+                        "No penalty",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::None);
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::Time(2000) => true,
+                            _ => false,
+                        },
+                        "2 second penalty",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::Time(2000));
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::RecognitionDNF => true,
+                            _ => false,
+                        },
+                        "Misrecognized",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::RecognitionDNF);
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::ExecutionDNF => true,
+                            _ => false,
+                        },
+                        "Misexecuted",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::ExecutionDNF);
+                let _ = history.local_commit();
+            }
+
+            ui.separator();
+
+            if ui
+                .add(
+                    SelectableLabel::new(false, "Delete solve").text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.delete_solve(solve.id.clone());
+                let _ = history.local_commit();
+            }
+        });
+    }
+
+    fn add_training_solve(
+        ui: &mut Ui,
+        idx: usize,
+        solve: &Solve,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+        algorithm: Algorithm,
+    ) {
+        let moves = match algorithm {
+            Algorithm::OLL(oll) => KnownAlgorithms::oll(oll)[0].clone(),
+            Algorithm::PLL(pll) => KnownAlgorithms::pll(pll)[0].clone(),
+        };
+
+        ui.horizontal(|ui| {
+            algorithm.draw(
+                ui,
+                &moves,
+                ui.fonts().row_height(FontSize::Normal.into()) * 2.0,
+                false,
+                None,
+            );
+
+            ui.add_space(8.0);
+
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.add(Label::new(format!("{}.", idx + 1)).text_color(Theme::Disabled));
+                    ui.with_layout(Layout::right_to_left(), |ui| {
+                        let _ = ui.allocate_space(
+                            ui.fonts()
+                                .layout_single_line(FontSize::Small.into(), "  ☰".into())
+                                .size,
+                        );
+                        ui.add(
+                            Label::new(match algorithm {
+                                Algorithm::OLL(oll) => format!("#{}", oll.as_number()),
+                                _ => algorithm.to_string(),
+                            })
+                            .text_color(Theme::Disabled),
+                        );
+                    });
+                });
+
+                ui.with_layout(Layout::right_to_left(), |ui| {
+                    Self::training_penalty_menu(ui, solve, history);
+
+                    ui.visuals_mut().widgets.inactive.fg_stroke = Stroke {
+                        width: 1.0,
+                        color: Theme::Content.into(),
+                    };
+                    ui.visuals_mut().widgets.hovered.fg_stroke = Stroke {
+                        width: 1.0,
+                        color: Theme::Blue.into(),
+                    };
+                    ui.visuals_mut().widgets.active.fg_stroke = Stroke {
+                        width: 1.0,
+                        color: Theme::Blue.into(),
+                    };
+                    let response = if let Some(time) = solve.final_time() {
+                        ui.add(Label::new(solve_time_string(time)).sense(Sense::click()))
+                    } else {
+                        match solve.penalty {
+                            Penalty::RecognitionDNF => ui.add(
+                                Label::new("Misrecognize")
+                                    .text_color(Theme::Red)
+                                    .small()
+                                    .sense(Sense::click()),
+                            ),
+                            Penalty::ExecutionDNF => ui.add(
+                                Label::new("Misexecute")
+                                    .text_color(Theme::Red)
+                                    .small()
+                                    .sense(Sense::click()),
+                            ),
+                            _ => ui.add(
+                                Label::new("DNF")
+                                    .text_color(Theme::Red)
+                                    .sense(Sense::click()),
+                            ),
+                        }
+                    };
+
+                    // Check for click on solve time
+                    if response.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                        *details = Some(SolveDetails::IndividualSolve(solve.clone()));
+                    }
+                });
+            });
+        });
+    }
+
+    fn add_oll_training_solve(
+        ui: &mut Ui,
+        idx: usize,
+        solve: &Solve,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
+        let mut cube = Cube3x3x3::new();
+        cube.do_moves(&solve.scramble);
+        let algorithm = OLLAlgorithm::from_cube(&cube.as_faces(), CubeFace::Top);
+        if let Some(algorithm) = algorithm {
+            Self::add_training_solve(ui, idx, solve, history, details, Algorithm::OLL(algorithm))
+        } else {
+            Self::add_standard_solve(ui, idx, solve, history, details)
+        }
+    }
+
+    fn add_pll_training_solve(
+        ui: &mut Ui,
+        idx: usize,
+        solve: &Solve,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
+        let mut cube = Cube3x3x3::new();
+        cube.do_moves(&solve.scramble);
+        let algorithm = PLLAlgorithm::from_cube(&cube.as_faces(), CubeFace::Top);
+        if let Some(algorithm) = algorithm {
+            Self::add_training_solve(ui, idx, solve, history, details, Algorithm::PLL(algorithm))
+        } else {
+            Self::add_standard_solve(ui, idx, solve, history, details)
+        }
+    }
+
+    fn add_solve(
+        ui: &mut Ui,
+        idx: usize,
+        solve: &Solve,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
+        // Change window theme so that popup menu stands out
+        let old_visuals = ui.ctx().style().visuals.clone();
+        ui.ctx().set_visuals(crate::style::popup_visuals());
+
+        ui.style_mut().spacing.item_spacing.x = 0.0;
+
+        match solve.solve_type {
+            SolveType::OLLTraining => {
+                Self::add_oll_training_solve(ui, idx, solve, history, details)
+            }
+            SolveType::PLLTraining => {
+                Self::add_pll_training_solve(ui, idx, solve, history, details)
+            }
+            _ => Self::add_standard_solve(ui, idx, solve, history, details),
+        };
 
         // Restore old theme
         ui.ctx().set_visuals(old_visuals);
+    }
+
+    fn last_layer_training_algorithm_menu(
+        ui: &mut Ui,
+        history: &mut History,
+        cube: &mut TimerCube,
+    ) {
+        let popup_id = ui.make_persistent_id("last-layer-training-algorithms");
+        let response = ui.add(
+            Label::new(format!(
+                "{} ⏷",
+                cube.last_layer_training_algorithms().to_string()
+            ))
+            .sense(Sense::click()),
+        );
+        if response.clicked() {
+            ui.memory().toggle_popup(popup_id);
+        }
+        popup_below_widget(ui, popup_id, &response, |ui| {
+            ui.set_min_width(180.0);
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        matches!(
+                            cube.last_layer_training_algorithms(),
+                            LastLayerAlgorithmSelection::Known
+                        ),
+                        "Known",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_algorithms(
+                    LastLayerAlgorithmSelection::Known,
+                    history,
+                );
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        matches!(
+                            cube.last_layer_training_algorithms(),
+                            LastLayerAlgorithmSelection::Learning
+                        ),
+                        "Learning",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_algorithms(
+                    LastLayerAlgorithmSelection::Learning,
+                    history,
+                );
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        matches!(
+                            cube.last_layer_training_algorithms(),
+                            LastLayerAlgorithmSelection::KnownAndLearning
+                        ),
+                        "Known + Learning",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_algorithms(
+                    LastLayerAlgorithmSelection::KnownAndLearning,
+                    history,
+                );
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        matches!(
+                            cube.last_layer_training_algorithms(),
+                            LastLayerAlgorithmSelection::All
+                        ),
+                        "All",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_algorithms(LastLayerAlgorithmSelection::All, history);
+            }
+        });
+    }
+
+    fn last_layer_training_weight_menu(ui: &mut Ui, history: &mut History, cube: &mut TimerCube) {
+        let popup_id = ui.make_persistent_id("last-layer-training-weight");
+        let response = ui.add(
+            Label::new(match cube.last_layer_training_realistic_weights() {
+                false => "Equal ⏷",
+                true => "Realistic ⏷",
+            })
+            .sense(Sense::click()),
+        );
+        if response.clicked() {
+            ui.memory().toggle_popup(popup_id);
+        }
+        popup_below_widget(ui, popup_id, &response, |ui| {
+            ui.set_min_width(100.0);
+            if ui
+                .add(
+                    SelectableLabel::new(!cube.last_layer_training_realistic_weights(), "Equal")
+                        .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_realistic_weights(false, history);
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(cube.last_layer_training_realistic_weights(), "Realistic")
+                        .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_realistic_weights(true, history);
+            }
+        });
+    }
+
+    fn last_layer_training_learning_multiplier_menu(
+        ui: &mut Ui,
+        history: &mut History,
+        cube: &mut TimerCube,
+    ) {
+        let popup_id = ui.make_persistent_id("last-layer-training-learning-mutliplier");
+        let response = ui.add(
+            Label::new(format!(
+                "{}x ⏷",
+                cube.last_layer_training_learning_multiplier()
+            ))
+            .sense(Sense::click()),
+        );
+        if response.clicked() {
+            ui.memory().toggle_popup(popup_id);
+        }
+        popup_below_widget(ui, popup_id, &response, |ui| {
+            ui.set_min_width(50.0);
+            if ui
+                .add(
+                    SelectableLabel::new(cube.last_layer_training_learning_multiplier() == 1, "1x")
+                        .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_learning_multiplier(1, history);
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(cube.last_layer_training_learning_multiplier() == 2, "2x")
+                        .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_learning_multiplier(2, history);
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(cube.last_layer_training_learning_multiplier() == 4, "4x")
+                        .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_learning_multiplier(4, history);
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(cube.last_layer_training_learning_multiplier() == 8, "8x")
+                        .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                cube.set_last_layer_training_learning_multiplier(8, history);
+            }
+        });
+    }
+
+    fn new_session_button(ui: &mut Ui, history: &mut History) {
+        ui.horizontal(|ui| {
+            ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
+                width: 1.0,
+                color: Theme::Red.into(),
+            };
+            ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
+                width: 1.0,
+                color: Theme::Red.into(),
+            };
+            ui.with_layout(Layout::right_to_left(), |ui| {
+                if ui
+                    .add(Label::new("↺  New session").sense(Sense::click()))
+                    .clicked()
+                {
+                    let _ = history.new_session();
+                }
+            })
+        });
     }
 
     pub fn landscape_sidebar(
@@ -297,89 +747,104 @@ impl TimerSession {
         ctxt: &CtxRef,
         history: &mut History,
         details: &mut Option<SolveDetails>,
+        cube: &mut TimerCube,
     ) {
         SidePanel::left("left_timer")
             .default_width(175.0)
             .resizable(false)
             .show(ctxt, |ui| {
-                ui.section("Session");
-
                 self.update(history);
 
-                ui.vertical(|ui| {
-                    Self::session_time(
-                        ui,
-                        "Last ao5",
-                        false,
-                        self.last_ao5
-                            .clone()
-                            .map(|avg| SessionTime::AverageOfN(avg)),
-                        details,
-                    );
-                    Self::session_time(
-                        ui,
-                        "Last ao12",
-                        false,
-                        self.last_ao12
-                            .clone()
-                            .map(|avg| SessionTime::AverageOfN(avg)),
-                        details,
-                    );
-                    Self::session_time(
-                        ui,
-                        "Session avg",
-                        false,
-                        self.session_avg.map(|avg| SessionTime::SessionAverage(avg)),
-                        details,
-                    );
-                    Self::session_time(
-                        ui,
-                        "Best solve",
-                        false,
-                        self.best_solve
-                            .clone()
-                            .map(|best| SessionTime::BestSolve(best)),
-                        details,
-                    );
-                    Self::session_time(
-                        ui,
-                        "Best ao5",
-                        false,
-                        self.best_ao5
-                            .clone()
-                            .map(|avg| SessionTime::AverageOfN(avg)),
-                        details,
-                    );
-                    Self::session_time(
-                        ui,
-                        "Best ao12",
-                        false,
-                        self.best_ao12
-                            .clone()
-                            .map(|avg| SessionTime::AverageOfN(avg)),
-                        details,
-                    );
+                if cube.solve_type().is_last_layer_training() {
+                    ui.section("Settings");
 
-                    ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        ui.style_mut().visuals.widgets.hovered.fg_stroke = Stroke {
-                            width: 1.0,
-                            color: Theme::Red.into(),
-                        };
-                        ui.style_mut().visuals.widgets.active.fg_stroke = Stroke {
-                            width: 1.0,
-                            color: Theme::Red.into(),
-                        };
-                        ui.with_layout(Layout::right_to_left(), |ui| {
-                            if ui
-                                .add(Label::new("↺  New session").sense(Sense::click()))
-                                .clicked()
-                            {
-                                let _ = history.new_session();
-                            }
-                        })
+                    ui.vertical(|ui| {
+                        ui.label("Algorithms: ");
+                        Self::last_layer_training_algorithm_menu(ui, history, cube);
+
+                        ui.horizontal(|ui| {
+                            ui.label("Weighting:");
+                            Self::last_layer_training_weight_menu(ui, history, cube);
+                        });
+
+                        if matches!(
+                            cube.last_layer_training_algorithms(),
+                            LastLayerAlgorithmSelection::KnownAndLearning
+                                | LastLayerAlgorithmSelection::All
+                        ) {
+                            ui.horizontal(|ui| {
+                                ui.label("Learning Weight:");
+                                Self::last_layer_training_learning_multiplier_menu(
+                                    ui, history, cube,
+                                );
+                            });
+                        }
+
+                        ui.add_space(8.0);
+                        Self::new_session_button(ui, history);
                     });
-                });
+                } else {
+                    ui.section("Session");
+
+                    ui.vertical(|ui| {
+                        Self::session_time(
+                            ui,
+                            "Last ao5",
+                            false,
+                            self.last_ao5
+                                .clone()
+                                .map(|avg| SessionTime::AverageOfN(avg)),
+                            details,
+                        );
+                        Self::session_time(
+                            ui,
+                            "Last ao12",
+                            false,
+                            self.last_ao12
+                                .clone()
+                                .map(|avg| SessionTime::AverageOfN(avg)),
+                            details,
+                        );
+                        Self::session_time(
+                            ui,
+                            "Session avg",
+                            false,
+                            self.session_avg.map(|avg| SessionTime::SessionAverage(avg)),
+                            details,
+                        );
+                        Self::session_time(
+                            ui,
+                            "Best solve",
+                            false,
+                            self.best_solve
+                                .clone()
+                                .map(|best| SessionTime::BestSolve(best)),
+                            details,
+                        );
+                        Self::session_time(
+                            ui,
+                            "Best ao5",
+                            false,
+                            self.best_ao5
+                                .clone()
+                                .map(|avg| SessionTime::AverageOfN(avg)),
+                            details,
+                        );
+                        Self::session_time(
+                            ui,
+                            "Best ao12",
+                            false,
+                            self.best_ao12
+                                .clone()
+                                .map(|avg| SessionTime::AverageOfN(avg)),
+                            details,
+                        );
+
+                        ui.add_space(8.0);
+                        Self::new_session_button(ui, history);
+                    });
+                }
+
                 ui.add_space(8.0);
                 ui.section("Solves");
 
@@ -408,80 +873,70 @@ impl TimerSession {
         ctxt: &CtxRef,
         history: &mut History,
         details: &mut Option<SolveDetails>,
+        cube: &mut TimerCube,
+        state: &TimerState,
     ) {
         TopBottomPanel::top("top_timer").show(ctxt, |ui| {
-            // Session header with embedded new session button.
-            ui.horizontal(|ui| {
-                ui.add(
-                    Label::new("Session")
-                        .font_size(FontSize::Section)
-                        .text_color(Theme::Blue),
-                );
-                ui.with_layout(Layout::right_to_left(), |ui| {
-                    if ui
-                        .add(Label::new("↺  New session").sense(Sense::click()))
-                        .clicked()
-                    {
-                        let _ = history.new_session();
-                    }
-                })
-            });
-            ui.section_separator();
-
             self.update(history);
 
-            // If the screen is too small, can only show last averages
-            let best_cutoff = if crate::is_mobile() == Some(true) {
-                320.0
-            } else {
-                290.0
-            };
-            let show_best = ui.max_rect().width() > best_cutoff;
+            if cube.solve_type().is_last_layer_training() {
+                // Settings header with embedded new session button.
+                ui.horizontal(|ui| {
+                    ui.add(
+                        Label::new("Settings")
+                            .font_size(FontSize::Section)
+                            .text_color(Theme::Blue),
+                    );
+                    ui.with_layout(Layout::right_to_left(), |ui| {
+                        if ui
+                            .add(Label::new("↺  New session").sense(Sense::click()))
+                            .clicked()
+                        {
+                            let _ = history.new_session();
+                        }
+                    });
+                });
+                ui.section_separator();
 
-            ui.horizontal(|ui| {
-                // Show last averages
-                ui.allocate_ui(
-                    Vec2::new(
-                        if show_best {
-                            (ui.max_rect().width() - 24.0) / 2.0
-                        } else {
-                            ui.max_rect().width()
+                let width = ui.max_rect().width();
+
+                ui.horizontal(|ui| {
+                    ui.allocate_ui(
+                        Vec2::new((width - 24.0) * 2.0 / 3.0, ui.max_rect().height()),
+                        |ui| {
+                            ui.vertical(|ui| {
+                                ui.allocate_at_least(
+                                    Vec2::new((width - 24.0) * 2.0 / 3.0, 0.0),
+                                    Sense::hover(),
+                                );
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Algorithms: ");
+                                    Self::last_layer_training_algorithm_menu(ui, history, cube);
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Weighting:");
+                                    Self::last_layer_training_weight_menu(ui, history, cube);
+                                });
+
+                                if matches!(
+                                    cube.last_layer_training_algorithms(),
+                                    LastLayerAlgorithmSelection::KnownAndLearning
+                                        | LastLayerAlgorithmSelection::All
+                                ) {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Learning Weight:");
+                                        Self::last_layer_training_learning_multiplier_menu(
+                                            ui, history, cube,
+                                        );
+                                    });
+                                }
+                            });
                         },
-                        ui.max_rect().height(),
-                    ),
-                    |ui| {
-                        ui.vertical(|ui| {
-                            Self::session_time(
-                                ui,
-                                "Last ao5",
-                                true,
-                                self.last_ao5
-                                    .clone()
-                                    .map(|avg| SessionTime::AverageOfN(avg)),
-                                details,
-                            );
-                            Self::session_time(
-                                ui,
-                                "Last ao12",
-                                true,
-                                self.last_ao12
-                                    .clone()
-                                    .map(|avg| SessionTime::AverageOfN(avg)),
-                                details,
-                            );
-                            Self::session_time(
-                                ui,
-                                "Session avg",
-                                true,
-                                self.session_avg.map(|avg| SessionTime::SessionAverage(avg)),
-                                details,
-                            );
-                        });
-                    },
-                );
+                    );
 
-                if show_best {
-                    // Show separator between last averages and best averages
+                    // Show separator between settings and last case
                     ui.scope(|ui| {
                         ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
                             width: 1.0,
@@ -490,43 +945,192 @@ impl TimerSession {
                         ui.separator();
                     });
 
-                    // Show best averages
                     ui.allocate_ui(
-                        Vec2::new((ui.max_rect().width() - 24.0) / 2.0, ui.max_rect().height()),
+                        Vec2::new((width - 24.0) / 3.0, ui.max_rect().height()),
+                        |ui| {
+                            ui.with_layout(Layout::top_down(Align::Center), |ui| {
+                                if let TimerState::Inactive(_, Some(last_solve)) = state {
+                                    if last_solve.solve_type == cube.solve_type() {
+                                        let algorithm = match last_solve.solve_type {
+                                            SolveType::OLLTraining => {
+                                                let mut cube = Cube3x3x3::new();
+                                                cube.do_moves(&last_solve.scramble);
+                                                let algorithm = OLLAlgorithm::from_cube(
+                                                    &cube.as_faces(),
+                                                    CubeFace::Top,
+                                                );
+                                                algorithm.map(|alg| Algorithm::OLL(alg))
+                                            }
+                                            SolveType::PLLTraining => {
+                                                let mut cube = Cube3x3x3::new();
+                                                cube.do_moves(&last_solve.scramble);
+                                                let algorithm = PLLAlgorithm::from_cube(
+                                                    &cube.as_faces(),
+                                                    CubeFace::Top,
+                                                );
+                                                algorithm.map(|alg| Algorithm::PLL(alg))
+                                            }
+                                            _ => None,
+                                        };
+
+                                        if let Some(algorithm) = algorithm {
+                                            ui.label(format!(
+                                                "Last: {}",
+                                                match algorithm {
+                                                    Algorithm::OLL(oll) => match oll {
+                                                        OLLAlgorithm::OLL(_) => oll.to_string(),
+                                                        _ => format!(
+                                                            "{} (#{})",
+                                                            oll.to_string(),
+                                                            oll.as_number()
+                                                        ),
+                                                    },
+                                                    _ => algorithm.to_string(),
+                                                },
+                                            ));
+                                            ui.add_space(4.0);
+
+                                            let moves = match algorithm {
+                                                Algorithm::OLL(oll) => {
+                                                    KnownAlgorithms::oll(oll)[0].clone()
+                                                }
+                                                Algorithm::PLL(pll) => {
+                                                    KnownAlgorithms::pll(pll)[0].clone()
+                                                }
+                                            };
+
+                                            algorithm.draw(
+                                                ui,
+                                                &moves,
+                                                ui.fonts().row_height(FontSize::Normal.into())
+                                                    * 2.0,
+                                                false,
+                                                None,
+                                            );
+                                        }
+                                    }
+                                }
+                            });
+                        },
+                    );
+                });
+            } else {
+                // Session header with embedded new session button.
+                ui.horizontal(|ui| {
+                    ui.add(
+                        Label::new("Session")
+                            .font_size(FontSize::Section)
+                            .text_color(Theme::Blue),
+                    );
+                    ui.with_layout(Layout::right_to_left(), |ui| {
+                        if ui
+                            .add(Label::new("↺  New session").sense(Sense::click()))
+                            .clicked()
+                        {
+                            let _ = history.new_session();
+                        }
+                    })
+                });
+                ui.section_separator();
+
+                // If the screen is too small, can only show last averages
+                let best_cutoff = if crate::is_mobile() == Some(true) {
+                    320.0
+                } else {
+                    290.0
+                };
+                let show_best = ui.max_rect().width() > best_cutoff;
+
+                ui.horizontal(|ui| {
+                    // Show last averages
+                    ui.allocate_ui(
+                        Vec2::new(
+                            if show_best {
+                                (ui.max_rect().width() - 24.0) / 2.0
+                            } else {
+                                ui.max_rect().width()
+                            },
+                            ui.max_rect().height(),
+                        ),
                         |ui| {
                             ui.vertical(|ui| {
                                 Self::session_time(
                                     ui,
-                                    "Best solve",
+                                    "Last ao5",
                                     true,
-                                    self.best_solve
-                                        .clone()
-                                        .map(|best| SessionTime::BestSolve(best)),
-                                    details,
-                                );
-                                Self::session_time(
-                                    ui,
-                                    "Best ao5",
-                                    true,
-                                    self.best_ao5
+                                    self.last_ao5
                                         .clone()
                                         .map(|avg| SessionTime::AverageOfN(avg)),
                                     details,
                                 );
                                 Self::session_time(
                                     ui,
-                                    "Best ao12",
+                                    "Last ao12",
                                     true,
-                                    self.best_ao12
+                                    self.last_ao12
                                         .clone()
                                         .map(|avg| SessionTime::AverageOfN(avg)),
+                                    details,
+                                );
+                                Self::session_time(
+                                    ui,
+                                    "Session avg",
+                                    true,
+                                    self.session_avg.map(|avg| SessionTime::SessionAverage(avg)),
                                     details,
                                 );
                             });
                         },
                     );
-                }
-            });
+
+                    if show_best {
+                        // Show separator between last averages and best averages
+                        ui.scope(|ui| {
+                            ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
+                                width: 1.0,
+                                color: Theme::Disabled.into(),
+                            };
+                            ui.separator();
+                        });
+
+                        // Show best averages
+                        ui.allocate_ui(
+                            Vec2::new((ui.max_rect().width() - 24.0) / 2.0, ui.max_rect().height()),
+                            |ui| {
+                                ui.vertical(|ui| {
+                                    Self::session_time(
+                                        ui,
+                                        "Best solve",
+                                        true,
+                                        self.best_solve
+                                            .clone()
+                                            .map(|best| SessionTime::BestSolve(best)),
+                                        details,
+                                    );
+                                    Self::session_time(
+                                        ui,
+                                        "Best ao5",
+                                        true,
+                                        self.best_ao5
+                                            .clone()
+                                            .map(|avg| SessionTime::AverageOfN(avg)),
+                                        details,
+                                    );
+                                    Self::session_time(
+                                        ui,
+                                        "Best ao12",
+                                        true,
+                                        self.best_ao12
+                                            .clone()
+                                            .map(|avg| SessionTime::AverageOfN(avg)),
+                                        details,
+                                    );
+                                });
+                            },
+                        );
+                    }
+                });
+            }
 
             ui.add_space(4.0);
         });

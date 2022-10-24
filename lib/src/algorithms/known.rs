@@ -1,4 +1,5 @@
 use crate::{CubeRotation, ExtendedMove, Move, OLLAlgorithm, PLLAlgorithm, SliceMove, WideMove};
+use num_enum::TryFromPrimitive;
 
 macro_rules! mv {
     (U) => {
@@ -829,6 +830,47 @@ impl KnownAlgorithms {
                 algorithm!(M2 Up Mp U2 M2 U2 Mp U M2),
                 algorithm!(M2 U2 M Up M2 Up M2 Up M),
             ],
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq, TryFromPrimitive)]
+pub enum AlgorithmType {
+    OLL = 0,
+    PLL = 1,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Algorithm {
+    OLL(OLLAlgorithm),
+    PLL(PLLAlgorithm),
+}
+
+impl Algorithm {
+    pub(crate) fn to_type_and_number(&self) -> (AlgorithmType, u8) {
+        match self {
+            Algorithm::OLL(oll) => (AlgorithmType::OLL, oll.as_number()),
+            Algorithm::PLL(pll) => (AlgorithmType::PLL, pll.to_index() as u8),
+        }
+    }
+
+    pub(crate) fn from_type_and_number(alg_type: AlgorithmType, num: u8) -> Option<Self> {
+        match alg_type {
+            AlgorithmType::OLL => Some(Algorithm::OLL(OLLAlgorithm::from_number(num))),
+            AlgorithmType::PLL => match PLLAlgorithm::from_index(num as usize) {
+                Some(pll) => Some(Algorithm::PLL(pll)),
+                None => None,
+            },
+        }
+    }
+}
+
+impl ToString for Algorithm {
+    fn to_string(&self) -> String {
+        match self {
+            Algorithm::OLL(oll) => oll.to_string(),
+            Algorithm::PLL(pll) => pll.to_str().into(),
         }
     }
 }

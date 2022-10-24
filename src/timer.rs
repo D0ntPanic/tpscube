@@ -16,7 +16,7 @@ use instant::Instant;
 use scramble::TimerCube;
 use session::TimerSession;
 use solve::{bluetooth_timer_ui, timer_ui};
-use state::TimerState;
+use state::{LastSolve, TimerState};
 use tpscube_core::{
     Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, PartialAnalysis,
     Penalty, Solve, SolveType, TimedMove,
@@ -51,8 +51,9 @@ impl TimerWidget {
     }
 
     fn finish_solve(&mut self, time: u32, history: &mut History, solve_type: SolveType) {
+        let id = Solve::new_id();
         history.new_solve(Solve {
-            id: Solve::new_id(),
+            id: id.clone(),
             solve_type,
             session: history.current_session().into(),
             scramble: self.cube.scramble().to_vec(),
@@ -63,7 +64,16 @@ impl TimerWidget {
             moves: None,
         });
         let _ = history.local_commit();
-        self.state = TimerState::SolveComplete(time, None);
+        self.state = TimerState::SolveComplete(
+            time,
+            LastSolve {
+                id,
+                solve_type,
+                analysis: None,
+                scramble: self.cube.scramble().to_vec(),
+                penalty: Penalty::None,
+            },
+        );
         self.cube.new_scramble();
     }
 
@@ -96,8 +106,9 @@ impl TimerWidget {
             (None, None)
         };
 
+        let id = Solve::new_id();
         history.new_solve(Solve {
-            id: Solve::new_id(),
+            id: id.clone(),
             solve_type,
             session: history.current_session().into(),
             scramble: self.cube.scramble().to_vec(),
@@ -108,14 +119,30 @@ impl TimerWidget {
             moves,
         });
         let _ = history.local_commit();
-        self.state = TimerState::SolveComplete(time, analysis);
+        self.state = TimerState::SolveComplete(
+            time,
+            LastSolve {
+                id,
+                solve_type,
+                analysis,
+                scramble: self.cube.scramble().to_vec(),
+                penalty: Penalty::None,
+            },
+        );
         self.cube.new_scramble();
     }
 
     fn abort_solve(&mut self, time: u32, history: &mut History, solve_type: SolveType) {
-        if time > 2000 {
+        let (penalty, min_time) = if solve_type.is_last_layer_training() {
+            (Penalty::ExecutionDNF, 500)
+        } else {
+            (Penalty::DNF, 2000)
+        };
+
+        if time >= min_time {
             // If some solve progress was made, add a DNF. Otherwise,
             // treat it as an accidental start.
+            let id = Solve::new_id();
             history.new_solve(Solve {
                 id: Solve::new_id(),
                 solve_type,
@@ -123,14 +150,25 @@ impl TimerWidget {
                 scramble: self.cube.scramble().to_vec(),
                 created: Local::now(),
                 time,
-                penalty: Penalty::DNF,
+                penalty,
                 device: None,
                 moves: None,
             });
             let _ = history.local_commit();
+            self.state = TimerState::SolveComplete(
+                time,
+                LastSolve {
+                    id,
+                    solve_type,
+                    analysis: None,
+                    scramble: self.cube.scramble().to_vec(),
+                    penalty,
+                },
+            );
             self.cube.new_scramble();
+        } else {
+            self.state = TimerState::Inactive(0, None);
         }
-        self.state = TimerState::SolveComplete(0, None);
     }
 
     fn check_for_interaction_and_state_transition(
@@ -161,8 +199,8 @@ impl TimerWidget {
             match event {
                 BluetoothEvent::HandsOnTimer => {
                     match self.state.clone() {
-                        TimerState::Inactive(time, analysis) => {
-                            self.state = TimerState::ExternalTimerPreparing(time, analysis);
+                        TimerState::Inactive(time, last_solve) => {
+                            self.state = TimerState::ExternalTimerPreparing(time, last_solve);
                         }
                         _ => self.state = TimerState::ExternalTimerPreparing(0, None),
                     }
@@ -170,8 +208,8 @@ impl TimerWidget {
                 }
                 BluetoothEvent::TimerStartCancel => {
                     match self.state.clone() {
-                        TimerState::ExternalTimerPreparing(time, analysis) => {
-                            self.state = TimerState::Inactive(time, analysis);
+                        TimerState::ExternalTimerPreparing(time, last_solve) => {
+                            self.state = TimerState::Inactive(time, last_solve);
                         }
                         _ => {
                             self.state = TimerState::Inactive(0, None);
@@ -189,7 +227,6 @@ impl TimerWidget {
                 }
                 BluetoothEvent::TimerFinished(time) => {
                     self.finish_solve(*time, history, solve_type);
-                    self.state = TimerState::SolveComplete(*time, None);
                     ctxt.request_repaint();
                 }
                 _ => (),
@@ -200,9 +237,9 @@ impl TimerWidget {
         let touching = crate::is_mobile() == Some(true)
             && (interact.is_pointer_button_down_on() || interact.dragged());
         match self.state.clone() {
-            TimerState::Inactive(time, analysis) => {
+            TimerState::Inactive(time, last_solve) => {
                 if accept_keyboard && (ctxt.input().keys_down.contains(&Key::Space) || touching) {
-                    self.state = TimerState::Preparing(Instant::now(), time, analysis);
+                    self.state = TimerState::Preparing(Instant::now(), time, last_solve);
                 } else if self.cube.is_bluetooth_active() {
                     if self
                         .cube
@@ -218,7 +255,7 @@ impl TimerWidget {
                             );
                         } else {
                             self.state =
-                                TimerState::BluetoothPreparing(Instant::now(), time, analysis);
+                                TimerState::BluetoothPreparing(Instant::now(), time, last_solve);
                         }
                     }
                 } else if accept_keyboard {
@@ -234,14 +271,14 @@ impl TimerWidget {
                     }
                 }
             }
-            TimerState::Preparing(start, time, analysis) => {
+            TimerState::Preparing(start, time, last_solve) => {
                 if ctxt.input().keys_down.len() == 0 && !touching {
-                    self.state = TimerState::Inactive(time, analysis);
+                    self.state = TimerState::Inactive(time, last_solve);
                 } else if (Instant::now() - start).as_millis() > 300 {
                     self.state = TimerState::Ready;
                 }
             }
-            TimerState::BluetoothPreparing(start, time, analysis) => {
+            TimerState::BluetoothPreparing(start, time, last_solve) => {
                 if self.cube.is_bluetooth_active() {
                     if bluetooth_events.len() != 0 {
                         // For the first second after finishing a Bluetooth scramble,
@@ -253,18 +290,18 @@ impl TimerWidget {
                             .cube
                             .update_bluetooth_scramble_and_check_finish(&bluetooth_events)
                         {
-                            self.state = TimerState::Inactive(time, analysis);
+                            self.state = TimerState::Inactive(time, last_solve);
                         }
                     } else if (Instant::now() - start).as_millis() >= 1000 {
                         self.state = TimerState::BluetoothReady;
                     }
                 } else {
-                    self.state = TimerState::Inactive(time, analysis);
+                    self.state = TimerState::Inactive(time, last_solve);
                 }
             }
-            TimerState::ExternalTimerPreparing(time, analysis) => {
+            TimerState::ExternalTimerPreparing(time, last_solve) => {
                 if bluetooth_name.is_none() {
-                    self.state = TimerState::Inactive(time, analysis);
+                    self.state = TimerState::Inactive(time, last_solve);
                 }
             }
             TimerState::Ready => {
@@ -377,7 +414,6 @@ impl TimerWidget {
                 } else if ctxt.input().key_down(Key::Enter) {
                     let time = TimerState::digits_to_time(digits);
                     self.finish_solve(time, history, solve_type);
-                    self.state = TimerState::SolveComplete(time, None);
                 } else {
                     for event in &ctxt.input().events {
                         if let Event::Text(text) = event {
@@ -403,9 +439,9 @@ impl TimerWidget {
                     self.state = TimerState::ManualTimeEntry(digits);
                 }
             }
-            TimerState::SolveComplete(time, analysis) => {
+            TimerState::SolveComplete(time, last_solve) => {
                 if ctxt.input().keys_down.len() == 0 && !touching {
-                    self.state = TimerState::Inactive(time, analysis);
+                    self.state = TimerState::Inactive(time, Some(last_solve));
                     ctxt.request_repaint();
                 }
             }
@@ -447,22 +483,24 @@ impl TimerWidget {
 
         if bluetooth_state.is_some() {
             // If Bluetooth cube is connected, force 3x3x3 solve type
-            if !solve_type.is_3x3x3() {
+            if !solve_type.is_3x3x3() && !solve_type.is_last_layer_training() {
                 *solve_type = SolveType::Standard3x3x3;
             }
         }
 
-        self.cube.check_solve_type(*solve_type);
+        self.cube.check_solve_type(*solve_type, history);
         self.check_for_expired_session(history, *solve_type);
 
         ctxt.set_visuals(side_visuals());
         let aspect = ctxt.available_rect().width() / ctxt.available_rect().height();
         if aspect >= 1.0 {
             // Landscape mode. Session details to the left.
-            self.session.landscape_sidebar(ctxt, history, details);
+            self.session
+                .landscape_sidebar(ctxt, history, details, &mut self.cube);
         } else {
             // Portrait mode. Session details at the top.
-            self.session.portrait_top_bar(ctxt, history, details);
+            self.session
+                .portrait_top_bar(ctxt, history, details, &mut self.cube, &self.state);
         }
 
         ctxt.set_visuals(content_visuals());
@@ -486,6 +524,16 @@ impl TimerWidget {
                             &mut rect,
                             &mut center,
                         );
+
+                        if solve_type.is_last_layer_training() {
+                            self.cube.training_penalty_buttons(
+                                ui,
+                                history,
+                                &mut self.state,
+                                &mut rect,
+                                &mut center,
+                            );
+                        }
                     }
 
                     // The entire timer area is interactable, touch events should start/stop the

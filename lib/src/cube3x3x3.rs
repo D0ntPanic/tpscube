@@ -327,7 +327,7 @@ impl Solver {
                     // Search for phase 2 solution using iterative deepening. Do not go beyond the maximum
                     // number of moves for the whole solve.
                     let mut depth = 0;
-                    while depth < self.max_moves - self.moves.len() {
+                    while self.moves.len() + depth < self.max_moves {
                         if self.search_phase_2(cube, depth) {
                             break;
                         }
@@ -1451,5 +1451,14 @@ pub fn scramble_3x3x3() -> Vec<Move> {
 pub fn scramble_3x3x3_fast() -> Vec<Move> {
     let state = Cube3x3x3::random();
     let solution = state.solve_fast().unwrap();
+    solution.inverse()
+}
+
+/// Generates a random scramble for the last layer only. Moves should be applied with the
+/// desired last layer on top.
+#[cfg(not(feature = "no_solver"))]
+pub fn scramble_last_layer(last_layer: LastLayerRandomization) -> Vec<Move> {
+    let state = Cube3x3x3::random_last_layer(CubeFace::Top, last_layer);
+    let solution = state.solve().unwrap();
     solution.inverse()
 }

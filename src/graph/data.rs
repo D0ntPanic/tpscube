@@ -20,6 +20,8 @@ pub enum Statistic {
     TurnsPerSecond,
     ExecutionTurnsPerSecond,
     SuccessRate,
+    RecognitionAccuracy,
+    ExecutionAccuracy,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -44,7 +46,9 @@ impl Statistic {
             }
             Statistic::MoveCount => YAxis::MoveCount,
             Statistic::TurnsPerSecond | Statistic::ExecutionTurnsPerSecond => YAxis::TurnsPerSecond,
-            Statistic::SuccessRate => YAxis::SuccessRate,
+            Statistic::SuccessRate
+            | Statistic::RecognitionAccuracy
+            | Statistic::ExecutionAccuracy => YAxis::SuccessRate,
         }
     }
 }
@@ -124,13 +128,21 @@ impl GraphData {
                     None
                 }
             }
-            Statistic::SuccessRate => {
-                if matches!(solve.penalty, Penalty::DNF) {
-                    Some(0)
-                } else {
-                    Some(1)
-                }
-            }
+            Statistic::SuccessRate => match solve.penalty {
+                Penalty::DNF | Penalty::RecognitionDNF | Penalty::ExecutionDNF => Some(0),
+                _ => Some(1),
+            },
+            Statistic::RecognitionAccuracy => match solve.penalty {
+                Penalty::DNF => None,
+                Penalty::RecognitionDNF => Some(0),
+                _ => Some(1),
+            },
+            Statistic::ExecutionAccuracy => match solve.penalty {
+                Penalty::DNF => None,
+                Penalty::ExecutionDNF => Some(0),
+                Penalty::RecognitionDNF => None,
+                _ => Some(1),
+            },
             _ => match phase {
                 Phase::EntireSolve => match statistic {
                     Statistic::TotalTime => solve.final_time(),
@@ -194,7 +206,9 @@ impl GraphData {
                     }
                     Statistic::TurnsPerSecond
                     | Statistic::ExecutionTurnsPerSecond
-                    | Statistic::SuccessRate => {
+                    | Statistic::SuccessRate
+                    | Statistic::RecognitionAccuracy
+                    | Statistic::ExecutionAccuracy => {
                         unreachable!()
                     }
                 },
@@ -211,7 +225,9 @@ impl GraphData {
                                     }
                                     Statistic::TurnsPerSecond
                                     | Statistic::ExecutionTurnsPerSecond
-                                    | Statistic::SuccessRate => {
+                                    | Statistic::SuccessRate
+                                    | Statistic::RecognitionAccuracy
+                                    | Statistic::ExecutionAccuracy => {
                                         unreachable!()
                                     }
                                 },
@@ -228,7 +244,9 @@ impl GraphData {
                                         }
                                         Statistic::TurnsPerSecond
                                         | Statistic::ExecutionTurnsPerSecond
-                                        | Statistic::SuccessRate => unreachable!(),
+                                        | Statistic::SuccessRate
+                                        | Statistic::RecognitionAccuracy
+                                        | Statistic::ExecutionAccuracy => unreachable!(),
                                     },
                                 )),
                                 CFOPPhase::OLL => {
@@ -249,7 +267,9 @@ impl GraphData {
                                             }
                                             Statistic::TurnsPerSecond
                                             | Statistic::ExecutionTurnsPerSecond
-                                            | Statistic::SuccessRate => unreachable!(),
+                                            | Statistic::SuccessRate
+                                            | Statistic::RecognitionAccuracy
+                                            | Statistic::ExecutionAccuracy => unreachable!(),
                                         }))
                                     }
                                 }
@@ -281,7 +301,9 @@ impl GraphData {
                                             }
                                             Statistic::TurnsPerSecond
                                             | Statistic::ExecutionTurnsPerSecond
-                                            | Statistic::SuccessRate => unreachable!(),
+                                            | Statistic::SuccessRate
+                                            | Statistic::RecognitionAccuracy
+                                            | Statistic::ExecutionAccuracy => unreachable!(),
                                         })
                                     }
                                 }
@@ -308,6 +330,8 @@ impl GraphData {
                 Statistic::TurnsPerSecond => "Turns per Second",
                 Statistic::ExecutionTurnsPerSecond => "Execution TPS",
                 Statistic::SuccessRate => "Success Rate",
+                Statistic::RecognitionAccuracy => "Recognition Accuracy",
+                Statistic::ExecutionAccuracy => "Execution Accuracy",
             },
             match self.phase {
                 Phase::EntireSolve => "Entire Solve",
@@ -347,7 +371,12 @@ impl GraphData {
                 window.remove(0);
             }
             if window.len() >= self.average_size {
-                if self.statistic == Statistic::SuccessRate {
+                if matches!(
+                    self.statistic,
+                    Statistic::SuccessRate
+                        | Statistic::RecognitionAccuracy
+                        | Statistic::ExecutionAccuracy
+                ) {
                     plot.push(
                         solve.created,
                         window.iter().fold(0, |sum, pt| sum + pt.unwrap_or(0)) as f32 * 100.0

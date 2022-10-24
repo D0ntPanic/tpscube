@@ -169,7 +169,11 @@ impl ImportedSession {
                             Penalty::None
                         }
                     } else {
-                        Penalty::DNF
+                        match penalty {
+                            1 => Penalty::RecognitionDNF,
+                            2 => Penalty::ExecutionDNF,
+                            _ => Penalty::DNF,
+                        }
                     },
                     device: device.map(|string| string.into()),
                     moves,

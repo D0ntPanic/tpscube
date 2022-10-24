@@ -2,14 +2,16 @@ use crate::theme::Theme;
 use crate::widgets::{solve_time_short_string, solve_time_string, solve_time_string_ms};
 use egui::{Color32, Key};
 use instant::Instant;
-use tpscube_core::{Analysis, AnalysisSummary, PartialAnalysis, TimedMove};
+use tpscube_core::{
+    Analysis, AnalysisSummary, Move, PartialAnalysis, Penalty, SolveType, TimedMove,
+};
 
 #[derive(Clone)]
 pub enum TimerState {
-    Inactive(u32, Option<Analysis>),
-    Preparing(Instant, u32, Option<Analysis>),
-    BluetoothPreparing(Instant, u32, Option<Analysis>),
-    ExternalTimerPreparing(u32, Option<Analysis>),
+    Inactive(u32, Option<LastSolve>),
+    Preparing(Instant, u32, Option<LastSolve>),
+    BluetoothPreparing(Instant, u32, Option<LastSolve>),
+    ExternalTimerPreparing(u32, Option<LastSolve>),
     Ready,
     BluetoothReady,
     ExternalTimerReady,
@@ -18,7 +20,16 @@ pub enum TimerState {
     ExternalTimerSolving(Instant),
     ManualTimeEntry(u32),
     ManualTimeEntryDelay(u32, Option<Key>),
-    SolveComplete(u32, Option<Analysis>),
+    SolveComplete(u32, LastSolve),
+}
+
+#[derive(Clone)]
+pub struct LastSolve {
+    pub id: String,
+    pub solve_type: SolveType,
+    pub analysis: Option<Analysis>,
+    pub scramble: Vec<Move>,
+    pub penalty: Penalty,
 }
 
 impl TimerState {
@@ -117,11 +128,37 @@ impl TimerState {
 
     pub fn analysis(&self) -> Option<&dyn AnalysisSummary> {
         match self {
-            TimerState::Inactive(_, Some(analysis)) => Some(analysis),
-            TimerState::Preparing(_, _, Some(analysis)) => Some(analysis),
-            TimerState::BluetoothPreparing(_, _, Some(analysis)) => Some(analysis),
+            TimerState::Inactive(
+                _,
+                Some(LastSolve {
+                    analysis: Some(analysis),
+                    ..
+                }),
+            ) => Some(analysis),
+            TimerState::Preparing(
+                _,
+                _,
+                Some(LastSolve {
+                    analysis: Some(analysis),
+                    ..
+                }),
+            ) => Some(analysis),
+            TimerState::BluetoothPreparing(
+                _,
+                _,
+                Some(LastSolve {
+                    analysis: Some(analysis),
+                    ..
+                }),
+            ) => Some(analysis),
             TimerState::BluetoothSolving(_, _, analysis) => Some(analysis),
-            TimerState::SolveComplete(_, Some(analysis)) => Some(analysis),
+            TimerState::SolveComplete(
+                _,
+                LastSolve {
+                    analysis: Some(analysis),
+                    ..
+                },
+            ) => Some(analysis),
             _ => None,
         }
     }

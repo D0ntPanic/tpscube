@@ -102,6 +102,26 @@ impl StoredAction {
                             .as_union_value(),
                         ),
                     ),
+                    Penalty::RecognitionDNF => (
+                        action_generated::Penalty::RecognitionDNFPenalty,
+                        Some(
+                            action_generated::RecognitionDNFPenalty::create(
+                                builder,
+                                &action_generated::RecognitionDNFPenaltyArgs {},
+                            )
+                            .as_union_value(),
+                        ),
+                    ),
+                    Penalty::ExecutionDNF => (
+                        action_generated::Penalty::ExecutionDNFPenalty,
+                        Some(
+                            action_generated::ExecutionDNFPenalty::create(
+                                builder,
+                                &action_generated::ExecutionDNFPenaltyArgs {},
+                            )
+                            .as_union_value(),
+                        ),
+                    ),
                 };
                 let device = solve
                     .device
@@ -160,6 +180,26 @@ impl StoredAction {
                             action_generated::DNFPenalty::create(
                                 builder,
                                 &action_generated::DNFPenaltyArgs {},
+                            )
+                            .as_union_value(),
+                        ),
+                    ),
+                    Penalty::RecognitionDNF => (
+                        action_generated::Penalty::RecognitionDNFPenalty,
+                        Some(
+                            action_generated::RecognitionDNFPenalty::create(
+                                builder,
+                                &action_generated::RecognitionDNFPenaltyArgs {},
+                            )
+                            .as_union_value(),
+                        ),
+                    ),
+                    Penalty::ExecutionDNF => (
+                        action_generated::Penalty::ExecutionDNFPenalty,
+                        Some(
+                            action_generated::ExecutionDNFPenalty::create(
+                                builder,
+                                &action_generated::ExecutionDNFPenaltyArgs {},
                             )
                             .as_union_value(),
                         ),
@@ -311,6 +351,8 @@ impl StoredAction {
                         Penalty::Time(time)
                     }
                     action_generated::Penalty::DNFPenalty => Penalty::DNF,
+                    action_generated::Penalty::RecognitionDNFPenalty => Penalty::RecognitionDNF,
+                    action_generated::Penalty::ExecutionDNFPenalty => Penalty::ExecutionDNF,
                     _ => Penalty::None,
                 };
                 let device = match action.device() {
@@ -365,6 +407,8 @@ impl StoredAction {
                         Penalty::Time(time)
                     }
                     action_generated::Penalty::DNFPenalty => Penalty::DNF,
+                    action_generated::Penalty::RecognitionDNFPenalty => Penalty::RecognitionDNF,
+                    action_generated::Penalty::ExecutionDNFPenalty => Penalty::ExecutionDNF,
                     _ => Penalty::None,
                 };
                 Some(Self {

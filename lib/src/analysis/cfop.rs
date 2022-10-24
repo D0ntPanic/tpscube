@@ -527,30 +527,56 @@ impl PLLAlgorithm {
         ]
     }
 
-    const fn from_index(idx: usize) -> Self {
+    pub(crate) const fn from_index(idx: usize) -> Option<Self> {
         match idx {
-            0 => PLLAlgorithm::Aa,
-            1 => PLLAlgorithm::Ab,
-            2 => PLLAlgorithm::F,
-            3 => PLLAlgorithm::Ga,
-            4 => PLLAlgorithm::Gb,
-            5 => PLLAlgorithm::Gc,
-            6 => PLLAlgorithm::Gd,
-            7 => PLLAlgorithm::Ja,
-            8 => PLLAlgorithm::Jb,
-            9 => PLLAlgorithm::Ra,
-            10 => PLLAlgorithm::Rb,
-            11 => PLLAlgorithm::T,
-            12 => PLLAlgorithm::E,
-            13 => PLLAlgorithm::Na,
-            14 => PLLAlgorithm::Nb,
-            15 => PLLAlgorithm::V,
-            16 => PLLAlgorithm::Y,
-            17 => PLLAlgorithm::H,
-            18 => PLLAlgorithm::Ua,
-            19 => PLLAlgorithm::Ub,
-            20 => PLLAlgorithm::Z,
-            _ => unreachable!(),
+            0 => Some(PLLAlgorithm::Aa),
+            1 => Some(PLLAlgorithm::Ab),
+            2 => Some(PLLAlgorithm::F),
+            3 => Some(PLLAlgorithm::Ga),
+            4 => Some(PLLAlgorithm::Gb),
+            5 => Some(PLLAlgorithm::Gc),
+            6 => Some(PLLAlgorithm::Gd),
+            7 => Some(PLLAlgorithm::Ja),
+            8 => Some(PLLAlgorithm::Jb),
+            9 => Some(PLLAlgorithm::Ra),
+            10 => Some(PLLAlgorithm::Rb),
+            11 => Some(PLLAlgorithm::T),
+            12 => Some(PLLAlgorithm::E),
+            13 => Some(PLLAlgorithm::Na),
+            14 => Some(PLLAlgorithm::Nb),
+            15 => Some(PLLAlgorithm::V),
+            16 => Some(PLLAlgorithm::Y),
+            17 => Some(PLLAlgorithm::H),
+            18 => Some(PLLAlgorithm::Ua),
+            19 => Some(PLLAlgorithm::Ub),
+            20 => Some(PLLAlgorithm::Z),
+            _ => None,
+        }
+    }
+
+    pub(crate) const fn to_index(&self) -> usize {
+        match self {
+            PLLAlgorithm::Aa => 0,
+            PLLAlgorithm::Ab => 1,
+            PLLAlgorithm::F => 2,
+            PLLAlgorithm::Ga => 3,
+            PLLAlgorithm::Gb => 4,
+            PLLAlgorithm::Gc => 5,
+            PLLAlgorithm::Gd => 6,
+            PLLAlgorithm::Ja => 7,
+            PLLAlgorithm::Jb => 8,
+            PLLAlgorithm::Ra => 9,
+            PLLAlgorithm::Rb => 10,
+            PLLAlgorithm::T => 11,
+            PLLAlgorithm::E => 12,
+            PLLAlgorithm::Na => 13,
+            PLLAlgorithm::Nb => 14,
+            PLLAlgorithm::V => 15,
+            PLLAlgorithm::Y => 16,
+            PLLAlgorithm::H => 17,
+            PLLAlgorithm::Ua => 18,
+            PLLAlgorithm::Ub => 19,
+            PLLAlgorithm::Z => 20,
         }
     }
 
@@ -670,7 +696,7 @@ impl PLLAlgorithm {
             // all four rotations.
             for (idx, case) in CUBE3_PLL_CASES.iter().enumerate() {
                 if colors == case {
-                    return Some(Self::from_index(idx));
+                    return Some(Self::from_index(idx).unwrap());
                 }
             }
         }

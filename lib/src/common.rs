@@ -215,7 +215,7 @@ impl Solve {
         match self.penalty {
             Penalty::None => Some(self.time),
             Penalty::Time(penalty) => Some(self.time + penalty),
-            Penalty::DNF => None,
+            Penalty::DNF | Penalty::RecognitionDNF | Penalty::ExecutionDNF => None,
         }
     }
 }
@@ -540,11 +540,13 @@ impl SolveList for &[Solve] {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Penalty {
     None,
     Time(u32),
     DNF,
+    RecognitionDNF,
+    ExecutionDNF,
 }
 
 #[repr(u8)]
@@ -565,6 +567,8 @@ pub enum SolveType {
     Skewb = 12,
     Square1 = 13,
     Clock = 14,*/
+    OLLTraining = 15,
+    PLLTraining = 16,
 }
 
 impl SolveType {
@@ -585,25 +589,25 @@ impl SolveType {
             "Skewb" => Some(SolveType::Skewb),
             "Square-1" => Some(SolveType::Square1),
             "Clock" => Some(SolveType::Clock),*/
+            "OLL Training" => Some(SolveType::OLLTraining),
+            "PLL Training" => Some(SolveType::PLLTraining),
             _ => None,
         }
     }
 
     pub fn is_3x3x3(&self) -> bool {
-        match self {
-            SolveType::Standard3x3x3 => true,
-            SolveType::OneHanded3x3x3 => true,
-            SolveType::Blind3x3x3 => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            SolveType::Standard3x3x3 | SolveType::OneHanded3x3x3 | SolveType::Blind3x3x3
+        )
     }
 
     pub fn is_4x4x4(&self) -> bool {
-        match self {
-            SolveType::Standard4x4x4 => true,
-            SolveType::Blind4x4x4 => true,
-            _ => false,
-        }
+        matches!(self, SolveType::Standard4x4x4 | SolveType::Blind4x4x4)
+    }
+
+    pub fn is_last_layer_training(&self) -> bool {
+        matches!(self, SolveType::OLLTraining | SolveType::PLLTraining)
     }
 }
 
@@ -625,6 +629,8 @@ impl ToString for SolveType {
             SolveType::Skewb => "Skewb".into(),
             SolveType::Square1 => "Square-1".into(),
             SolveType::Clock => "Clock".into(),*/
+            SolveType::OLLTraining => "OLL Training".into(),
+            SolveType::PLLTraining => "PLL Training".into(),
         }
     }
 }

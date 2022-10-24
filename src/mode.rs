@@ -45,6 +45,10 @@ impl SolveTypeSelectWindow {
                     ui.section("Blindfolded");
                     self.option(ui, selected, SolveType::Blind3x3x3, "3x3x3 Blindfolded");
                     self.option(ui, selected, SolveType::Blind4x4x4, "4x4x4 Blindfolded");
+
+                    ui.section("Training");
+                    self.option(ui, selected, SolveType::OLLTraining, "OLL Training");
+                    self.option(ui, selected, SolveType::PLLTraining, "PLL Training");
                 });
             });
     }

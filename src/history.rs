@@ -1,3 +1,4 @@
+use crate::algorithms::AlgorithmRender;
 use crate::app::SolveDetails;
 use crate::font::FontSize;
 use crate::style::content_visuals;
@@ -8,7 +9,8 @@ use egui::{
     Rect, SelectableLabel, Sense, Stroke, Ui, Vec2,
 };
 use tpscube_core::{
-    Average, BestSolve, History, ListAverage, Penalty, Solve, SolveList, SolveType,
+    Algorithm, Average, BestSolve, Cube, Cube3x3x3, CubeFace, History, InitialCubeState,
+    KnownAlgorithms, ListAverage, OLLAlgorithm, PLLAlgorithm, Penalty, Solve, SolveList, SolveType,
 };
 
 const REGION_PADDING: f32 = 16.0;
@@ -49,6 +51,7 @@ struct AllTimeBestRegion {
 struct SessionRegion {
     session_id: String,
     name: String,
+    solve_type: SolveType,
     solves: Vec<Solve>,
     has_moves: bool,
     last_solve: Solve,
@@ -725,116 +728,594 @@ impl HistoryRegion for AllTimeBestRegion {
     }
 }
 
+impl SessionRegion {
+    fn paint_standard_solve(
+        &self,
+        ui: &mut Ui,
+        x: f32,
+        y: f32,
+        i: usize,
+        solve: &Solve,
+        layout_metrics: &SolveLayoutMetrics,
+        history: &mut History,
+        all_time_best_solve: Option<u32>,
+        details: &mut Option<SolveDetails>,
+    ) {
+        // Draw solve number
+        ui.painter().text(
+            Pos2::new(x, y),
+            Align2::LEFT_TOP,
+            format!("{}.", i + 1),
+            FontSize::Normal.into(),
+            Theme::Disabled.into(),
+        );
+
+        // Layout solve time for right alignment
+        let time = solve.final_time();
+        let galley = ui.fonts().layout_single_line(
+            FontSize::Normal.into(),
+            match time {
+                Some(time) => format!(
+                    "{}{}",
+                    solve_time_string(time),
+                    if let Some(moves) = &solve.moves {
+                        let time = (time + 5) / 10;
+                        let tps = moves.len() as u32 * 1000 / time;
+                        format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
+                    } else {
+                        format!("")
+                    }
+                ),
+                None => "DNF".into(),
+            },
+        );
+
+        let solve_time_rect = Rect::from_min_size(
+            Pos2::new(
+                x + layout_metrics.solve_number_width + layout_metrics.solve_time_width
+                    - galley.size.x,
+                y,
+            ),
+            galley.size,
+        );
+
+        // Draw solve time
+        let interact = ui.allocate_rect(solve_time_rect, Sense::click());
+        ui.painter().galley(
+            solve_time_rect.left_top(),
+            galley,
+            if interact.hovered() {
+                Theme::Blue.into()
+            } else {
+                match time {
+                    Some(_) => {
+                        if time == all_time_best_solve {
+                            Theme::Orange.into()
+                        } else if time == self.best_solve.as_ref().map(|best| best.time) {
+                            Theme::Green.into()
+                        } else {
+                            Theme::Content.into()
+                        }
+                    }
+                    None => Theme::Red.into(),
+                }
+            },
+        );
+
+        // Check for click on solve time
+        if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+            *details = Some(SolveDetails::IndividualSolve(solve.clone()));
+        }
+
+        if let Penalty::Time(penalty) = solve.penalty {
+            // Draw penalty
+            ui.painter().text(
+                Pos2::new(
+                    x + layout_metrics.solve_number_width + layout_metrics.solve_time_width,
+                    y + ui.fonts().row_height(FontSize::Normal.into()),
+                ),
+                Align2::LEFT_BOTTOM,
+                format!(" (+{})", penalty / 1000),
+                FontSize::Small.into(),
+                Theme::Red.into(),
+            );
+        } else if solve.moves.is_some() {
+            // Draw icon to show move data is available
+            let icon_rect = Rect::from_min_size(
+                Pos2::new(
+                    x + layout_metrics.solve_number_width + layout_metrics.solve_time_width,
+                    y + ui.fonts().row_height(FontSize::Normal.into())
+                        - ui.fonts().row_height(FontSize::Small.into()),
+                ),
+                Vec2::new(
+                    layout_metrics.solve_penalty_width,
+                    ui.fonts().row_height(FontSize::Small.into()),
+                ),
+            );
+            ui.allocate_rect(icon_rect, Sense::hover())
+                .on_hover_text("Analysis available for this solve");
+            ui.painter().text(
+                icon_rect.left_bottom(),
+                Align2::LEFT_BOTTOM,
+                "   📊",
+                FontSize::Small.into(),
+                Theme::Light.into(),
+            );
+        }
+
+        // Draw menu
+        let menu_rect = Rect::from_min_size(
+            Pos2::new(
+                x + layout_metrics.solve_number_width
+                    + layout_metrics.solve_time_width
+                    + layout_metrics.solve_penalty_width,
+                y + ui.fonts().row_height(FontSize::Normal.into())
+                    - ui.fonts().row_height(FontSize::Small.into()),
+            ),
+            Vec2::new(
+                layout_metrics.solve_menu_width,
+                ui.fonts().row_height(FontSize::Small.into()),
+            ),
+        );
+        let interact = ui.allocate_rect(menu_rect, Sense::click());
+        ui.painter().text(
+            Pos2::new(menu_rect.left(), menu_rect.bottom()),
+            Align2::LEFT_BOTTOM,
+            " ☰",
+            FontSize::Small.into(),
+            if interact.hovered() {
+                Theme::Content.into()
+            } else {
+                Theme::Disabled.into()
+            },
+        );
+
+        // Check for menu interaction
+        let popup_id = ui.make_persistent_id(format!("history-{}", solve.id));
+        if interact.clicked() {
+            ui.memory().toggle_popup(popup_id);
+        }
+        let old_visuals = ui.ctx().style().visuals.clone();
+        ui.ctx().set_visuals(crate::style::popup_visuals());
+        popup_below_widget(ui, popup_id, &interact, |ui| {
+            ui.set_min_width(180.0);
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::None => true,
+                            _ => false,
+                        },
+                        "No penalty",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::None);
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::Time(2000) => true,
+                            _ => false,
+                        },
+                        "2 second penalty",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::Time(2000));
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::DNF => true,
+                            _ => false,
+                        },
+                        "DNF",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::DNF);
+                let _ = history.local_commit();
+            }
+
+            ui.separator();
+
+            if ui
+                .add(
+                    SelectableLabel::new(false, "Delete solve").text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.delete_solve(solve.id.clone());
+                let _ = history.local_commit();
+            }
+        });
+        ui.ctx().set_visuals(old_visuals);
+    }
+
+    fn paint_last_layer_training_solve(
+        &self,
+        ui: &mut Ui,
+        x: f32,
+        y: f32,
+        i: usize,
+        solve: &Solve,
+        algorithm: Algorithm,
+        layout_metrics: &SolveLayoutMetrics,
+        history: &mut History,
+        details: &mut Option<SolveDetails>,
+    ) {
+        let moves = match algorithm {
+            Algorithm::OLL(oll) => KnownAlgorithms::oll(oll)[0].clone(),
+            Algorithm::PLL(pll) => KnownAlgorithms::pll(pll)[0].clone(),
+        };
+
+        let cube_size = ui.fonts().row_height(FontSize::Normal.into()) * 1.85;
+        algorithm.draw(
+            ui,
+            &moves,
+            ui.fonts().row_height(FontSize::Normal.into()) * 2.0,
+            false,
+            Some(Rect::from_min_size(
+                Pos2::new(x, y),
+                Vec2::new(cube_size, cube_size),
+            )),
+        );
+
+        // Draw solve number
+        ui.painter().text(
+            Pos2::new(x + cube_size + 8.0, y),
+            Align2::LEFT_TOP,
+            format!("{}.", i + 1),
+            FontSize::Normal.into(),
+            Theme::Disabled.into(),
+        );
+
+        // Layout solve time for right alignment
+        let time = solve.final_time();
+        let galley = ui.fonts().layout_single_line(
+            match solve.penalty {
+                Penalty::RecognitionDNF | Penalty::ExecutionDNF => FontSize::Small.into(),
+                _ => FontSize::Normal.into(),
+            },
+            match time {
+                Some(time) => format!(
+                    "{}{}",
+                    solve_time_string(time),
+                    if let Some(moves) = &solve.moves {
+                        let time = (time + 5) / 10;
+                        let tps = moves.len() as u32 * 1000 / time;
+                        format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
+                    } else {
+                        format!("")
+                    }
+                ),
+                None => match solve.penalty {
+                    Penalty::RecognitionDNF => "Misrecognize".into(),
+                    Penalty::ExecutionDNF => "Misexecute".into(),
+                    _ => "DNF".into(),
+                },
+            },
+        );
+
+        let solve_time_rect = Rect::from_min_size(
+            Pos2::new(
+                x + layout_metrics.solve_number_width
+                    + layout_metrics.solve_time_width
+                    + layout_metrics.solve_penalty_width
+                    - galley.size.x,
+                y + ui.fonts().row_height(FontSize::Normal.into())
+                    + (ui.fonts().row_height(FontSize::Normal.into()) - galley.size.y) / 2.0,
+            ),
+            galley.size,
+        );
+
+        // Draw solve time
+        let interact = ui.allocate_rect(solve_time_rect, Sense::click());
+        ui.painter().galley(
+            solve_time_rect.left_top(),
+            galley,
+            if interact.hovered() {
+                Theme::Blue.into()
+            } else {
+                match time {
+                    Some(_) => Theme::Content.into(),
+                    None => Theme::Red.into(),
+                }
+            },
+        );
+
+        // Check for click on solve time
+        if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+            *details = Some(SolveDetails::IndividualSolve(solve.clone()));
+        }
+
+        // Layout algorithm name for right alignment
+        let galley = ui.fonts().layout_single_line(
+            FontSize::Normal.into(),
+            match algorithm {
+                Algorithm::OLL(oll) => format!("#{}", oll.as_number()),
+                _ => algorithm.to_string(),
+            },
+        );
+
+        let alg_name_rect = Rect::from_min_size(
+            Pos2::new(
+                x + layout_metrics.solve_number_width
+                    + layout_metrics.solve_time_width
+                    + layout_metrics.solve_penalty_width
+                    - galley.size.x,
+                y,
+            ),
+            galley.size,
+        );
+
+        // Draw algorithm name
+        ui.painter()
+            .galley(alg_name_rect.left_top(), galley, Theme::Disabled.into());
+
+        // Draw menu
+        let menu_rect = Rect::from_min_size(
+            Pos2::new(
+                x + layout_metrics.solve_number_width
+                    + layout_metrics.solve_time_width
+                    + layout_metrics.solve_penalty_width,
+                y + ui.fonts().row_height(FontSize::Normal.into()) * 2.0
+                    - ui.fonts().row_height(FontSize::Small.into()),
+            ),
+            Vec2::new(
+                layout_metrics.solve_menu_width,
+                ui.fonts().row_height(FontSize::Small.into()),
+            ),
+        );
+        let interact = ui.allocate_rect(menu_rect, Sense::click());
+        ui.painter().text(
+            Pos2::new(menu_rect.left(), menu_rect.bottom()),
+            Align2::LEFT_BOTTOM,
+            " ☰",
+            FontSize::Small.into(),
+            if interact.hovered() {
+                Theme::Content.into()
+            } else {
+                Theme::Disabled.into()
+            },
+        );
+
+        // Check for menu interaction
+        let popup_id = ui.make_persistent_id(format!("history-{}", solve.id));
+        if interact.clicked() {
+            ui.memory().toggle_popup(popup_id);
+        }
+        let old_visuals = ui.ctx().style().visuals.clone();
+        ui.ctx().set_visuals(crate::style::popup_visuals());
+        popup_below_widget(ui, popup_id, &interact, |ui| {
+            ui.set_min_width(180.0);
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::None => true,
+                            _ => false,
+                        },
+                        "No penalty",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::None);
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::Time(2000) => true,
+                            _ => false,
+                        },
+                        "2 second penalty",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::Time(2000));
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::RecognitionDNF => true,
+                            _ => false,
+                        },
+                        "Misrecognized",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::RecognitionDNF);
+                let _ = history.local_commit();
+            }
+
+            if ui
+                .add(
+                    SelectableLabel::new(
+                        match solve.penalty {
+                            Penalty::ExecutionDNF => true,
+                            _ => false,
+                        },
+                        "Misexecuted",
+                    )
+                    .text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.penalty(solve.id.clone(), Penalty::ExecutionDNF);
+                let _ = history.local_commit();
+            }
+
+            ui.separator();
+
+            if ui
+                .add(
+                    SelectableLabel::new(false, "Delete solve").text_style(FontSize::Normal.into()),
+                )
+                .clicked()
+            {
+                history.delete_solve(solve.id.clone());
+                let _ = history.local_commit();
+            }
+        });
+        ui.ctx().set_visuals(old_visuals);
+    }
+}
+
 impl HistoryRegion for SessionRegion {
     fn height(&self, ui: &Ui, layout_metrics: &SolveLayoutMetrics) -> f32 {
         // Layout best solve and average region to determine line wrapping
-        let mut x = 0.0;
-        let mut lines = 1;
-        if let Some(best_solve) = &self.best_solve {
-            x += ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best solve: ".into())
-                .size
-                .x;
-            x += ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_solve.time))
-                .size
-                .x
-                + SESSION_BEST_PADDING;
-        }
+        if self.solve_type.is_last_layer_training() {
+            ui.fonts().row_height(FontSize::Normal.into()) * (self.rows as f32) * 2.1
+                + ui.fonts().row_height(FontSize::Section.into())
+                + SESSION_REGION_BORDER
+                + SESSION_SEPARATOR_SIZE
+        } else {
+            let mut x = 0.0;
+            let mut lines = 1;
 
-        if let Some(best_ao5) = &self.best_ao5 {
-            let width = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 5: ".into())
-                .size
-                .x
-                + ui.fonts()
-                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao5.time))
-                    .size
-                    .x
-                + SESSION_BEST_PADDING;
-            if (x + width) > layout_metrics.solve_content_width {
-                x = 0.0;
-                lines += 1;
-            }
-            x += width;
-        }
-
-        if let Some(best_ao12) = &self.best_ao12 {
-            let width = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 12: ".into())
-                .size
-                .x
-                + ui.fonts()
-                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao12.time))
-                    .size
-                    .x
-                + SESSION_BEST_PADDING;
-            if (x + width) > layout_metrics.solve_content_width {
-                x = 0.0;
-                lines += 1;
-            }
-            x += width;
-        }
-
-        if let Some(best_ao50) = &self.best_ao50 {
-            let width = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 50: ".into())
-                .size
-                .x
-                + ui.fonts()
-                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao50.time))
-                    .size
-                    .x
-                + SESSION_BEST_PADDING;
-            if (x + width) > layout_metrics.solve_content_width {
-                x = 0.0;
-                lines += 1;
-            }
-            x += width;
-        }
-
-        if let Some(best_ao100) = &self.best_ao100 {
-            let width = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 100: ".into())
-                .size
-                .x
-                + ui.fonts()
-                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao100.time))
-                    .size
-                    .x
-                + SESSION_BEST_PADDING;
-            if (x + width) > layout_metrics.solve_content_width {
-                x = 0.0;
-                lines += 1;
-            }
-            x += width;
-        }
-
-        if let Some(average) = &self.average {
-            let width = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Session avg: ".into())
-                .size
-                .x
-                + ui.fonts()
-                    .layout_single_line(FontSize::Normal.into(), solve_time_string(*average))
+            if let Some(best_solve) = &self.best_solve {
+                x += ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best solve: ".into())
                     .size
                     .x;
-            if (x + width) > layout_metrics.solve_content_width {
-                lines += 1;
+                x += ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_solve.time))
+                    .size
+                    .x
+                    + SESSION_BEST_PADDING;
             }
-        }
 
-        ui.fonts().row_height(FontSize::Normal.into()) * ((self.rows + lines) as f32)
-            + ui.fonts().row_height(FontSize::Section.into())
-            + SESSION_REGION_BORDER
-            + SESSION_SEPARATOR_SIZE * 2.0
+            if let Some(best_ao5) = &self.best_ao5 {
+                let width = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 5: ".into())
+                    .size
+                    .x
+                    + ui.fonts()
+                        .layout_single_line(
+                            FontSize::Normal.into(),
+                            solve_time_string(best_ao5.time),
+                        )
+                        .size
+                        .x
+                    + SESSION_BEST_PADDING;
+                if (x + width) > layout_metrics.solve_content_width {
+                    x = 0.0;
+                    lines += 1;
+                }
+                x += width;
+            }
+
+            if let Some(best_ao12) = &self.best_ao12 {
+                let width = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 12: ".into())
+                    .size
+                    .x
+                    + ui.fonts()
+                        .layout_single_line(
+                            FontSize::Normal.into(),
+                            solve_time_string(best_ao12.time),
+                        )
+                        .size
+                        .x
+                    + SESSION_BEST_PADDING;
+                if (x + width) > layout_metrics.solve_content_width {
+                    x = 0.0;
+                    lines += 1;
+                }
+                x += width;
+            }
+
+            if let Some(best_ao50) = &self.best_ao50 {
+                let width = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 50: ".into())
+                    .size
+                    .x
+                    + ui.fonts()
+                        .layout_single_line(
+                            FontSize::Normal.into(),
+                            solve_time_string(best_ao50.time),
+                        )
+                        .size
+                        .x
+                    + SESSION_BEST_PADDING;
+                if (x + width) > layout_metrics.solve_content_width {
+                    x = 0.0;
+                    lines += 1;
+                }
+                x += width;
+            }
+
+            if let Some(best_ao100) = &self.best_ao100 {
+                let width = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 100: ".into())
+                    .size
+                    .x
+                    + ui.fonts()
+                        .layout_single_line(
+                            FontSize::Normal.into(),
+                            solve_time_string(best_ao100.time),
+                        )
+                        .size
+                        .x
+                    + SESSION_BEST_PADDING;
+                if (x + width) > layout_metrics.solve_content_width {
+                    x = 0.0;
+                    lines += 1;
+                }
+                x += width;
+            }
+
+            if let Some(average) = &self.average {
+                let width = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Session avg: ".into())
+                    .size
+                    .x
+                    + ui.fonts()
+                        .layout_single_line(FontSize::Normal.into(), solve_time_string(*average))
+                        .size
+                        .x;
+                if (x + width) > layout_metrics.solve_content_width {
+                    lines += 1;
+                }
+            }
+
+            ui.fonts().row_height(FontSize::Normal.into()) * ((self.rows + lines) as f32)
+                + ui.fonts().row_height(FontSize::Section.into())
+                + SESSION_REGION_BORDER
+                + SESSION_SEPARATOR_SIZE * 2.0
+        }
     }
 
     fn paint(
@@ -936,226 +1417,79 @@ impl HistoryRegion for SessionRegion {
             }
 
             for row in 0..self.rows {
-                // Draw solve number
-                ui.painter().text(
-                    Pos2::new(
+                match self.solve_type {
+                    SolveType::OLLTraining => {
+                        let mut cube = Cube3x3x3::new();
+                        cube.do_moves(&self.solves[i].scramble);
+                        let algorithm = OLLAlgorithm::from_cube(&cube.as_faces(), CubeFace::Top);
+                        if let Some(algorithm) = algorithm {
+                            self.paint_last_layer_training_solve(
+                                ui,
+                                content_area.left() + col as f32 * col_width,
+                                y + row as f32 * row_height * 2.1,
+                                i,
+                                &self.solves[i],
+                                Algorithm::OLL(algorithm),
+                                solves_layout_metrics,
+                                history,
+                                details,
+                            )
+                        } else {
+                            self.paint_standard_solve(
+                                ui,
+                                content_area.left() + col as f32 * col_width,
+                                y + row as f32 * row_height * 2.1,
+                                i,
+                                &self.solves[i],
+                                solves_layout_metrics,
+                                history,
+                                all_time_best_solve,
+                                details,
+                            )
+                        }
+                    }
+                    SolveType::PLLTraining => {
+                        let mut cube = Cube3x3x3::new();
+                        cube.do_moves(&self.solves[i].scramble);
+                        let algorithm = PLLAlgorithm::from_cube(&cube.as_faces(), CubeFace::Top);
+                        if let Some(algorithm) = algorithm {
+                            self.paint_last_layer_training_solve(
+                                ui,
+                                content_area.left() + col as f32 * col_width,
+                                y + row as f32 * row_height * 2.1,
+                                i,
+                                &self.solves[i],
+                                Algorithm::PLL(algorithm),
+                                solves_layout_metrics,
+                                history,
+                                details,
+                            )
+                        } else {
+                            self.paint_standard_solve(
+                                ui,
+                                content_area.left() + col as f32 * col_width,
+                                y + row as f32 * row_height * 2.1,
+                                i,
+                                &self.solves[i],
+                                solves_layout_metrics,
+                                history,
+                                all_time_best_solve,
+                                details,
+                            )
+                        }
+                    }
+                    _ => self.paint_standard_solve(
+                        ui,
                         content_area.left() + col as f32 * col_width,
                         y + row as f32 * row_height,
+                        i,
+                        &self.solves[i],
+                        solves_layout_metrics,
+                        history,
+                        all_time_best_solve,
+                        details,
                     ),
-                    Align2::LEFT_TOP,
-                    format!("{}.", i + 1),
-                    FontSize::Normal.into(),
-                    Theme::Disabled.into(),
-                );
-
-                // Layout solve time for right alignment
-                let time = self.solves[i].final_time();
-                let galley = ui.fonts().layout_single_line(
-                    FontSize::Normal.into(),
-                    match time {
-                        Some(time) => format!(
-                            "{}{}",
-                            solve_time_string(time),
-                            if let Some(moves) = &self.solves[i].moves {
-                                let time = (time + 5) / 10;
-                                let tps = moves.len() as u32 * 1000 / time;
-                                format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
-                            } else {
-                                format!("")
-                            }
-                        ),
-                        None => "DNF".into(),
-                    },
-                );
-
-                let solve_time_rect = Rect::from_min_size(
-                    Pos2::new(
-                        content_area.left()
-                            + col as f32 * col_width
-                            + solves_layout_metrics.solve_number_width
-                            + solves_layout_metrics.solve_time_width
-                            - galley.size.x,
-                        y + row as f32 * row_height,
-                    ),
-                    galley.size,
-                );
-
-                // Draw solve time
-                let interact = ui.allocate_rect(solve_time_rect, Sense::click());
-                ui.painter().galley(
-                    solve_time_rect.left_top(),
-                    galley,
-                    if interact.hovered() {
-                        Theme::Blue.into()
-                    } else {
-                        match time {
-                            Some(_) => {
-                                if time == all_time_best_solve {
-                                    Theme::Orange.into()
-                                } else if time == self.best_solve.as_ref().map(|best| best.time) {
-                                    Theme::Green.into()
-                                } else {
-                                    Theme::Content.into()
-                                }
-                            }
-                            None => Theme::Red.into(),
-                        }
-                    },
-                );
-
-                // Check for click on solve time
-                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-                    *details = Some(SolveDetails::IndividualSolve(self.solves[i].clone()));
                 }
-
-                if let Penalty::Time(penalty) = self.solves[i].penalty {
-                    // Draw penalty
-                    ui.painter().text(
-                        Pos2::new(
-                            content_area.left()
-                                + col as f32 * col_width
-                                + solves_layout_metrics.solve_number_width
-                                + solves_layout_metrics.solve_time_width,
-                            y + row as f32 * row_height
-                                + ui.fonts().row_height(FontSize::Normal.into()),
-                        ),
-                        Align2::LEFT_BOTTOM,
-                        format!(" (+{})", penalty / 1000),
-                        FontSize::Small.into(),
-                        Theme::Red.into(),
-                    );
-                } else if self.solves[i].moves.is_some() {
-                    // Draw icon to show move data is available
-                    let icon_rect = Rect::from_min_size(
-                        Pos2::new(
-                            content_area.left()
-                                + col as f32 * col_width
-                                + solves_layout_metrics.solve_number_width
-                                + solves_layout_metrics.solve_time_width,
-                            y + row as f32 * row_height
-                                + ui.fonts().row_height(FontSize::Normal.into())
-                                - ui.fonts().row_height(FontSize::Small.into()),
-                        ),
-                        Vec2::new(
-                            solves_layout_metrics.solve_penalty_width,
-                            ui.fonts().row_height(FontSize::Small.into()),
-                        ),
-                    );
-                    ui.allocate_rect(icon_rect, Sense::hover())
-                        .on_hover_text("Analysis available for this solve");
-                    ui.painter().text(
-                        icon_rect.left_bottom(),
-                        Align2::LEFT_BOTTOM,
-                        "   📊",
-                        FontSize::Small.into(),
-                        Theme::Light.into(),
-                    );
-                }
-
-                // Draw menu
-                let menu_rect = Rect::from_min_size(
-                    Pos2::new(
-                        content_area.left()
-                            + col as f32 * col_width
-                            + solves_layout_metrics.solve_number_width
-                            + solves_layout_metrics.solve_time_width
-                            + solves_layout_metrics.solve_penalty_width,
-                        y + row as f32 * row_height
-                            + ui.fonts().row_height(FontSize::Normal.into())
-                            - ui.fonts().row_height(FontSize::Small.into()),
-                    ),
-                    Vec2::new(
-                        solves_layout_metrics.solve_menu_width,
-                        ui.fonts().row_height(FontSize::Small.into()),
-                    ),
-                );
-                let interact = ui.allocate_rect(menu_rect, Sense::click());
-                ui.painter().text(
-                    Pos2::new(menu_rect.left(), menu_rect.bottom()),
-                    Align2::LEFT_BOTTOM,
-                    " ☰",
-                    FontSize::Small.into(),
-                    if interact.hovered() {
-                        Theme::Content.into()
-                    } else {
-                        Theme::Disabled.into()
-                    },
-                );
-
-                // Check for menu interaction
-                let popup_id = ui.make_persistent_id(format!("history-{}", self.solves[i].id));
-                if interact.clicked() {
-                    ui.memory().toggle_popup(popup_id);
-                }
-                let old_visuals = ui.ctx().style().visuals.clone();
-                ui.ctx().set_visuals(crate::style::popup_visuals());
-                popup_below_widget(ui, popup_id, &interact, |ui| {
-                    ui.set_min_width(180.0);
-                    if ui
-                        .add(
-                            SelectableLabel::new(
-                                match self.solves[i].penalty {
-                                    Penalty::None => true,
-                                    _ => false,
-                                },
-                                "No penalty",
-                            )
-                            .text_style(FontSize::Normal.into()),
-                        )
-                        .clicked()
-                    {
-                        history.penalty(self.solves[i].id.clone(), Penalty::None);
-                        let _ = history.local_commit();
-                    }
-
-                    if ui
-                        .add(
-                            SelectableLabel::new(
-                                match self.solves[i].penalty {
-                                    Penalty::Time(2000) => true,
-                                    _ => false,
-                                },
-                                "2 second penalty",
-                            )
-                            .text_style(FontSize::Normal.into()),
-                        )
-                        .clicked()
-                    {
-                        history.penalty(self.solves[i].id.clone(), Penalty::Time(2000));
-                        let _ = history.local_commit();
-                    }
-
-                    if ui
-                        .add(
-                            SelectableLabel::new(
-                                match self.solves[i].penalty {
-                                    Penalty::DNF => true,
-                                    _ => false,
-                                },
-                                "DNF",
-                            )
-                            .text_style(FontSize::Normal.into()),
-                        )
-                        .clicked()
-                    {
-                        history.penalty(self.solves[i].id.clone(), Penalty::DNF);
-                        let _ = history.local_commit();
-                    }
-
-                    ui.separator();
-
-                    if ui
-                        .add(
-                            SelectableLabel::new(false, "Delete solve")
-                                .text_style(FontSize::Normal.into()),
-                        )
-                        .clicked()
-                    {
-                        history.delete_solve(self.solves[i].id.clone());
-                        let _ = history.local_commit();
-                    }
-                });
-                ui.ctx().set_visuals(old_visuals);
 
                 i += 1;
                 if i >= self.solves.len() {
@@ -1171,7 +1505,16 @@ impl HistoryRegion for SessionRegion {
             ui.painter().line_segment(
                 [
                     Pos2::new(x, y),
-                    Pos2::new(x, y + self.rows as f32 * row_height),
+                    Pos2::new(
+                        x,
+                        y + self.rows as f32
+                            * row_height
+                            * if self.solve_type.is_last_layer_training() {
+                                2.0
+                            } else {
+                                1.0
+                            },
+                    ),
                 ],
                 Stroke {
                     width: 1.0,
@@ -1179,242 +1522,247 @@ impl HistoryRegion for SessionRegion {
                 },
             );
         }
-        y += self.rows as f32 * row_height;
 
-        // Draw separator between solves and best times
-        ui.painter().line_segment(
-            [
-                Pos2::new(content_area.left(), y + SESSION_SEPARATOR_SIZE / 2.0),
-                Pos2::new(content_area.right(), y + SESSION_SEPARATOR_SIZE / 2.0),
-            ],
-            Stroke {
-                width: 1.0,
-                color: Theme::DarkBlue.into(),
-            },
-        );
-        y += SESSION_SEPARATOR_SIZE;
+        if !self.solve_type.is_last_layer_training() {
+            y += self.rows as f32 * row_height;
 
-        // Draw best solve
-        let mut x = content_area.left();
-        let max_x = x + layout_metrics.solve_content_width;
-        if let Some(best_solve) = &self.best_solve {
-            let galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best solve: ".into());
-            let width = galley.size.x;
-            ui.painter()
-                .galley(Pos2::new(x, y), galley, Theme::Disabled.into());
-            x += width;
-
-            let galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_solve.time));
-            let width = galley.size.x;
-            let rect = Rect::from_min_size(Pos2::new(x, y), galley.size);
-            let interact = ui.allocate_rect(rect, Sense::click());
-            ui.painter().galley(
-                rect.left_top(),
-                galley,
-                if interact.hovered() {
-                    Theme::Blue.into()
-                } else if Some(best_solve.time) == all_time_best_solve {
-                    Theme::Orange.into()
-                } else {
-                    Theme::Content.into()
+            // Draw separator between solves and best times
+            ui.painter().line_segment(
+                [
+                    Pos2::new(content_area.left(), y + SESSION_SEPARATOR_SIZE / 2.0),
+                    Pos2::new(content_area.right(), y + SESSION_SEPARATOR_SIZE / 2.0),
+                ],
+                Stroke {
+                    width: 1.0,
+                    color: Theme::DarkBlue.into(),
                 },
             );
-            x += width + SESSION_BEST_PADDING;
+            y += SESSION_SEPARATOR_SIZE;
 
-            // Check for click on solve time
-            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-                *details = Some(SolveDetails::IndividualSolve(best_solve.solve.clone()));
-            }
-        }
+            // Draw best solve
+            let mut x = content_area.left();
+            let max_x = x + layout_metrics.solve_content_width;
+            if let Some(best_solve) = &self.best_solve {
+                let galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best solve: ".into());
+                let width = galley.size.x;
+                ui.painter()
+                    .galley(Pos2::new(x, y), galley, Theme::Disabled.into());
+                x += width;
 
-        // Draw best average of 5
-        if let Some(best_ao5) = &self.best_ao5 {
-            let label_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 5: ".into());
-            let time_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao5.time));
-            let label_width = label_galley.size.x;
-            let time_width = time_galley.size.x;
-            let width = label_width + time_width + SESSION_BEST_PADDING;
+                let galley = ui.fonts().layout_single_line(
+                    FontSize::Normal.into(),
+                    solve_time_string(best_solve.time),
+                );
+                let width = galley.size.x;
+                let rect = Rect::from_min_size(Pos2::new(x, y), galley.size);
+                let interact = ui.allocate_rect(rect, Sense::click());
+                ui.painter().galley(
+                    rect.left_top(),
+                    galley,
+                    if interact.hovered() {
+                        Theme::Blue.into()
+                    } else if Some(best_solve.time) == all_time_best_solve {
+                        Theme::Orange.into()
+                    } else {
+                        Theme::Content.into()
+                    },
+                );
+                x += width + SESSION_BEST_PADDING;
 
-            if (x + width) > max_x {
-                x = content_area.left();
-                y += ui.fonts().row_height(FontSize::Normal.into());
-            }
-
-            ui.painter()
-                .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
-            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
-            let interact = ui.allocate_rect(rect, Sense::click());
-            ui.painter().galley(
-                rect.left_top(),
-                time_galley,
-                if interact.hovered() {
-                    Theme::Blue.into()
-                } else if Some(best_ao5.time) == all_time_best_ao5 {
-                    Theme::Orange.into()
-                } else {
-                    Theme::Content.into()
-                },
-            );
-            x += width;
-
-            // Check for click on solve time
-            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-                *details = Some(SolveDetails::AverageOfSolves(best_ao5.solves.clone()));
-            }
-        }
-
-        // Draw best average of 12
-        if let Some(best_ao12) = &self.best_ao12 {
-            let label_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 12: ".into());
-            let time_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao12.time));
-            let label_width = label_galley.size.x;
-            let time_width = time_galley.size.x;
-            let width = label_width + time_width + SESSION_BEST_PADDING;
-
-            if (x + width) > max_x {
-                x = content_area.left();
-                y += ui.fonts().row_height(FontSize::Normal.into());
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::IndividualSolve(best_solve.solve.clone()));
+                }
             }
 
-            ui.painter()
-                .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
-            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
-            let interact = ui.allocate_rect(rect, Sense::click());
-            ui.painter().galley(
-                rect.left_top(),
-                time_galley,
-                if interact.hovered() {
-                    Theme::Blue.into()
-                } else if Some(best_ao12.time) == all_time_best_ao12 {
-                    Theme::Orange.into()
-                } else {
-                    Theme::Content.into()
-                },
-            );
-            x += width;
+            // Draw best average of 5
+            if let Some(best_ao5) = &self.best_ao5 {
+                let label_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 5: ".into());
+                let time_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao5.time));
+                let label_width = label_galley.size.x;
+                let time_width = time_galley.size.x;
+                let width = label_width + time_width + SESSION_BEST_PADDING;
 
-            // Check for click on solve time
-            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-                *details = Some(SolveDetails::AverageOfSolves(best_ao12.solves.clone()));
-            }
-        }
+                if (x + width) > max_x {
+                    x = content_area.left();
+                    y += ui.fonts().row_height(FontSize::Normal.into());
+                }
 
-        // Draw best average of 50
-        if let Some(best_ao50) = &self.best_ao50 {
-            let label_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 50: ".into());
-            let time_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao50.time));
-            let label_width = label_galley.size.x;
-            let time_width = time_galley.size.x;
-            let width = label_width + time_width + SESSION_BEST_PADDING;
+                ui.painter()
+                    .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+                let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+                let interact = ui.allocate_rect(rect, Sense::click());
+                ui.painter().galley(
+                    rect.left_top(),
+                    time_galley,
+                    if interact.hovered() {
+                        Theme::Blue.into()
+                    } else if Some(best_ao5.time) == all_time_best_ao5 {
+                        Theme::Orange.into()
+                    } else {
+                        Theme::Content.into()
+                    },
+                );
+                x += width;
 
-            if (x + width) > max_x {
-                x = content_area.left();
-                y += ui.fonts().row_height(FontSize::Normal.into());
-            }
-
-            ui.painter()
-                .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
-            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
-            let interact = ui.allocate_rect(rect, Sense::click());
-            ui.painter().galley(
-                rect.left_top(),
-                time_galley,
-                if interact.hovered() {
-                    Theme::Blue.into()
-                } else if Some(best_ao50.time) == all_time_best_ao50 {
-                    Theme::Orange.into()
-                } else {
-                    Theme::Content.into()
-                },
-            );
-            x += width;
-
-            // Check for click on solve time
-            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-                *details = Some(SolveDetails::AverageOfSolves(best_ao50.solves.clone()));
-            }
-        }
-
-        // Draw best average of 100
-        if let Some(best_ao100) = &self.best_ao100 {
-            let label_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Best avg of 100: ".into());
-            let time_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao100.time));
-            let label_width = label_galley.size.x;
-            let time_width = time_galley.size.x;
-            let width = label_width + time_width + SESSION_BEST_PADDING;
-
-            if (x + width) > max_x {
-                x = content_area.left();
-                y += ui.fonts().row_height(FontSize::Normal.into());
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::AverageOfSolves(best_ao5.solves.clone()));
+                }
             }
 
-            ui.painter()
-                .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
-            let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
-            let interact = ui.allocate_rect(rect, Sense::click());
-            ui.painter().galley(
-                rect.left_top(),
-                time_galley,
-                if interact.hovered() {
-                    Theme::Blue.into()
-                } else if Some(best_ao100.time) == all_time_best_ao100 {
-                    Theme::Orange.into()
-                } else {
-                    Theme::Content.into()
-                },
-            );
-            x += width;
+            // Draw best average of 12
+            if let Some(best_ao12) = &self.best_ao12 {
+                let label_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 12: ".into());
+                let time_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao12.time));
+                let label_width = label_galley.size.x;
+                let time_width = time_galley.size.x;
+                let width = label_width + time_width + SESSION_BEST_PADDING;
 
-            // Check for click on solve time
-            if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
-                *details = Some(SolveDetails::AverageOfSolves(best_ao100.solves.clone()));
+                if (x + width) > max_x {
+                    x = content_area.left();
+                    y += ui.fonts().row_height(FontSize::Normal.into());
+                }
+
+                ui.painter()
+                    .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+                let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+                let interact = ui.allocate_rect(rect, Sense::click());
+                ui.painter().galley(
+                    rect.left_top(),
+                    time_galley,
+                    if interact.hovered() {
+                        Theme::Blue.into()
+                    } else if Some(best_ao12.time) == all_time_best_ao12 {
+                        Theme::Orange.into()
+                    } else {
+                        Theme::Content.into()
+                    },
+                );
+                x += width;
+
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::AverageOfSolves(best_ao12.solves.clone()));
+                }
             }
-        }
 
-        // Draw session average
-        if let Some(average) = &self.average {
-            let label_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), "Session avg: ".into());
-            let time_galley = ui
-                .fonts()
-                .layout_single_line(FontSize::Normal.into(), solve_time_string(*average));
-            let label_width = label_galley.size.x;
-            let time_width = time_galley.size.x;
-            let width = label_width + time_width;
+            // Draw best average of 50
+            if let Some(best_ao50) = &self.best_ao50 {
+                let label_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 50: ".into());
+                let time_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(best_ao50.time));
+                let label_width = label_galley.size.x;
+                let time_width = time_galley.size.x;
+                let width = label_width + time_width + SESSION_BEST_PADDING;
 
-            if (x + width) > max_x {
-                x = content_area.left();
-                y += ui.fonts().row_height(FontSize::Normal.into());
+                if (x + width) > max_x {
+                    x = content_area.left();
+                    y += ui.fonts().row_height(FontSize::Normal.into());
+                }
+
+                ui.painter()
+                    .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+                let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+                let interact = ui.allocate_rect(rect, Sense::click());
+                ui.painter().galley(
+                    rect.left_top(),
+                    time_galley,
+                    if interact.hovered() {
+                        Theme::Blue.into()
+                    } else if Some(best_ao50.time) == all_time_best_ao50 {
+                        Theme::Orange.into()
+                    } else {
+                        Theme::Content.into()
+                    },
+                );
+                x += width;
+
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::AverageOfSolves(best_ao50.solves.clone()));
+                }
             }
 
-            ui.painter()
-                .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
-            ui.painter().galley(
-                Pos2::new(x + label_width, y),
-                time_galley,
-                Theme::Content.into(),
-            );
+            // Draw best average of 100
+            if let Some(best_ao100) = &self.best_ao100 {
+                let label_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Best avg of 100: ".into());
+                let time_galley = ui.fonts().layout_single_line(
+                    FontSize::Normal.into(),
+                    solve_time_string(best_ao100.time),
+                );
+                let label_width = label_galley.size.x;
+                let time_width = time_galley.size.x;
+                let width = label_width + time_width + SESSION_BEST_PADDING;
+
+                if (x + width) > max_x {
+                    x = content_area.left();
+                    y += ui.fonts().row_height(FontSize::Normal.into());
+                }
+
+                ui.painter()
+                    .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+                let rect = Rect::from_min_size(Pos2::new(x + label_width, y), time_galley.size);
+                let interact = ui.allocate_rect(rect, Sense::click());
+                ui.painter().galley(
+                    rect.left_top(),
+                    time_galley,
+                    if interact.hovered() {
+                        Theme::Blue.into()
+                    } else if Some(best_ao100.time) == all_time_best_ao100 {
+                        Theme::Orange.into()
+                    } else {
+                        Theme::Content.into()
+                    },
+                );
+                x += width;
+
+                // Check for click on solve time
+                if interact.on_hover_cursor(CursorIcon::PointingHand).clicked() {
+                    *details = Some(SolveDetails::AverageOfSolves(best_ao100.solves.clone()));
+                }
+            }
+
+            // Draw session average
+            if let Some(average) = &self.average {
+                let label_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), "Session avg: ".into());
+                let time_galley = ui
+                    .fonts()
+                    .layout_single_line(FontSize::Normal.into(), solve_time_string(*average));
+                let label_width = label_galley.size.x;
+                let time_width = time_galley.size.x;
+                let width = label_width + time_width;
+
+                if (x + width) > max_x {
+                    x = content_area.left();
+                    y += ui.fonts().row_height(FontSize::Normal.into());
+                }
+
+                ui.painter()
+                    .galley(Pos2::new(x, y), label_galley, Theme::Disabled.into());
+                ui.painter().galley(
+                    Pos2::new(x + label_width, y),
+                    time_galley,
+                    Theme::Content.into(),
+                );
+            }
         }
     }
 }
@@ -1550,6 +1898,7 @@ impl HistoryWidget {
             session_regions.push(SessionRegion {
                 session_id: session.id().into(),
                 name,
+                solve_type,
                 solves,
                 has_moves,
                 last_solve,
@@ -1582,23 +1931,27 @@ impl HistoryWidget {
             regions.push(Box::new(NoSolvesRegion));
             self.all_time_best_region = None;
         } else {
-            let running_best_ao50 = all_solves.as_slice().best_average(50);
-            let running_last_ao50 = all_solves.as_slice().last_average(50);
-            let running_best_ao100 = all_solves.as_slice().best_average(100);
-            let running_last_ao100 = all_solves.as_slice().last_average(100);
+            if solve_type.is_last_layer_training() {
+                self.all_time_best_region = None;
+            } else {
+                let running_best_ao50 = all_solves.as_slice().best_average(50);
+                let running_last_ao50 = all_solves.as_slice().last_average(50);
+                let running_best_ao100 = all_solves.as_slice().best_average(100);
+                let running_last_ao100 = all_solves.as_slice().last_average(100);
 
-            // Add an all-time best region at the top
-            self.all_time_best_region = Some(AllTimeBestRegion {
-                best_solve: all_time_best_solve,
-                best_ao5: all_time_best_ao5,
-                best_ao12: all_time_best_ao12,
-                best_ao50: all_time_best_ao50,
-                best_ao100: all_time_best_ao100,
-                running_best_ao50: running_best_ao50,
-                running_best_ao100: running_best_ao100,
-                running_last_ao50: running_last_ao50,
-                running_last_ao100: running_last_ao100,
-            });
+                // Add an all-time best region at the top
+                self.all_time_best_region = Some(AllTimeBestRegion {
+                    best_solve: all_time_best_solve,
+                    best_ao5: all_time_best_ao5,
+                    best_ao12: all_time_best_ao12,
+                    best_ao50: all_time_best_ao50,
+                    best_ao100: all_time_best_ao100,
+                    running_best_ao50: running_best_ao50,
+                    running_best_ao100: running_best_ao100,
+                    running_last_ao50: running_last_ao50,
+                    running_last_ao100: running_last_ao100,
+                });
+            }
         }
 
         // Lay out regions
