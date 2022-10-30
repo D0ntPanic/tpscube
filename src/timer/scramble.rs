@@ -10,9 +10,9 @@ use crate::widgets::fit_scramble;
 use anyhow::Result;
 use egui::{CtxRef, Pos2, Rect, Response, Sense, Ui, Vec2};
 use tpscube_core::{
-    scramble_2x2x2, scramble_3x3x3, scramble_4x4x4, scramble_last_layer, Cube, Cube2x2x2,
-    Cube3x3x3, Cube4x4x4, History, InitialCubeState, LastLayerRandomization, Move, MoveSequence,
-    Penalty, SolveType,
+    scramble_2x2x2, scramble_3x3x3, scramble_4x4x4, scramble_last_layer, scramble_megaminx, Cube,
+    Cube2x2x2, Cube3x3x3, Cube4x4x4, History, InitialCubeState, LastLayerRandomization, Move,
+    MoveSequence, Penalty, SolveType,
 };
 
 const TARGET_SCRAMBLE_FRACTION: f32 = 0.2;
@@ -27,6 +27,9 @@ const TRAINING_PENALTY_PADDING: f32 = 16.0;
 const ANALYSIS_MIN_PADDING: f32 = 24.0;
 const ANALYSIS_MAX_PADDING: f32 = 64.0;
 const MAX_ANALYSIS_WIDTH: f32 = 360.0;
+
+const LARGE_MIN_MEGAMINX_SCRAMBLE_WIDTH: f32 = 430.0;
+const NORMAL_MIN_MEGAMINX_SCRAMBLE_WIDTH: f32 = 360.0;
 
 pub struct TimerCube {
     current_scramble: Vec<Move>,
@@ -129,6 +132,7 @@ impl TimerCube {
                 scramble_3x3x3()
             }
             SolveType::Standard4x4x4 | SolveType::Blind4x4x4 => scramble_4x4x4(),
+            SolveType::Megaminx => scramble_megaminx(),
             SolveType::OLLTraining => {
                 scramble_last_layer(LastLayerRandomization::RandomStateUnsolved)
             }
@@ -581,7 +585,15 @@ impl TimerCube {
 
         let scramble_padding = 8.0;
 
-        let scramble_font = if self.displayed_scramble.len() > 25 {
+        let scramble_font = if self.solve_type == SolveType::Megaminx
+            && rect.width() < NORMAL_MIN_MEGAMINX_SCRAMBLE_WIDTH
+        {
+            FontSize::Small
+        } else if self.solve_type == SolveType::Megaminx
+            && rect.width() < LARGE_MIN_MEGAMINX_SCRAMBLE_WIDTH
+        {
+            FontSize::Normal
+        } else if self.displayed_scramble.len() > 25 {
             FontSize::Section
         } else {
             FontSize::Scramble
@@ -599,6 +611,14 @@ impl TimerCube {
                         .collect::<Vec<Move>>(),
                 ],
             )
+        } else if self.solve_type == SolveType::Megaminx {
+            // Megaminx is always split into 11 move lines
+            let lines: Vec<Vec<Move>> = self
+                .displayed_scramble
+                .chunks(11)
+                .map(|x| x.to_vec())
+                .collect();
+            (false, lines)
         } else {
             (
                 false,
@@ -623,7 +643,8 @@ impl TimerCube {
             16.0
         };
 
-        let show_cube = !self.solve_type.is_last_layer_training();
+        let show_cube =
+            !self.solve_type.is_last_layer_training() && self.solve_type != SolveType::Megaminx;
         let cube_height = rect.height()
             - (scramble_padding + scramble_height + timer_height + timer_padding - timer_overlap);
 
@@ -850,6 +871,8 @@ impl TimerCube {
             SolveType::Standard4x4x4 | SolveType::Blind4x4x4 => {
                 CubeRenderer::new(Box::new(Cube4x4x4::new()))
             }
+            // Not actually rendered
+            SolveType::Megaminx => CubeRenderer::new(Box::new(Cube3x3x3::new())),
         };
         self.next_scramble = None;
         self.new_scramble();

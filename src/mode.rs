@@ -36,10 +36,11 @@ impl SolveTypeSelectWindow {
             .open(open)
             .show(ctxt, |ui| {
                 ui.vertical(|ui| {
-                    ui.section("Standard Cubes");
+                    ui.section("Standard Puzzles");
                     self.option(ui, selected, SolveType::Standard2x2x2, "2x2x2");
                     self.option(ui, selected, SolveType::Standard3x3x3, "3x3x3");
                     self.option(ui, selected, SolveType::Standard4x4x4, "4x4x4");
+                    self.option(ui, selected, SolveType::Megaminx, "Megaminx");
                     self.option(ui, selected, SolveType::OneHanded3x3x3, "3x3x3 One Handed");
 
                     ui.section("Blindfolded");

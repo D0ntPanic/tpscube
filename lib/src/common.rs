@@ -188,6 +188,28 @@ pub enum Move {
     Dw = 33,
     Dwp = 34,
     Dw2 = 35,
+    U3w = 36,
+    U3wp = 37,
+    U3w2 = 38,
+    F3w = 39,
+    F3wp = 40,
+    F3w2 = 41,
+    R3w = 42,
+    R3wp = 43,
+    R3w2 = 44,
+    B3w = 45,
+    B3wp = 46,
+    B3w2 = 47,
+    L3w = 48,
+    L3wp = 49,
+    L3w2 = 50,
+    D3w = 51,
+    D3wp = 52,
+    D3w2 = 53,
+    Rpp = 54,
+    Rmm = 55,
+    Dpp = 56,
+    Dmm = 57,
 }
 
 #[derive(Clone, Debug)]
@@ -562,9 +584,9 @@ pub enum SolveType {
     Blind5x5x5 = 7,
     Standard6x6x6 = 8,
     Standard7x7x7 = 9,
-    Pyraminx = 10,
+    Pyraminx = 10,*/
     Megaminx = 11,
-    Skewb = 12,
+    /*Skewb = 12,
     Square1 = 13,
     Clock = 14,*/
     OLLTraining = 15,
@@ -584,9 +606,9 @@ impl SolveType {
             "5x5x5 Blind" => Some(SolveType::Blind5x5x5),
             "6x6x6" => Some(SolveType::Standard6x6x6),
             "7x7x7" => Some(SolveType::Standard7x7x7),
-            "Pyraminx" => Some(SolveType::Pyraminx),
+            "Pyraminx" => Some(SolveType::Pyraminx),*/
             "Megaminx" => Some(SolveType::Megaminx),
-            "Skewb" => Some(SolveType::Skewb),
+            /*"Skewb" => Some(SolveType::Skewb),
             "Square-1" => Some(SolveType::Square1),
             "Clock" => Some(SolveType::Clock),*/
             "OLL Training" => Some(SolveType::OLLTraining),
@@ -624,9 +646,9 @@ impl ToString for SolveType {
             SolveType::Blind5x5x5 => "5x5x5 Blind".into(),
             SolveType::Standard6x6x6 => "6x6x6".into(),
             SolveType::Standard7x7x7 => "7x7x7".into(),
-            SolveType::Pyraminx => "Pyraminx".into(),
+            SolveType::Pyraminx => "Pyraminx".into(),*/
             SolveType::Megaminx => "Megaminx".into(),
-            SolveType::Skewb => "Skewb".into(),
+            /*SolveType::Skewb => "Skewb".into(),
             SolveType::Square1 => "Square-1".into(),
             SolveType::Clock => "Clock".into(),*/
             SolveType::OLLTraining => "OLL Training".into(),
@@ -755,6 +777,62 @@ impl Move {
                     _ => None,
                 },
             },
+            3 => match face {
+                CubeFace::Top => match rotation {
+                    -3 => Some(Move::U3w),
+                    -2 => Some(Move::U3w2),
+                    -1 => Some(Move::U3wp),
+                    1 => Some(Move::U3w),
+                    2 => Some(Move::U3w2),
+                    3 => Some(Move::U3wp),
+                    _ => None,
+                },
+                CubeFace::Front => match rotation {
+                    -3 => Some(Move::F3w),
+                    -2 => Some(Move::F3w2),
+                    -1 => Some(Move::F3wp),
+                    1 => Some(Move::F3w),
+                    2 => Some(Move::F3w2),
+                    3 => Some(Move::F3wp),
+                    _ => None,
+                },
+                CubeFace::Right => match rotation {
+                    -3 => Some(Move::R3w),
+                    -2 => Some(Move::R3w2),
+                    -1 => Some(Move::R3wp),
+                    1 => Some(Move::R3w),
+                    2 => Some(Move::R3w2),
+                    3 => Some(Move::R3wp),
+                    _ => None,
+                },
+                CubeFace::Back => match rotation {
+                    -3 => Some(Move::B3w),
+                    -2 => Some(Move::B3w2),
+                    -1 => Some(Move::B3wp),
+                    1 => Some(Move::B3w),
+                    2 => Some(Move::B3w2),
+                    3 => Some(Move::B3wp),
+                    _ => None,
+                },
+                CubeFace::Left => match rotation {
+                    -3 => Some(Move::L3w),
+                    -2 => Some(Move::L3w2),
+                    -1 => Some(Move::L3wp),
+                    1 => Some(Move::L3w),
+                    2 => Some(Move::L3w2),
+                    3 => Some(Move::L3wp),
+                    _ => None,
+                },
+                CubeFace::Bottom => match rotation {
+                    -3 => Some(Move::D3w),
+                    -2 => Some(Move::D3w2),
+                    -1 => Some(Move::D3wp),
+                    1 => Some(Move::D3w),
+                    2 => Some(Move::D3w2),
+                    3 => Some(Move::D3wp),
+                    _ => None,
+                },
+            },
             _ => None,
         }
     }
@@ -775,6 +853,18 @@ impl Move {
         Move::try_from(rng.next(Self::count_4x4x4() as u32) as u8).unwrap()
     }
 
+    pub(crate) fn sourced_random_5x5x5<T: RandomSource>(rng: &mut T) -> Move {
+        Move::try_from(rng.next(Self::count_5x5x5() as u32) as u8).unwrap()
+    }
+
+    pub(crate) fn sourced_random_6x6x6<T: RandomSource>(rng: &mut T) -> Move {
+        Move::try_from(rng.next(Self::count_6x6x6() as u32) as u8).unwrap()
+    }
+
+    pub(crate) fn sourced_random_7x7x7<T: RandomSource>(rng: &mut T) -> Move {
+        Move::try_from(rng.next(Self::count_7x7x7() as u32) as u8).unwrap()
+    }
+
     /// Gets a randomly chosen move
     pub fn random_2x2x2() -> Move {
         Self::sourced_random_2x2x2(&mut StandardRandomSource)
@@ -790,6 +880,21 @@ impl Move {
         Self::sourced_random_4x4x4(&mut StandardRandomSource)
     }
 
+    /// Gets a randomly chosen move
+    pub fn random_5x5x5() -> Move {
+        Self::sourced_random_5x5x5(&mut StandardRandomSource)
+    }
+
+    /// Gets a randomly chosen move
+    pub fn random_6x6x6() -> Move {
+        Self::sourced_random_6x6x6(&mut StandardRandomSource)
+    }
+
+    /// Gets a randomly chosen move
+    pub fn random_7x7x7() -> Move {
+        Self::sourced_random_7x7x7(&mut StandardRandomSource)
+    }
+
     pub const fn count_2x2x2() -> usize {
         Move::D2 as u8 as usize + 1
     }
@@ -802,14 +907,78 @@ impl Move {
         Move::Dw2 as u8 as usize + 1
     }
 
+    pub const fn count_5x5x5() -> usize {
+        Move::Dw2 as u8 as usize + 1
+    }
+
+    pub const fn count_6x6x6() -> usize {
+        Move::D3w2 as u8 as usize + 1
+    }
+
+    pub const fn count_7x7x7() -> usize {
+        Move::D3w2 as u8 as usize + 1
+    }
+
     pub const fn face(&self) -> CubeFace {
         match self {
-            Move::U | Move::Up | Move::U2 | Move::Uw | Move::Uwp | Move::Uw2 => CubeFace::Top,
-            Move::F | Move::Fp | Move::F2 | Move::Fw | Move::Fwp | Move::Fw2 => CubeFace::Front,
-            Move::R | Move::Rp | Move::R2 | Move::Rw | Move::Rwp | Move::Rw2 => CubeFace::Right,
-            Move::B | Move::Bp | Move::B2 | Move::Bw | Move::Bwp | Move::Bw2 => CubeFace::Back,
-            Move::L | Move::Lp | Move::L2 | Move::Lw | Move::Lwp | Move::Lw2 => CubeFace::Left,
-            Move::D | Move::Dp | Move::D2 | Move::Dw | Move::Dwp | Move::Dw2 => CubeFace::Bottom,
+            Move::U
+            | Move::Up
+            | Move::U2
+            | Move::Uw
+            | Move::Uwp
+            | Move::Uw2
+            | Move::U3w
+            | Move::U3wp
+            | Move::U3w2 => CubeFace::Top,
+            Move::F
+            | Move::Fp
+            | Move::F2
+            | Move::Fw
+            | Move::Fwp
+            | Move::Fw2
+            | Move::F3w
+            | Move::F3wp
+            | Move::F3w2 => CubeFace::Front,
+            Move::R
+            | Move::Rp
+            | Move::R2
+            | Move::Rw
+            | Move::Rwp
+            | Move::Rw2
+            | Move::R3w
+            | Move::R3wp
+            | Move::R3w2
+            | Move::Rpp
+            | Move::Rmm => CubeFace::Right,
+            Move::B
+            | Move::Bp
+            | Move::B2
+            | Move::Bw
+            | Move::Bwp
+            | Move::Bw2
+            | Move::B3w
+            | Move::B3wp
+            | Move::B3w2 => CubeFace::Back,
+            Move::L
+            | Move::Lp
+            | Move::L2
+            | Move::Lw
+            | Move::Lwp
+            | Move::Lw2
+            | Move::L3w
+            | Move::L3wp
+            | Move::L3w2 => CubeFace::Left,
+            Move::D
+            | Move::Dp
+            | Move::D2
+            | Move::Dw
+            | Move::Dwp
+            | Move::Dw2
+            | Move::D3w
+            | Move::D3wp
+            | Move::D3w2
+            | Move::Dpp
+            | Move::Dmm => CubeFace::Bottom,
         }
     }
 
@@ -827,7 +996,13 @@ impl Move {
             | Move::Rw
             | Move::Bw
             | Move::Lw
-            | Move::Dw => 1,
+            | Move::Dw
+            | Move::U3w
+            | Move::F3w
+            | Move::R3w
+            | Move::B3w
+            | Move::L3w
+            | Move::D3w => 1,
             Move::Up
             | Move::Fp
             | Move::Rp
@@ -839,7 +1014,13 @@ impl Move {
             | Move::Rwp
             | Move::Bwp
             | Move::Lwp
-            | Move::Dwp => -1,
+            | Move::Dwp
+            | Move::U3wp
+            | Move::F3wp
+            | Move::R3wp
+            | Move::B3wp
+            | Move::L3wp
+            | Move::D3wp => -1,
             Move::U2
             | Move::F2
             | Move::R2
@@ -851,7 +1032,16 @@ impl Move {
             | Move::Rw2
             | Move::Bw2
             | Move::Lw2
-            | Move::Dw2 => 2,
+            | Move::Dw2
+            | Move::U3w2
+            | Move::F3w2
+            | Move::R3w2
+            | Move::B3w2
+            | Move::L3w2
+            | Move::D3w2
+            | Move::Rpp
+            | Move::Dpp => 2,
+            Move::Rmm | Move::Dmm => -2,
         }
     }
 
@@ -894,6 +1084,25 @@ impl Move {
             | Move::Bw2
             | Move::Lw2
             | Move::Dw2 => 2,
+            Move::U3w
+            | Move::F3w
+            | Move::R3w
+            | Move::B3w
+            | Move::L3w
+            | Move::D3w
+            | Move::U3wp
+            | Move::F3wp
+            | Move::R3wp
+            | Move::B3wp
+            | Move::L3wp
+            | Move::D3wp
+            | Move::U3w2
+            | Move::F3w2
+            | Move::R3w2
+            | Move::B3w2
+            | Move::L3w2
+            | Move::D3w2 => 3,
+            Move::Rpp | Move::Rmm | Move::Dpp | Move::Dmm => 4,
         }
     }
 
@@ -935,6 +1144,28 @@ impl Move {
             Move::Dw => Move::Dwp,
             Move::Dwp => Move::Dw,
             Move::Dw2 => Move::Dw2,
+            Move::U3w => Move::U3wp,
+            Move::U3wp => Move::U3w,
+            Move::U3w2 => Move::U3w2,
+            Move::F3w => Move::F3wp,
+            Move::F3wp => Move::F3w,
+            Move::F3w2 => Move::F3w2,
+            Move::R3w => Move::R3wp,
+            Move::R3wp => Move::R3w,
+            Move::R3w2 => Move::R3w2,
+            Move::B3w => Move::B3wp,
+            Move::B3wp => Move::B3w,
+            Move::B3w2 => Move::B3w2,
+            Move::L3w => Move::L3wp,
+            Move::L3wp => Move::L3w,
+            Move::L3w2 => Move::L3w2,
+            Move::D3w => Move::D3wp,
+            Move::D3wp => Move::D3w,
+            Move::D3w2 => Move::D3w2,
+            Move::Rpp => Move::Rmm,
+            Move::Rmm => Move::Rpp,
+            Move::Dpp => Move::Dmm,
+            Move::Dmm => Move::Dpp,
         }
     }
 
@@ -976,6 +1207,28 @@ impl Move {
             "Dw" | "d" => Some(Move::Dw),
             "Dw'" | "d'" => Some(Move::Dwp),
             "Dw2" | "d2" => Some(Move::Dw2),
+            "3Uw" => Some(Move::U3w),
+            "3Uw'" => Some(Move::U3wp),
+            "3Uw2" => Some(Move::U3w2),
+            "3Fw" => Some(Move::F3w),
+            "3Fw'" => Some(Move::F3wp),
+            "3Fw2" => Some(Move::F3w2),
+            "3Rw" => Some(Move::R3w),
+            "3Rw'" => Some(Move::R3wp),
+            "3Rw2" => Some(Move::R3w2),
+            "3Bw" => Some(Move::B3w),
+            "3Bw'" => Some(Move::B3wp),
+            "3Bw2" => Some(Move::B3w2),
+            "3Lw" => Some(Move::L3w),
+            "3Lw'" => Some(Move::L3wp),
+            "3Lw2" => Some(Move::L3w2),
+            "3Dw" => Some(Move::D3w),
+            "3Dw'" => Some(Move::D3wp),
+            "3Dw2" => Some(Move::D3w2),
+            "R++" => Some(Move::Rpp),
+            "R--" => Some(Move::Rmm),
+            "D++" => Some(Move::Dpp),
+            "D--" => Some(Move::Dmm),
             _ => None,
         }
     }
@@ -1020,6 +1273,28 @@ impl ToString for Move {
             Move::Dw => "Dw".into(),
             Move::Dwp => "Dw'".into(),
             Move::Dw2 => "Dw2".into(),
+            Move::U3w => "3Uw".into(),
+            Move::U3wp => "3Uw'".into(),
+            Move::U3w2 => "3Uw2".into(),
+            Move::F3w => "3Fw".into(),
+            Move::F3wp => "3Fw'".into(),
+            Move::F3w2 => "3Fw2".into(),
+            Move::R3w => "3Rw".into(),
+            Move::R3wp => "3Rw'".into(),
+            Move::R3w2 => "3Rw2".into(),
+            Move::B3w => "3Bw".into(),
+            Move::B3wp => "3Bw'".into(),
+            Move::B3w2 => "3Bw2".into(),
+            Move::L3w => "3Lw".into(),
+            Move::L3wp => "3Lw'".into(),
+            Move::L3w2 => "3Lw2".into(),
+            Move::D3w => "3Dw".into(),
+            Move::D3wp => "3Dw'".into(),
+            Move::D3w2 => "3Dw2".into(),
+            Move::Rpp => "R++".into(),
+            Move::Rmm => "R--".into(),
+            Move::Dpp => "D++".into(),
+            Move::Dmm => "D--".into(),
         }
     }
 }
@@ -1198,4 +1473,18 @@ pub fn parse_timed_move_string(string: &str) -> Result<Vec<TimedMove>> {
         moves.push(TimedMove(mv, time));
     }
     Ok(moves)
+}
+
+/// Generates a random scramble
+pub fn scramble_megaminx() -> Vec<Move> {
+    let mut result = Vec::new();
+    let mut rand = StandardRandomSource;
+    for _ in 0..7 {
+        for _ in 0..5 {
+            result.push([Move::Rpp, Move::Rmm][rand.next(2) as usize]);
+            result.push([Move::Dpp, Move::Dmm][rand.next(2) as usize]);
+        }
+        result.push([Move::U, Move::Up][rand.next(2) as usize]);
+    }
+    result
 }

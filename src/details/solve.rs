@@ -114,6 +114,18 @@ impl SolveDetailsWindow {
                     mode: SolveDetailsMode::Replay,
                 }
             }
+            SolveType::Megaminx => Self {
+                solve,
+                unsolved_state: Box::new(Cube3x3x3::new()),
+                analysis: Analysis::default(),
+                summary: Vec::new(),
+                renderer: CubeRenderer::new(Box::new(Cube3x3x3::new())),
+                replay_time: 0.0,
+                replay_move_idx: 0,
+                playing: false,
+                last_frame: Instant::now(),
+                mode: SolveDetailsMode::Replay,
+            },
         }
     }
 
@@ -435,26 +447,30 @@ impl SolveDetailsWindow {
                 };
             }
 
+            let show_cube = self.solve.solve_type != SolveType::Megaminx;
+
             // Allocate space for the cube rendering, this will be rendered using
             // OpenGL later.
-            let (id, rect) = ui.allocate_space(Vec2::new(cube_size, cube_size));
-            let response = ui.interact(rect, id, Sense::click_and_drag());
-            *cube_rect = Some(rect);
-            if self.renderer.animating() {
-                framerate.request_max();
-            }
+            if show_cube {
+                let (id, rect) = ui.allocate_space(Vec2::new(cube_size, cube_size));
+                let response = ui.interact(rect, id, Sense::click_and_drag());
+                *cube_rect = Some(rect);
+                if self.renderer.animating() {
+                    framerate.request_max();
+                }
 
-            // Process rotation input for the cube rendering
-            if ui.rect_contains_pointer(rect) {
-                let scroll_delta = ctxt.input().scroll_delta;
-                self.renderer
-                    .adjust_angle(scroll_delta.x / 3.0, scroll_delta.y / 3.0);
-            }
-            if response.dragged() {
-                self.renderer.adjust_angle(
-                    ui.input().pointer.delta().x / 3.0,
-                    ui.input().pointer.delta().y / 3.0,
-                );
+                // Process rotation input for the cube rendering
+                if ui.rect_contains_pointer(rect) {
+                    let scroll_delta = ctxt.input().scroll_delta;
+                    self.renderer
+                        .adjust_angle(scroll_delta.x / 3.0, scroll_delta.y / 3.0);
+                }
+                if response.dragged() {
+                    self.renderer.adjust_angle(
+                        ui.input().pointer.delta().x / 3.0,
+                        ui.input().pointer.delta().y / 3.0,
+                    );
+                }
             }
 
             if self.solve.moves.is_some() && self.solve.moves.as_ref().unwrap().len() > 0 {

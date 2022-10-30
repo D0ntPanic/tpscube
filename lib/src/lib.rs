@@ -42,9 +42,9 @@ pub use analysis::{
     PartialAnalysisMethod, SolveAnalysis,
 };
 pub use common::{
-    parse_move_string, parse_timed_move_string, Average, BestSolve, Color, Corner, CornerPiece,
-    Cube, CubeFace, FaceRotation, InitialCubeState, ListAverage, Move, MoveSequence, Penalty,
-    RotationDirection, Solve, SolveList, SolveType, TimedMove,
+    parse_move_string, parse_timed_move_string, scramble_megaminx, Average, BestSolve, Color,
+    Corner, CornerPiece, Cube, CubeFace, FaceRotation, InitialCubeState, ListAverage, Move,
+    MoveSequence, Penalty, RotationDirection, Solve, SolveList, SolveType, TimedMove,
 };
 pub use cube2x2x2::{Cube2x2x2, Cube2x2x2Faces};
 pub use cube3x3x3::{Cube3x3x3, Cube3x3x3Faces, Edge3x3x3, EdgePiece3x3x3, LastLayerRandomization};
