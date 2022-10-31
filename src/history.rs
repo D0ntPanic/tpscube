@@ -1510,7 +1510,7 @@ impl HistoryRegion for SessionRegion {
                         y + self.rows as f32
                             * row_height
                             * if self.solve_type.is_last_layer_training() {
-                                2.0
+                                2.1
                             } else {
                                 1.0
                             },

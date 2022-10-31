@@ -841,7 +841,7 @@ pub enum AlgorithmType {
     PLL = 1,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum Algorithm {
     OLL(OLLAlgorithm),
     PLL(PLLAlgorithm),

@@ -1,14 +1,15 @@
 use crate::graph::plot::{Plot, SinglePlot, YAxis};
 use crate::theme::Theme;
 use tpscube_core::{
-    Analysis, Cube, Cube3x3x3, CubeWithSolution, History, InitialCubeState, ListAverage, Penalty,
-    Solve, SolveType,
+    Algorithm, Analysis, Cube, Cube3x3x3, CubeFace, CubeWithSolution, History, InitialCubeState,
+    ListAverage, OLLAlgorithm, PLLAlgorithm, Penalty, Solve, SolveType,
 };
 
 pub struct GraphData {
     statistic: Statistic,
     phase: Phase,
     average_size: usize,
+    algorithm: Option<Algorithm>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -59,6 +60,7 @@ impl GraphData {
             statistic: Statistic::TotalTime,
             phase: Phase::EntireSolve,
             average_size: 5,
+            algorithm: None,
         }
     }
 
@@ -77,6 +79,11 @@ impl GraphData {
         self
     }
 
+    pub fn algorithm(mut self, algorithm: Option<Algorithm>) -> Self {
+        self.algorithm = algorithm;
+        self
+    }
+
     fn analyze(solve: &Solve) -> Option<Analysis> {
         if let Some(solution) = &solve.moves {
             let mut initial_state = Cube3x3x3::new();
@@ -90,12 +97,36 @@ impl GraphData {
         }
     }
 
-    fn data_point(solve: &Solve, statistic: Statistic, phase: Phase) -> Option<u32> {
+    fn data_point(
+        solve: &Solve,
+        statistic: Statistic,
+        phase: Phase,
+        algorithm: Option<Algorithm>,
+    ) -> Option<u32> {
+        // If a specific algorithm is specified, match against state
+        match algorithm {
+            Some(Algorithm::OLL(oll)) => {
+                let mut initial_state = Cube3x3x3::new();
+                initial_state.do_moves(&solve.scramble);
+                if OLLAlgorithm::from_cube(&initial_state.as_faces(), CubeFace::Top) != Some(oll) {
+                    return None;
+                }
+            }
+            Some(Algorithm::PLL(pll)) => {
+                let mut initial_state = Cube3x3x3::new();
+                initial_state.do_moves(&solve.scramble);
+                if PLLAlgorithm::from_cube(&initial_state.as_faces(), CubeFace::Top) != Some(pll) {
+                    return None;
+                }
+            }
+            _ => (),
+        }
+
         match statistic {
             Statistic::TurnsPerSecond => {
                 // Calculate TPS generically by fetching time and move stats
-                let time = Self::data_point(solve, Statistic::TotalTime, phase);
-                let moves = Self::data_point(solve, Statistic::MoveCount, phase);
+                let time = Self::data_point(solve, Statistic::TotalTime, phase, algorithm);
+                let moves = Self::data_point(solve, Statistic::MoveCount, phase, algorithm);
                 if let Some(time) = time {
                     if let Some(moves) = moves {
                         if moves > 0 && time > 0 {
@@ -112,8 +143,8 @@ impl GraphData {
             }
             Statistic::ExecutionTurnsPerSecond => {
                 // Calculate TPS generically by fetching time and move stats
-                let time = Self::data_point(solve, Statistic::ExecutionTime, phase);
-                let moves = Self::data_point(solve, Statistic::MoveCount, phase);
+                let time = Self::data_point(solve, Statistic::ExecutionTime, phase, algorithm);
+                let moves = Self::data_point(solve, Statistic::MoveCount, phase, algorithm);
                 if let Some(time) = time {
                     if let Some(moves) = moves {
                         if moves > 0 && time > 0 {
@@ -361,10 +392,11 @@ impl GraphData {
                 continue;
             }
 
-            let data_point = match Self::data_point(solve, self.statistic, self.phase) {
-                Some(value) => Some(value),
-                None => continue,
-            };
+            let data_point =
+                match Self::data_point(solve, self.statistic, self.phase, self.algorithm) {
+                    Some(value) => Some(value),
+                    None => continue,
+                };
 
             window.push(data_point);
             if window.len() > self.average_size {

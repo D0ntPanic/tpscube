@@ -1,6 +1,7 @@
 mod data;
 mod plot;
 
+use crate::algorithms::AlgorithmRender;
 use crate::font::FontSize;
 use crate::style::{content_visuals, side_visuals};
 use crate::theme::Theme;
@@ -12,7 +13,7 @@ use egui::{
     SidePanel, Stroke, TopBottomPanel, Ui, Vec2,
 };
 use plot::Plot;
-use tpscube_core::{History, SolveType};
+use tpscube_core::{Algorithm, History, KnownAlgorithms, OLLAlgorithm, PLLAlgorithm, SolveType};
 
 const GRAPH_PADDING: f32 = 16.0;
 
@@ -20,6 +21,7 @@ pub struct GraphWidget {
     statistic: Statistic,
     phase: Phase,
     average_size: usize,
+    algorithm: Option<Algorithm>,
     plot: Option<Plot>,
     update_id: Option<u64>,
     solve_type: SolveType,
@@ -32,6 +34,7 @@ impl GraphWidget {
             statistic: Statistic::TotalTime,
             phase: Phase::EntireSolve,
             average_size: 5,
+            algorithm: None,
             plot: None,
             update_id: None,
             solve_type: SolveType::Standard3x3x3,
@@ -250,6 +253,79 @@ impl GraphWidget {
         }
     }
 
+    fn algorithm_options(
+        &mut self,
+        ui: &mut Ui,
+        history: &mut History,
+        solve_type: SolveType,
+        compact: bool,
+    ) {
+        if ui.mode_label("All", self.algorithm.is_none()).clicked() {
+            self.algorithm = None;
+            self.plot = None;
+            let _ = self.save_settings(history);
+        }
+
+        // Get list of all algorithms
+        let algs: Vec<Algorithm> = match solve_type {
+            SolveType::OLLTraining => OLLAlgorithm::all()
+                .iter()
+                .map(|alg| Algorithm::OLL(*alg))
+                .collect(),
+            SolveType::PLLTraining => PLLAlgorithm::all()
+                .iter()
+                .map(|alg| Algorithm::PLL(*alg))
+                .collect(),
+            _ => return,
+        };
+
+        for alg in algs {
+            ui.horizontal(|ui| {
+                // Allocate space for state rendering and check for clicks
+                let cube_size = ui.fonts().row_height(FontSize::Normal.into()) * 1.85;
+                let (id, rect) = ui.allocate_space(Vec2::new(cube_size, cube_size));
+                if ui.interact(rect, id, Sense::click()).clicked() {
+                    self.algorithm = Some(alg);
+                    self.plot = None;
+                    let _ = self.save_settings(history);
+                }
+
+                // Render state
+                let moves = match alg {
+                    Algorithm::OLL(oll) => KnownAlgorithms::oll(oll)[0].clone(),
+                    Algorithm::PLL(pll) => KnownAlgorithms::pll(pll)[0].clone(),
+                };
+                alg.draw(
+                    ui,
+                    &moves,
+                    ui.fonts().row_height(FontSize::Normal.into()) * 1.85,
+                    false,
+                    Some(rect),
+                );
+
+                // Render name and check for clicks
+                let name = match alg {
+                    Algorithm::OLL(oll) => match oll {
+                        OLLAlgorithm::OLL(_) => oll.to_string(),
+                        _ => {
+                            if compact {
+                                format!("{}\n(#{})", oll.to_string(), oll.as_number())
+                            } else {
+                                format!("{} (#{})", oll.to_string(), oll.as_number())
+                            }
+                        }
+                    },
+                    _ => alg.to_string(),
+                };
+                if ui.mode_label(&name, self.algorithm == Some(alg)).clicked() {
+                    self.algorithm = Some(alg);
+                    self.plot = None;
+                    let _ = self.save_settings(history);
+                }
+            });
+        }
+    }
+
     fn landscape_sidebar(&mut self, ctxt: &CtxRef, history: &mut History, solve_type: SolveType) {
         SidePanel::left("left_graph_options")
             .default_width(160.0)
@@ -270,6 +346,7 @@ impl GraphWidget {
                                 ui.add_space(8.0);
                                 ui.section("Phase");
                                 self.phase_options(ui, history);
+                                self.algorithm = None;
                             } else if solve_type.is_last_layer_training() {
                                 if !matches!(
                                     self.statistic,
@@ -289,11 +366,18 @@ impl GraphWidget {
                                     self.statistic = Statistic::TotalTime;
                                 }
                                 self.phase = Phase::EntireSolve;
+                                self.algorithm = None;
                             }
 
                             ui.add_space(8.0);
                             ui.section("Average");
                             self.average_options(ui, history, false);
+
+                            if solve_type.is_last_layer_training() {
+                                ui.add_space(8.0);
+                                ui.section("Algorithm");
+                                self.algorithm_options(ui, history, solve_type, false);
+                            }
                         });
                     });
             });
@@ -348,6 +432,19 @@ impl GraphWidget {
                                 };
                                 ui.separator();
                             });
+
+                            self.algorithm = None;
+                        } else if solve_type.is_last_layer_training() {
+                            if !matches!(
+                                self.statistic,
+                                Statistic::TotalTime
+                                    | Statistic::SuccessRate
+                                    | Statistic::RecognitionAccuracy
+                                    | Statistic::ExecutionAccuracy
+                            ) {
+                                self.statistic = Statistic::TotalTime;
+                            }
+                            self.phase = Phase::EntireSolve;
                         } else {
                             if !matches!(
                                 self.statistic,
@@ -356,6 +453,7 @@ impl GraphWidget {
                                 self.statistic = Statistic::TotalTime;
                             }
                             self.phase = Phase::EntireSolve;
+                            self.algorithm = None;
                         }
 
                         ui.allocate_ui(
@@ -368,6 +466,38 @@ impl GraphWidget {
                                 });
                             },
                         );
+
+                        if solve_type.is_last_layer_training() {
+                            // Show separator between sections
+                            ui.scope(|ui| {
+                                ui.style_mut().visuals.widgets.noninteractive.bg_stroke = Stroke {
+                                    width: 1.0,
+                                    color: Theme::Disabled.into(),
+                                };
+                                ui.separator();
+                            });
+
+                            ui.allocate_ui(
+                                Vec2::new(
+                                    (ui.max_rect().width() - 48.0) / 3.0,
+                                    ui.max_rect().height(),
+                                ),
+                                |ui| {
+                                    ui.vertical(|ui| {
+                                        ui.section("Algorithm");
+                                        ScrollArea::from_max_height(140.0)
+                                            .always_show_scroll(false)
+                                            .id_source("left_graph_options_scroll")
+                                            .show(ui, |ui| {
+                                                self.algorithm_options(
+                                                    ui, history, solve_type, true,
+                                                );
+                                            });
+                                        ui.add_space(4.0);
+                                    });
+                                },
+                            );
+                        }
                     },
                 );
             });
@@ -488,6 +618,7 @@ impl GraphWidget {
                         .statistic(self.statistic)
                         .phase(self.phase)
                         .average_size(self.average_size)
+                        .algorithm(self.algorithm)
                         .build(history, solve_type),
                 );
                 self.update_id = Some(history.update_id());
