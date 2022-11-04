@@ -760,10 +760,14 @@ impl SessionRegion {
                     solve_time_string(time),
                     if let Some(moves) = &solve.moves {
                         let time = (time + 5) / 10;
-                        let tps = moves.len() as u32 * 1000 / time;
-                        format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
+                        if time != 0 {
+                            let tps = moves.len() as u32 * 1000 / time;
+                            format!(" ({}/{}.{})", moves.len(), tps / 10, tps % 10)
+                        } else {
+                            "".into()
+                        }
                     } else {
-                        format!("")
+                        "".into()
                     }
                 ),
                 None => "DNF".into(),
