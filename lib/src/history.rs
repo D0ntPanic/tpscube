@@ -20,6 +20,7 @@ use dirs::data_local_dir;
 use std::path::Path;
 
 const UNSYNCED: u32 = 0;
+const MAX_ACTIONS_PER_SYNC: usize = 1024;
 
 pub struct History {
     storage: DeferredStorage,
@@ -380,6 +381,7 @@ impl History {
         let actions: Vec<StoredAction> = self
             .local_actions
             .iter()
+            .take(MAX_ACTIONS_PER_SYNC)
             .map(|action| action.clone())
             .collect();
 
